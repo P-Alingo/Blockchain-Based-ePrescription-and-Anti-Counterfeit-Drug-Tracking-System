@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Search, Filter, Download, MapPin, Clock, Package } from "lucide-react";
+import { Truck, Search, Filter, Download, MapPin, Clock, Package, RotateCcw, FileText, Activity } from "lucide-react";
 
 const ShipmentLogs = () => {
+   const sidebarItems = [
+    { icon: Truck, label: 'Dashboard', path: '/distributor/dashboard', active: false },
+    { icon: Package, label: 'Active Shipments', path: '/distributor/active-shipments', active: false },
+    { icon: RotateCcw, label: 'Update Shipment', path: '/distributor/update-shipment', active: false },
+    { icon: FileText, label: 'Shipment Logs', path: '/distributor/shipment-logs', active: true },
+    { icon: Activity, label: 'Activity Logs', path: '/distributor/activity-logs', active: false },
+  ];
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -98,19 +107,13 @@ const ShipmentLogs = () => {
   });
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Truck className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+      <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName="Mike Distributor" userEmail="mike@logistics.co.ke">
+      <div className="space-y-8">
+        <div>
+           <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">
               Shipment Logs
             </h1>
             <p className="text-muted-foreground">Track and monitor all pharmaceutical shipment activities</p>
-          </div>
-        </div>
         <Button className="flex items-center gap-2">
           <Download className="h-4 w-4" />
           Export Logs
@@ -259,7 +262,9 @@ const ShipmentLogs = () => {
           </Table>
         </CardContent>
       </Card>
-    </div>
+      </div>
+      </DashboardLayout>
+   
   );
 };
 

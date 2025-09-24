@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, Search, Filter, Download, Package2, Beaker, Shield, Settings } from "lucide-react";
+import { Activity, Search, Filter, Download, Package2, Beaker, Shield, Settings, Package, Plus, List } from "lucide-react";
 
 const ManufacturerActivityLogs = () => {
+   const sidebarItems = [
+    { icon: Package, label: 'Dashboard', path: '/manufacturer/dashboard', active: false },
+    { icon: Plus, label: 'Register Batch', path: '/manufacturer/register-batch', active: false },
+    { icon: List, label: 'Batch List', path: '/manufacturer/batch-list', active: false },
+    { icon: Shield, label: 'Blockchain Verification', path: '/manufacturer/blockchain-verification', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/manufacturer/activity-logs', active: true },
+  ];
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
 
@@ -124,14 +132,11 @@ const ManufacturerActivityLogs = () => {
   });
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Activity className="h-6 w-6 text-primary" />
-          </div>
+    <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
+      <div className="space-y-8">
+        <div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
               Manufacturing Activity Logs
             </h1>
             <p className="text-muted-foreground">Monitor all manufacturing and production activities</p>
@@ -295,7 +300,7 @@ const ManufacturerActivityLogs = () => {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </DashboardLayout>
   );
 };
 

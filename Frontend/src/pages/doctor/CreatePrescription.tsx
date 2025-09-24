@@ -18,6 +18,7 @@ import {
 
 const CreatePrescription = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard', active: false },
     { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription', active: true },
     { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions', active: false },
     { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification', active: false },
@@ -33,7 +34,7 @@ const CreatePrescription = () => {
     >
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">Create New Prescription</h1>
+          <h1 className="text-3xl font-bold text-blue-600">Create New Prescription</h1>
           <p className="text-muted-foreground">Create a secure, blockchain-verified prescription</p>
         </div>
 

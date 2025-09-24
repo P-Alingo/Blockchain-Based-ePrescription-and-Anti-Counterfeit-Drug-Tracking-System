@@ -12,12 +12,14 @@ import {
   AlertTriangle,
   Calendar,
   Pill,
-  TrendingUp
+  TrendingUp,
+  Shield
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const PatientDashboard = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: true },
     { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: false },
     { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: false },
     { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: false },
@@ -119,7 +121,7 @@ const PatientDashboard = () => {
       <div className="space-y-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">My Health Dashboard</h1>
+           <h1 className="text-3xl font-bold text-green-600">Patient Dashboard</h1>
             <p className="text-muted-foreground">Track your prescriptions and medication schedule</p>
           </div>
           <Link to="/patient/qr-viewer">

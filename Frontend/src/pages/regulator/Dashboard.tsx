@@ -33,7 +33,7 @@ const RegulatorDashboard = () => {
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">
-            Regulatory Dashboard
+            Regulator Dashboard
           </h1>
           <p className="text-muted-foreground">Monitor compliance, conduct audits, and ensure pharmaceutical safety standards</p>
         </div>

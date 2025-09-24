@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, Search, Filter, Download, Truck, Package, MapPin, User } from "lucide-react";
+import { Activity, Search, Filter, Download, Truck, Package, MapPin, User, RotateCcw, FileText } from "lucide-react";
 
 const DistributorActivityLogs = () => {
+   const sidebarItems = [
+    { icon: Truck, label: 'Dashboard', path: '/distributor/dashboard', active: false },
+    { icon: Package, label: 'Active Shipments', path: '/distributor/active-shipments', active: false },
+    { icon: RotateCcw, label: 'Update Shipment', path: '/distributor/update-shipment', active: false },
+    { icon: FileText, label: 'Shipment Logs', path: '/distributor/shipment-logs', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/distributor/activity-logs', active: true },
+  ];
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
 
@@ -132,14 +141,11 @@ const DistributorActivityLogs = () => {
   });
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Activity className="h-6 w-6 text-primary" />
-          </div>
+    <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName="Mike Distributor" userEmail="mike@logistics.co.ke">
+      <div className="space-y-8">
+        <div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">
               Distribution Activity Logs
             </h1>
             <p className="text-muted-foreground">Monitor all distribution activities and shipment events</p>
@@ -289,7 +295,7 @@ const DistributorActivityLogs = () => {
           </Table>
         </CardContent>
       </Card>
-    </div>
+      </DashboardLayout>
   );
 };
 

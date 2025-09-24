@@ -6,9 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pill, User, Calendar, CheckCircle, Package } from "lucide-react";
+import { Pill, User, Calendar, CheckCircle, Package, Activity, Shield, Scan, PillBottle } from "lucide-react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 
 const DispenseDrug = () => {
+  const sidebarItems = [
+  { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
+    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: false },
+    { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: false },
+    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: true },
+    { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: false },
+  ];
   const [prescriptionId, setPrescriptionId] = useState("");
   const [dispensingNotes, setDispensingNotes] = useState("");
   const [selectedPrescription, setSelectedPrescription] = useState(null);
@@ -32,13 +41,11 @@ const DispenseDrug = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <Pill className="h-6 w-6 text-primary" />
-        </div>
+   <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Dispense Medication
           </h1>
           <p className="text-muted-foreground">Process prescription and dispense medication to patients</p>
@@ -193,6 +200,7 @@ const DispenseDrug = () => {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 };
 

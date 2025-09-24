@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Hash, Search, CheckCircle, AlertTriangle, Clock, Package2 } from "lucide-react";
+import { Shield, Hash, Search, CheckCircle, AlertTriangle, Clock, Package2, Package, Plus, List, Activity } from "lucide-react";
 
 const ManufacturerBlockchainVerification = () => {
+   const sidebarItems = [
+    { icon: Package, label: 'Dashboard', path: '/manufacturer/dashboard', active: false },
+    { icon: Plus, label: 'Register Batch', path: '/manufacturer/register-batch', active: false },
+    { icon: List, label: 'Batch List', path: '/manufacturer/batch-list', active: false },
+    { icon: Shield, label: 'Blockchain Verification', path: '/manufacturer/blockchain-verification', active: true },
+    { icon: Activity, label: 'Activity Logs', path: '/manufacturer/activity-logs', active: false },
+  ];
   const [searchHash, setSearchHash] = useState("");
   const [verificationResult, setVerificationResult] = useState(null);
 
@@ -72,13 +80,10 @@ const ManufacturerBlockchainVerification = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <Shield className="h-6 w-6 text-primary" />
-        </div>
+ <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
             Blockchain Verification
           </h1>
           <p className="text-muted-foreground">Verify manufacturing records on the blockchain</p>
@@ -328,7 +333,7 @@ const ManufacturerBlockchainVerification = () => {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+    </DashboardLayout>
   );
 };
 

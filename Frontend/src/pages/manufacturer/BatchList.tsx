@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package2, Search, Filter, Download, Calendar, Shield, Beaker } from "lucide-react";
+import { Package2, Search, Filter, Download, Calendar, Shield, Beaker, Activity, Plus, Package, List } from "lucide-react";
 
 const BatchList = () => {
+   const sidebarItems = [
+    { icon: Package, label: 'Dashboard', path: '/manufacturer/dashboard', active: false },
+    { icon: Plus, label: 'Register Batch', path: '/manufacturer/register-batch', active: false },
+    { icon: List, label: 'Batch List', path: '/manufacturer/batch-list', active: true },
+    { icon: Shield, label: 'Blockchain Verification', path: '/manufacturer/blockchain-verification', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/manufacturer/activity-logs', active: false },
+  ];
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -120,14 +129,11 @@ const BatchList = () => {
   });
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Package2 className="h-6 w-6 text-primary" />
-          </div>
+  <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
+      <div className="space-y-8">
+        <div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
               Batch Management
             </h1>
             <p className="text-muted-foreground">Monitor and manage all pharmaceutical production batches</p>
@@ -325,7 +331,7 @@ const BatchList = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
 

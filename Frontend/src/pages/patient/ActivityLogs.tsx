@@ -7,11 +7,13 @@ import {
   Activity,
   Eye,
   Pill,
+  Shield,
   Scan
 } from 'lucide-react';
 
 const ActivityLogs = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: false },
     { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: false },
     { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: false },
     { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: false },
@@ -50,7 +52,7 @@ const ActivityLogs = () => {
     >
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">Activity Logs</h1>
+         <h1 className="text-3xl font-bold text-green-600">Activity Logs</h1>
           <p className="text-muted-foreground">Track your prescription and medication history</p>
         </div>
 

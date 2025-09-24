@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 
 const DoctorDashboard = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard', active: true },
     { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription', active: false },
     { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions', active: false },
     { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification', active: false },
@@ -95,7 +96,7 @@ const DoctorDashboard = () => {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
+            <h1 className="text-3xl font-bold text-blue-600">Doctor Dashboard</h1>
             <p className="text-muted-foreground">Manage prescriptions and monitor blockchain verification</p>
           </div>
           <Link to="/doctor/create-prescription">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Zap, Users, CheckCircle, Star, ArrowRight, FileText, Scan, Database, TrendingUp } from 'lucide-react';
+import { Shield, Zap, Users, CheckCircle, Star, ArrowRight, FileText, Scan, Database, TrendingUp, Instagram, Twitter, Youtube, Mail, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import heroImage from '@/assets/hero-healthcare.jpg';
 import testimonialDoctor from '@/assets/testimonial-doctor-1.jpg';
@@ -68,8 +68,28 @@ const Landing = () => {
     }
   ];
 
+  // FAQ Data for landing page footer
+  const faqs = [
+    {
+      question: 'How does ePrescribe Kenya ensure prescription security?',
+      answer: 'We use blockchain technology to create immutable records that prevent counterfeit prescriptions.'
+    },
+    {
+      question: 'Can patients verify their prescriptions?',
+      answer: 'Yes, patients and pharmacists can verify prescriptions instantly using QR code scanning.'
+    },
+    {
+      question: 'Who can join this platform?',
+      answer: 'Doctors, patients, pharmacists, manufacturers, distributors, and regulators across Kenya.'
+    },
+    {
+      question: 'How can I contact support?',
+      answer: 'Use the contact information provided below or visit our support pages.'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -237,17 +257,91 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-foreground/5 py-12">
-        <div className="container mx-auto px-4 text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-6 h-6 bg-gradient-to-r from-primary to-accent rounded-md flex items-center justify-center">
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-gradient">ePrescribe Kenya</span>
+      <footer className="bg-foreground/5 border-t border-muted/30 py-16 px-6 sm:px-12 lg:px-24 text-background mt-auto">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+          {/* Contact Info */}
+          <div>
+            <h3 className="text-xl font-semibold mb-4 text-primary">Contact Us</h3>
+            <ul className="space-y-2 text-muted-foreground text-sm">
+              <li className="flex items-center space-x-2">
+                <Mail className="w-5 h-5 text-primary" />
+                <span>support@eprescribe.ke</span>
+              </li>
+              <li className="flex items-center space-x-2">
+                <Phone className="w-5 h-5 text-primary" />
+                <span>+254 700 123 456</span>
+              </li>
+            </ul>
           </div>
-          <p className="text-muted-foreground">
-            Securing Kenya's healthcare future with blockchain technology
-          </p>
+
+          {/* Social Media */}
+          <div>
+            <h3 className="text-xl font-semibold mb-4 text-primary">Follow Us</h3>
+            <div className="flex space-x-6 text-muted-foreground">
+              <a
+                href="https://instagram.com/eprescribe.ke"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="hover:text-primary transition"
+              >
+                <Instagram className="w-6 h-6" />
+              </a>
+              <a
+                href="https://twitter.com/eprescribe_ke"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Twitter"
+                className="hover:text-primary transition"
+              >
+                <Twitter className="w-6 h-6" />
+              </a>
+              <a
+                href="https://tiktok.com/@eprescribe.ke"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="TikTok"
+                className="hover:text-primary transition"
+              >
+                <Youtube className="w-6 h-6" />
+              </a>
+            </div>
+          </div>
+
+          {/* FAQ */}
+          <div>
+            <h3 className="text-xl font-semibold mb-4 text-primary">FAQs</h3>
+            <ul className="space-y-3 text-muted-foreground text-sm">
+              <li className="space-y-1">
+                <p className="font-semibold">How does ePrescribe Kenya ensure prescription security?</p>
+                <p>We use blockchain technology to create immutable records that prevent counterfeit prescriptions.</p>
+              </li>
+              <li className="space-y-1">
+                <p className="font-semibold">Can patients verify their prescriptions?</p>
+                <p>Yes, patients and pharmacists can verify prescriptions instantly using QR code scanning.</p>
+              </li>
+              <li className="space-y-1">
+                <p className="font-semibold">Who can join this platform?</p>
+                <p>Doctors, patients, pharmacists, manufacturers, distributors, and regulators across Kenya.</p>
+              </li>
+              <li className="space-y-1">
+                <p className="font-semibold">How can I contact support?</p>
+                <p>Use the contact information provided or visit our support pages.</p>
+              </li>
+            </ul>
+          </div>
+
+          {/* About Us */}
+          <div>
+            <h3 className="text-xl font-semibold mb-4 text-primary">About Us</h3>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              ePrescribe Kenya is dedicated to securing Kenya's healthcare future through blockchain technology. We provide a cutting-edge digital prescription platform that empowers healthcare professionals and patients while eliminating counterfeit drugs.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-12 text-center text-muted-foreground text-xs">
+          &copy; {new Date().getFullYear()} ePrescribe Kenya. All rights reserved.
         </div>
       </footer>
     </div>

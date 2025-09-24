@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -5,9 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Shield, AlertTriangle, CheckCircle, Clock, FileText, Eye, Gavel, Scale } from "lucide-react";
+import { Search, Shield, AlertTriangle, CheckCircle, Clock, FileText, Eye, Gavel, Scale, CheckSquare, Activity } from "lucide-react";
 
 const RegulatorComplianceActions = () => {
+    const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
+    { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
+    { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
+    { icon: AlertTriangle, label: 'Alerts', path: '/regulator/alerts', active: false },
+    { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: true },
+    { icon: Activity, label: 'Activity Logs', path: '/regulator/activity-logs', active: false },
+  ];
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -108,11 +118,10 @@ const RegulatorComplianceActions = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+   <DashboardLayout sidebarItems={sidebarItems} userRole="regulator" userName="Dr. Jane Regulator" userEmail="jane@ppb.go.ke">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-4xl font-bold text-gradient">Compliance Actions</h1>
+           <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">Compliance Actions</h1>
           <p className="text-lg text-muted-foreground mt-2">
             Regulatory enforcement and compliance management
           </p>
@@ -377,7 +386,7 @@ const RegulatorComplianceActions = () => {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+      </DashboardLayout>
   );
 };
 

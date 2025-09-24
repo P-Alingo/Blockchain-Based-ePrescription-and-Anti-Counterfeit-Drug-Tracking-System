@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -5,9 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Bell, AlertTriangle, Clock, CheckCircle, Shield, Activity, Filter, Eye } from "lucide-react";
+import { Search, Bell, AlertTriangle, Clock, CheckCircle, Shield, Activity, Filter, Eye, CheckSquare, FileText } from "lucide-react";
 
 const RegulatorAlerts = () => {
+    const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
+    { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
+    { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
+    { icon: AlertTriangle, label: 'Alerts', path: '/regulator/alerts', active: true },
+    { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/regulator/activity-logs', active: false },
+  ];
+
   const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
 
@@ -108,11 +118,10 @@ const RegulatorAlerts = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+   <DashboardLayout sidebarItems={sidebarItems} userRole="regulator" userName="Dr. Jane Regulator" userEmail="jane@ppb.go.ke">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-4xl font-bold text-gradient">System Alerts</h1>
+           <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">System Alerts</h1>
           <p className="text-lg text-muted-foreground mt-2">
             Real-time monitoring and incident response management
           </p>
@@ -368,7 +377,7 @@ const RegulatorAlerts = () => {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+      </DashboardLayout>
   );
 };
 

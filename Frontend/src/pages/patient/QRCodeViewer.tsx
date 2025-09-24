@@ -11,12 +11,14 @@ import {
   Share2,
   Maximize2,
   Smartphone,
+  Shield,
   AlertCircle
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const QRCodeViewer = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: false },
     { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: false },
     { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: true },
     { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: false },
@@ -68,7 +70,7 @@ const QRCodeViewer = () => {
       <div className="space-y-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">QR Code Viewer</h1>
+           <h1 className="text-3xl font-bold text-green-600">QR Code Viewer</h1>
             <p className="text-muted-foreground">Show prescription QR codes for pharmacy scanning</p>
           </div>
         </div>

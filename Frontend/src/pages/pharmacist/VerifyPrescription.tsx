@@ -1,12 +1,22 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, FileText, Clock, User, AlertTriangle, CheckCircle } from "lucide-react";
-
+import { ShieldCheck, FileText, Clock, User, AlertTriangle, CheckCircle, Activity, Package, Shield, Scan, PillBottle } from "lucide-react";
+  
 const VerifyPrescription = () => {
+  const sidebarItems = [
+  { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
+    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: false },
+    { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: true },
+    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
+    { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: false },
+  ];
+
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationResult, setVerificationResult] = useState(null);
 
@@ -28,13 +38,10 @@ const VerifyPrescription = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <ShieldCheck className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+   <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
+         <div className="space-y-8">
+           <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Verify Prescription
           </h1>
           <p className="text-muted-foreground">Validate prescription authenticity using blockchain verification</p>
@@ -148,8 +155,9 @@ const VerifyPrescription = () => {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </DashboardLayout>
   );
 };
+
 
 export default VerifyPrescription;

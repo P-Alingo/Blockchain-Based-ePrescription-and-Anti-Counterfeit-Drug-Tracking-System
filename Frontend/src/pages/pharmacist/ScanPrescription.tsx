@@ -1,5 +1,5 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Scan, Shield, Package, Activity, Camera, Upload, QrCode } from 'lucide-react';
+import { Scan, Shield, Package, Activity, Camera, Upload, QrCode, PillBottle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +9,10 @@ import { Badge } from '@/components/ui/badge';
 
 const ScanPrescription = () => {
   const sidebarItems = [
+  { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
     { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: true },
     { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: false },
+    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
     { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
     { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: false },
   ];
@@ -25,7 +27,7 @@ const ScanPrescription = () => {
     <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+         <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Scan Prescription
           </h1>
           <p className="text-muted-foreground">Scan and verify electronic prescriptions using QR codes or manual entry</p>

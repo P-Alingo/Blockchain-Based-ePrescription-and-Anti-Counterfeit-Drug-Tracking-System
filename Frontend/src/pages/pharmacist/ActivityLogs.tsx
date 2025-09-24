@@ -5,9 +5,18 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, Search, Filter, Download, Calendar, User, Pill } from "lucide-react";
+import { Activity, Search, Filter, Download, Calendar, User, Pill, Package, Shield, Scan, PillBottle } from "lucide-react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 
 const PharmacistActivityLogs = () => {
+  const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
+    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: false },
+    { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: false },
+    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
+    { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: true },
+  ];
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
 
@@ -89,14 +98,11 @@ const PharmacistActivityLogs = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Activity className="h-6 w-6 text-primary" />
-          </div>
+   <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
+      <div className="space-y-8">
+        <div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+           <h1 className="text-3xl font-bold text-purple-600">
               Activity Logs
             </h1>
             <p className="text-muted-foreground">Monitor all pharmacy system activities and transactions</p>
@@ -239,7 +245,7 @@ const PharmacistActivityLogs = () => {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </DashboardLayout>
   );
 };
 

@@ -1,37 +1,148 @@
-import { useState } from 'react';
+// Login.tsx
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, Eye, EyeOff, Wallet } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Shield, Wallet } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('');
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [nonce, setNonce] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [is2FAVerified, setIs2FAVerified] = useState(false);
+  const [jwtToken, setJwtToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
 
-  const userRoles = [
-    { value: 'doctor', label: 'Doctor' },
-    { value: 'patient', label: 'Patient' },
-    { value: 'pharmacist', label: 'Pharmacist' },
-    { value: 'manufacturer', label: 'Manufacturer' },
-    { value: 'distributor', label: 'Distributor' },
-    { value: 'regulator', label: 'Regulator' },
-    { value: 'admin', label: 'Administrator' }
-  ];
+  const navigate = useNavigate();
 
-  const handleLogin = () => {
-    if (selectedRole) {
-      // Redirect to appropriate dashboard based on role
-      window.location.href = `/${selectedRole}/dashboard`;
+  // Helper: Connect to MetaMask wallet
+  const connectWallet = async () => {
+    if (!(window as any).ethereum) {
+      setErrorMsg('MetaMask is not installed. Please install it to continue.');
+      return;
+    }
+    try {
+      setErrorMsg(null);
+      const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+      if (accounts.length > 0) {
+        setWalletAddress(accounts[0]);
+        return accounts[0];
+      }
+    } catch (err: any) {
+      setErrorMsg('Wallet connection failed.');
+    }
+    return null;
+  };
+
+  // Start login flow: connect wallet and get nonce from backend
+  const startLogin = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    const address = await connectWallet();
+    if (!address) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Fetch nonce for this wallet address from backend
+      const res = await fetch(`/api/auth/nonce?wallet=${address}`);
+      if (!res.ok) throw new Error('Failed to get nonce');
+      const data = await res.json();
+      setNonce(data.nonce);
+    } catch (err) {
+      setErrorMsg('Could not get nonce for signing. Please try again.');
+      setLoading(false);
     }
   };
+
+  // Sign the nonce message with wallet
+  const signNonce = async () => {
+    if (!walletAddress || !nonce) return;
+    try {
+      const message = `Login nonce: ${nonce}`;
+      const signature = await (window as any).ethereum.request({
+        method: 'personal_sign',
+        params: [message, walletAddress],
+      });
+      setSignature(signature);
+    } catch (err) {
+      setErrorMsg('Signature rejected or failed.');
+      setLoading(false);
+    }
+  };
+
+  // Verify signature and obtain 2FA requirement and role
+  useEffect(() => {
+    if (!signature) return;
+
+    const verifySignature = async () => {
+      try {
+        const res = await fetch('/api/auth/verify-signature', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet: walletAddress, signature }),
+        });
+        if (!res.ok) throw new Error('Verification failed');
+        const data = await res.json();
+        // data could contain { requires2FA: boolean, role: string }
+        if (data.requires2FA) {
+          // Show 2FA input or handle 2FA flow here
+          // For demo, let's simulate 2FA success immediately
+          setIs2FAVerified(true);
+          setSelectedRole(data.role);
+        } else {
+          // Directly get JWT if no 2FA required
+          setJwtToken(data.token);
+          setSelectedRole(data.role);
+        }
+      } catch (err) {
+        setErrorMsg('Signature verification failed.');
+        setLoading(false);
+      }
+    };
+    verifySignature();
+  }, [signature, walletAddress]);
+
+  // After 2FA success or if no 2FA, get JWT token
+  useEffect(() => {
+    if (!is2FAVerified || !walletAddress) return;
+    const getJwtAfter2FA = async () => {
+      try {
+        const res = await fetch('/api/auth/2fa-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet: walletAddress }),
+        });
+        if (!res.ok) throw new Error('2FA verification failed');
+        const data = await res.json();
+        setJwtToken(data.token);
+        setSelectedRole(data.role);
+      } catch (err) {
+        setErrorMsg('2FA verification failed.');
+        setLoading(false);
+      }
+    };
+    getJwtAfter2FA();
+  }, [is2FAVerified, walletAddress]);
+
+  // Redirect once JWT token and role are set
+  useEffect(() => {
+    if (jwtToken && selectedRole) {
+      // Save token to localStorage or context as needed
+      localStorage.setItem('jwtToken', jwtToken);
+      localStorage.setItem('userRole', selectedRole);
+      // Redirect to dashboard according to role
+      navigate(`/${selectedRole}/dashboard`);
+    }
+  }, [jwtToken, selectedRole, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 gradient-bg opacity-5"></div>
-      
+
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
@@ -41,7 +152,7 @@ const Login = () => {
             <span className="text-2xl font-bold text-gradient">ePrescribe Kenya</span>
           </div>
           <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
-          <p className="text-muted-foreground">Sign in to access your dashboard</p>
+          <p className="text-muted-foreground">Sign in securely with your MetaMask wallet</p>
         </div>
 
         <Card className="card-elevated">
@@ -49,78 +160,58 @@ const Login = () => {
             <CardTitle>Sign In</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="doctor@hospital.co.ke"
-                className="focus:ring-primary"
-              />
-            </div>
+            {errorMsg && (
+              <div className="text-red-600 text-center font-semibold">{errorMsg}</div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input 
-                  id="password" 
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
-                  className="focus:ring-primary pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </Button>
+            {!walletAddress && (
+              <Button
+                onClick={startLogin}
+                className="w-full btn-gradient-primary text-lg py-6 flex items-center justify-center space-x-2"
+                disabled={loading}
+              >
+                <Wallet className="h-5 w-5" />
+                <span>{loading ? 'Connecting Wallet...' : 'Connect MetaMask Wallet'}</span>
+              </Button>
+            )}
+
+            {walletAddress && !nonce && (
+              <div className="text-center text-muted-foreground">
+                Connected wallet: <span className="font-mono">{walletAddress}</span><br />
+                Loading nonce...
               </div>
-            </div>
+            )}
 
-            <div className="space-y-2">
-              <Label>Select Your Role</Label>
-              <Select onValueChange={setSelectedRole}>
-                <SelectTrigger className="focus:ring-primary">
-                  <SelectValue placeholder="Choose your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userRoles.map(role => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {nonce && !signature && (
+              <Button
+                onClick={signNonce}
+                className="w-full btn-gradient-primary text-lg py-6"
+                disabled={loading}
+              >
+                Sign Login Message
+              </Button>
+            )}
 
-            <Button 
-              onClick={handleLogin}
-              disabled={!selectedRole}
-              className="w-full btn-gradient-primary text-lg py-6"
-            >
-              Sign In to Dashboard
-            </Button>
+            {signature && !jwtToken && (
+              <div className="text-center text-muted-foreground">
+                Verifying signature...
+              </div>
+            )}
+
+            {jwtToken && (
+              <div className="text-center text-success font-semibold">
+                Login successful! Redirecting...
+              </div>
+            )}
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
               </div>
             </div>
-
-            <Button variant="outline" className="w-full py-6 border-primary/30 hover:bg-primary/5">
-              <Wallet className="mr-2 h-5 w-5" />
-              Connect MetaMask Wallet
-            </Button>
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">

@@ -1,5 +1,5 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Scan, Shield, Package, Activity, TrendingUp, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Scan, Shield, Package, Activity, TrendingUp, AlertTriangle, CheckCircle, Clock, PillBottle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 
 const PharmacistDashboard = () => {
   const sidebarItems = [
-    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: true },
+    { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: true },
+    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: false },
     { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: false },
+    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
     { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
     { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: false },
   ];
@@ -23,7 +25,7 @@ const PharmacistDashboard = () => {
     <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Pharmacist Dashboard
           </h1>
           <p className="text-muted-foreground">Monitor prescriptions, verify authenticity, and manage inventory</p>

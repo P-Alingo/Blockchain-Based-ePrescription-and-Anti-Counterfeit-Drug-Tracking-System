@@ -1,33 +1,120 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Shield, Eye, EyeOff, CheckCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Shield, Wallet } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Register = () => {
-  const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('');
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [nonce, setNonce] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const navigate = useNavigate();
 
   const userRoles = [
-    { value: 'doctor', label: 'Doctor', description: 'Licensed medical practitioner' },
-    { value: 'patient', label: 'Patient', description: 'Healthcare service recipient' },
-    { value: 'pharmacist', label: 'Pharmacist', description: 'Licensed pharmacy professional' },
-    { value: 'manufacturer', label: 'Manufacturer', description: 'Pharmaceutical manufacturer' },
-    { value: 'distributor', label: 'Distributor', description: 'Pharmaceutical distributor' },
-    { value: 'regulator', label: 'Regulator', description: 'Healthcare regulatory body' }
+    { value: 'doctor', label: 'Doctor' },
+    { value: 'patient', label: 'Patient' },
+    { value: 'pharmacist', label: 'Pharmacist' },
+    { value: 'manufacturer', label: 'Manufacturer' },
+    { value: 'distributor', label: 'Distributor' },
+    { value: 'regulator', label: 'Regulator' }
   ];
+
+  const connectWallet = async () => {
+    if (!(window as any).ethereum) {
+      setErrorMsg('MetaMask is not installed. Please install it to continue.');
+      return null;
+    }
+    try {
+      setErrorMsg(null);
+      const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+      if (accounts.length > 0) {
+        setWalletAddress(accounts[0]);
+        return accounts[0];
+      }
+    } catch (error) {
+      console.error('Wallet connection error:', error);
+      setErrorMsg('Wallet connection failed.');
+    }
+    return null;
+  };
+
+  const startRegistration = async () => {
+    setErrorMsg(null);
+    if (!selectedRole) {
+      setErrorMsg('Please select your role before connecting wallet.');
+      return;
+    }
+    setLoading(true);
+    const address = await connectWallet();
+    if (!address) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/register?walletAddress=${address}`);
+      if (!res.ok) throw new Error('Failed to get nonce from server');
+      const data = await res.json();
+      setNonce(data.nonce);
+    } catch (error) {
+      console.error('Fetching nonce error:', error);
+      setErrorMsg('Failed to get nonce from server. Try again.');
+      setLoading(false);
+    }
+  };
+
+  const signNonce = async () => {
+    if (!walletAddress || !nonce) return;
+    setLoading(true);
+    try {
+      const signature = await (window as any).ethereum.request({
+        method: 'personal_sign',
+        params: [nonce, walletAddress],
+      });
+      setSignature(signature);
+    } catch (error) {
+      console.error('Signing error:', error);
+      setErrorMsg('Signature rejected or failed.');
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const submitRegistration = async () => {
+      if (!walletAddress || !signature || !selectedRole) return;
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress, signature, role: selectedRole }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || 'Registration failed');
+        }
+        // Success: redirect to confirmation or dashboard
+        navigate('/register/confirmation');
+      } catch (error) {
+        console.error('Registration submission error:', error);
+        setErrorMsg((error as Error).message || 'Registration failed.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (signature) {
+      submitRegistration();
+    }
+  }, [signature, walletAddress, selectedRole, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 gradient-bg opacity-5"></div>
-      
-      <div className="w-full max-w-2xl relative z-10">
+
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="w-10 h-10 bg-gradient-to-r from-primary to-accent rounded-xl flex items-center justify-center">
@@ -36,149 +123,83 @@ const Register = () => {
             <span className="text-2xl font-bold text-gradient">ePrescribe Kenya</span>
           </div>
           <h1 className="text-3xl font-bold mb-2">Create Account</h1>
-          <p className="text-muted-foreground">Join Kenya's secure prescription network</p>
+          <p className="text-muted-foreground">Register securely with your MetaMask wallet</p>
         </div>
 
         <Card className="card-elevated">
           <CardHeader>
-            <CardTitle>Registration Form</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              All fields are required. Your application will be reviewed by our admin team.
+            <CardTitle>Registration</CardTitle>
+            <p className="text-sm text-muted-foreground mb-4">
+              Choose your role, connect your wallet, then sign the message to register.
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input 
-                  id="firstName" 
-                  placeholder="Enter your first name"
-                  className="focus:ring-primary"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input 
-                  id="lastName" 
-                  placeholder="Enter your last name"
-                  className="focus:ring-primary"
-                />
-              </div>
+            {errorMsg && (
+              <div className="text-red-600 text-center font-semibold">{errorMsg}</div>
+            )}
+
+            <div>
+              <label htmlFor="role" className="block mb-1 font-semibold text-sm">
+                Select Your Role
+              </label>
+              <select
+                id="role"
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                disabled={!!walletAddress}
+              >
+                <option value="" disabled>
+                  Choose your role
+                </option>
+                {userRoles.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="your.email@example.com"
-                className="focus:ring-primary"
-              />
-            </div>
+            {!walletAddress && (
+              <Button
+                onClick={startRegistration}
+                className="w-full btn-gradient-primary text-lg py-6 flex items-center justify-center space-x-2"
+                disabled={loading || !selectedRole}
+              >
+                <Wallet className="h-5 w-5" />
+                <span>{loading ? 'Connecting Wallet...' : 'Connect Wallet & Get Nonce'}</span>
+              </Button>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input 
-                id="phone" 
-                type="tel" 
-                placeholder="+254 700 000 000"
-                className="focus:ring-primary"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input 
-                  id="password" 
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Create a strong password"
-                  className="focus:ring-primary pr-10"
-                />
+            {walletAddress && nonce && !signature && (
+              <div>
+                <div className="text-center text-muted-foreground mb-4">
+                  Connected wallet: <span className="font-mono">{walletAddress}</span>
+                </div>
                 <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={signNonce}
+                  className="w-full btn-gradient-primary text-lg py-6"
+                  disabled={loading}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  )}
+                  {loading ? 'Waiting for Signature...' : 'Sign Registration Message'}
                 </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select onValueChange={setSelectedRole}>
-                <SelectTrigger className="focus:ring-primary">
-                  <SelectValue placeholder="Select your professional role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userRoles.map(role => (
-                    <SelectItem key={role.value} value={role.value}>
-                      <div>
-                        <div className="font-medium">{role.label}</div>
-                        <div className="text-xs text-muted-foreground">{role.description}</div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedRole && selectedRole !== 'patient' && (
-              <div className="space-y-2">
-                <Label htmlFor="credentials">Professional Credentials</Label>
-                <Textarea 
-                  id="credentials"
-                  placeholder={`Please provide your ${selectedRole} license number, institution affiliation, or other relevant credentials...`}
-                  className="focus:ring-primary min-h-[80px]"
-                />
-                <p className="text-xs text-muted-foreground">
-                  This information will be verified by our admin team before account approval.
-                </p>
               </div>
             )}
 
-            <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
-              <div className="flex items-start space-x-3">
-                <Checkbox 
-                  id="terms"
-                  checked={agreeToTerms}
-                  onCheckedChange={(checked) => setAgreeToTerms(checked as boolean)}
-                />
-                <div className="text-sm">
-                  <Label htmlFor="terms" className="cursor-pointer">
-                    I agree to the{' '}
-                    <Link to="/terms" className="text-primary hover:underline">
-                      Terms of Service
-                    </Link>{' '}
-                    and{' '}
-                    <Link to="/privacy" className="text-primary hover:underline">
-                      Privacy Policy
-                    </Link>
-                  </Label>
-                </div>
+            {signature && (
+              <div className="text-center text-success font-semibold">
+                Signature received. Completing registration...
               </div>
-              
-              <div className="flex items-start space-x-3">
-                <CheckCircle className="w-4 h-4 text-success mt-1 flex-shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                  Your data will be securely stored and used only for authentication and system access purposes.
-                </p>
+            )}
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
               </div>
             </div>
-
-            <Button 
-              disabled={!selectedRole || !agreeToTerms}
-              className="w-full btn-gradient-primary text-lg py-6"
-            >
-              Submit Application
-            </Button>
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">

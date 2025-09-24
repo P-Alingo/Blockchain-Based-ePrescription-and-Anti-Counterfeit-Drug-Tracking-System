@@ -1,3 +1,4 @@
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,9 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, MapPin, Clock, Package, CheckCircle, AlertTriangle } from "lucide-react";
+import { Truck, MapPin, Clock, Package, CheckCircle, AlertTriangle, RotateCcw, FileText, Activity } from "lucide-react";
 
 const UpdateShipment = () => {
+   const sidebarItems = [
+    { icon: Truck, label: 'Dashboard', path: '/distributor/dashboard', active: false },
+    { icon: Package, label: 'Active Shipments', path: '/distributor/active-shipments', active: false },
+    { icon: RotateCcw, label: 'Update Shipment', path: '/distributor/update-shipment', active: true },
+    { icon: FileText, label: 'Shipment Logs', path: '/distributor/shipment-logs', active: false },
+    { icon: Activity, label: 'Activity Logs', path: '/distributor/activity-logs', active: false },
+  ];
+
   const [shipmentId, setShipmentId] = useState("");
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [updateNotes, setUpdateNotes] = useState("");
@@ -37,13 +46,10 @@ const UpdateShipment = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-background to-primary/5 min-h-screen">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <Truck className="h-6 w-6 text-primary" />
-        </div>
+    <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName="Mike Distributor" userEmail="mike@logistics.co.ke">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">
             Update Shipment
           </h1>
           <p className="text-muted-foreground">Track and update pharmaceutical shipment status</p>
@@ -241,7 +247,7 @@ const UpdateShipment = () => {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </DashboardLayout>
   );
 };
 

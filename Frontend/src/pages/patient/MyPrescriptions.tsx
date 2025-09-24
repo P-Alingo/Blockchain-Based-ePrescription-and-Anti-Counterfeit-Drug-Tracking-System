@@ -12,6 +12,7 @@ import {
   Calendar,
   Download,
   Eye,
+  Shield,
   Pill
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const MyPrescriptions = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: false },
     { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: true },
     { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: false },
     { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: false },
@@ -111,7 +113,7 @@ const MyPrescriptions = () => {
       <div className="space-y-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">My Prescriptions</h1>
+           <h1 className="text-3xl font-bold text-green-600">My Prescriptions</h1>
             <p className="text-muted-foreground">View and manage all your prescription history</p>
           </div>
           <Button className="btn-gradient-primary">

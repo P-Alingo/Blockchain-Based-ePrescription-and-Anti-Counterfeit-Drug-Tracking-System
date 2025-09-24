@@ -18,6 +18,7 @@ import {
 
 const BlockchainVerification = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard', active: false },
     { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription', active: false },
     { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions', active: false },
     { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification', active: true },
@@ -84,7 +85,7 @@ const BlockchainVerification = () => {
     >
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">Blockchain Verification</h1>
+          <h1 className="text-3xl font-bold text-blue-600">Blockchain Verification</h1>
           <p className="text-muted-foreground">Monitor prescription blockchain status and verification</p>
         </div>
 

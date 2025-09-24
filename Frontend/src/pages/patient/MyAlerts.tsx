@@ -10,11 +10,13 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Pill
+  Pill,
+  Shield
 } from 'lucide-react';
 
 const MyAlerts = () => {
   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: false },
     { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: false },
     { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: false },
     { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: true },
@@ -51,7 +53,7 @@ const MyAlerts = () => {
     >
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">My Alerts</h1>
+          <h1 className="text-3xl font-bold text-green-600">My Alerts</h1>
           <p className="text-muted-foreground">Stay updated with prescription and medication alerts</p>
         </div>
 
