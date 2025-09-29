@@ -1,0 +1,38 @@
+{
+  "name": "eprescribe-kenya-backend",
+  "version": "1.0.0",
+   "type": "module",
+  "description": "Backend API for Pharma Supply Chain Management with blockchain, IPFS, and role-based auth",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest --coverage",
+    "prisma:migrate": "prisma migrate deploy"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^4.16.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "ethers": "^5.7.2",
+    "express": "^4.21.2",
+    "express-rate-limit": "^6.11.2",
+    "helmet": "^8.1.0",
+    "ipfs-http-client": "^59.0.0",
+    "joi": "^17.7.0",
+    "jsonwebtoken": "^9.0.0",
+    "morgan": "^1.10.1",
+    "nodemailer": "^6.9.1",
+    "qrcode": "^1.5.1",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "jest": "^29.5.0",
+    "nodemon": "^2.0.22",
+    "prisma": "^4.16.2",
+    "supertest": "^6.3.3"
+  }
+}

@@ -1,0 +1,345 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id    Int    @id @default(autoincrement())
+  name  String @unique @db.VarChar(50)
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id                                                      Int                 @id @default(autoincrement())
+  wallet                                                  String              @unique @db.VarChar(100)
+  email                                                   String?             @unique @db.VarChar(100)
+  passwordhash                                            String?             @db.VarChar(255)
+  roleid                                                  Int?
+  createdAt                                               DateTime?           @default(now()) @map("createdat") @db.Timestamp(6)
+  updatedAt                                               DateTime?           @default(now()) @updatedAt @map("updatedat") @db.Timestamp(6)
+  activitylog                                             ActivityLog[]
+  admin                                                   Admin?
+  alert                                                   Alert[]
+  distributor                                             Distributor?
+  doctor                                                  Doctor?
+  manufacturer                                            Manufacturer?
+  otp                                                     Otp[]
+  patient                                                 Patient?
+  pharmacist                                              Pharmacist?
+  regulator                                               Regulator?
+  reports                                                 Report[]
+  revocationrecord                                        RevocationRecord[]
+  supplychainrecord_supplychainrecord_fromentityidTousers SupplyChainRecord[] @relation("supplychainrecord_fromentityidTousers")
+  supplychainrecord_supplychainrecord_toentityidTousers   SupplyChainRecord[] @relation("supplychainrecord_toentityidTousers")
+  roles                                                   Role?               @relation(fields: [roleid], references: [id], onUpdate: NoAction)
+
+  @@index([wallet], map: "idx_user_wallet")
+  @@index([email], map: "idx_user_email")
+  @@index([roleid], map: "idx_user_role")
+  @@index([createdAt], map: "idx_user_createdat")
+  @@map("users")
+}
+
+model Permission {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(50)
+
+  @@map("permissions")
+}
+
+model Doctor {
+  id           Int            @id @default(autoincrement())
+  userid       Int?           @unique
+  licenseno    String         @unique @db.VarChar(100)
+  hospital     String         @db.VarChar(100)
+  users        User?          @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  prescription Prescription[]
+
+  @@index([userid], map: "idx_doctor_user")
+  @@index([licenseno], map: "idx_doctor_license")
+  @@map("doctor")
+}
+
+model Patient {
+  id           Int            @id @default(autoincrement())
+  userid       Int?           @unique
+  dateofbirth  DateTime       @db.Date
+  users        User?          @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  prescription Prescription[]
+
+  @@index([userid], map: "idx_patient_user")
+  @@index([dateofbirth], map: "idx_patient_dob")
+  @@map("patient")
+}
+
+model Pharmacist {
+  id             Int              @id @default(autoincrement())
+  userid         Int?             @unique
+  licenseno      String           @unique @db.VarChar(100)
+  pharmacy       String           @db.VarChar(100)
+  dispenserecord DispenseRecord[]
+  users          User?            @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_pharmacist_user")
+  @@index([licenseno], map: "idx_pharmacist_license")
+  @@map("pharmacist")
+}
+
+model Manufacturer {
+  id          Int         @id @default(autoincrement())
+  userid      Int?        @unique
+  companyname String      @db.VarChar(100)
+  drugbatch   DrugBatch[]
+  users       User?       @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_manufacturer_user")
+  @@index([companyname], map: "idx_manufacturer_company")
+  @@map("manufacturer")
+}
+
+model Distributor {
+  id          Int    @id @default(autoincrement())
+  userid      Int?   @unique
+  companyname String @db.VarChar(100)
+  users       User?  @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_distributor_user")
+  @@index([companyname], map: "idx_distributor_company")
+  @@map("distributor")
+}
+
+model Regulator {
+  id         Int    @id @default(autoincrement())
+  userid     Int?   @unique
+  agencyname String @db.VarChar(100)
+  users      User?  @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_regulator_user")
+  @@index([agencyname], map: "idx_regulator_agency")
+  @@map("regulator")
+}
+
+model Admin {
+  id     Int   @id @default(autoincrement())
+  userid Int?  @unique
+  users  User? @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_admin_user")
+  @@map("admin")
+}
+
+model Drug {
+  id           Int            @id @default(autoincrement())
+  name         String         @db.VarChar(100)
+  code         String         @unique @db.VarChar(50)
+  formulation  String         @db.VarChar(50)
+  dosageunit   String         @db.VarChar(20)
+  drugbatch    DrugBatch[]
+  prescription Prescription[]
+
+  @@index([name], map: "idx_drug_name")
+  @@index([code], map: "idx_drug_code")
+  @@map("drug")
+}
+
+model Prescription {
+  id                 Int                  @id @default(autoincrement())
+  patientid          Int?
+  doctorid           Int?
+  drugid             Int?
+  dosage             String               @db.VarChar(50)
+  issuedat           DateTime?            @default(now()) @db.Timestamp(6)
+  expiresat          DateTime             @db.Timestamp(6)
+  blockchaintx       String?              @db.VarChar(255)
+  qrcode             String
+  ipfshash           String?              @db.VarChar(255)
+  status             String               @db.VarChar(50)
+  blockchaineventlog BlockchainEventLog[]
+  dispenserecord     DispenseRecord[]
+  doctor             Doctor?              @relation(fields: [doctorid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  drug               Drug?                @relation(fields: [drugid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  patient            Patient?             @relation(fields: [patientid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([patientid], map: "idx_prescription_patient")
+  @@index([doctorid], map: "idx_prescription_doctor")
+  @@index([drugid], map: "idx_prescription_drug")
+  @@index([issuedat], map: "idx_prescription_issued")
+  @@index([expiresat], map: "idx_prescription_expires")
+  @@index([status], map: "idx_prescription_status")
+  @@index([blockchaintx], map: "idx_prescription_tx")
+  @@map("prescription")
+}
+
+model DrugBatch {
+  id                 Int                  @id @default(autoincrement())
+  manufacturerid     Int?
+  drugid             Int?
+  batchnumber        String               @unique @db.VarChar(50)
+  manufacturedate    DateTime             @db.Date
+  expirydate         DateTime             @db.Date
+  blockchaintx       String?              @db.VarChar(255)
+  qrcode             String
+  ipfshash           String?              @db.VarChar(255)
+  blockchaineventlog BlockchainEventLog[]
+  dispenserecord     DispenseRecord[]
+  drug               Drug?                @relation(fields: [drugid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  manufacturer       Manufacturer?        @relation(fields: [manufacturerid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  supplychainrecord  SupplyChainRecord[]
+
+  @@index([manufacturerid], map: "idx_drugbatch_manufacturer")
+  @@index([drugid], map: "idx_drugbatch_drug")
+  @@index([batchnumber], map: "idx_drugbatch_batchnumber")
+  @@index([manufacturedate], map: "idx_drugbatch_manufactured")
+  @@index([expirydate], map: "idx_drugbatch_expiry")
+  @@index([blockchaintx], map: "idx_drugbatch_tx")
+  @@map("drugbatch")
+}
+
+model SupplyChainRecord {
+  id                                          Int                  @id @default(autoincrement())
+  drugbatchid                                 Int?
+  fromentityid                                Int?
+  toentityid                                  Int?
+  action                                      String               @db.VarChar(50)
+  timestamp                                   DateTime?            @default(now()) @db.Timestamp(6)
+  blockchaintx                                String?              @db.VarChar(255)
+  blockchaineventlog                          BlockchainEventLog[]
+  drugbatch                                   DrugBatch?           @relation(fields: [drugbatchid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_supplychainrecord_fromentityidTousers User?                @relation("supplychainrecord_fromentityidTousers", fields: [fromentityid], references: [id], onUpdate: NoAction)
+  users_supplychainrecord_toentityidTousers   User?                @relation("supplychainrecord_toentityidTousers", fields: [toentityid], references: [id], onUpdate: NoAction)
+
+  @@index([drugbatchid], map: "idx_supplychain_batch")
+  @@index([fromentityid], map: "idx_supplychain_from")
+  @@index([toentityid], map: "idx_supplychain_to")
+  @@index([action], map: "idx_supplychain_action")
+  @@index([timestamp], map: "idx_supplychain_timestamp")
+  @@index([blockchaintx], map: "idx_supplychain_tx")
+  @@map("supplychainrecord")
+}
+
+model RevocationRecord {
+  id           Int       @id @default(autoincrement())
+  type         String    @db.VarChar(50)
+  refid        Int
+  reason       String
+  revokedbyid  Int?
+  timestamp    DateTime? @default(now()) @db.Timestamp(6)
+  blockchaintx String?   @db.VarChar(255)
+  users        User?     @relation(fields: [revokedbyid], references: [id], onUpdate: NoAction)
+
+  @@index([type], map: "idx_revocation_type")
+  @@index([refid], map: "idx_revocation_ref")
+  @@index([revokedbyid], map: "idx_revocation_by")
+  @@index([timestamp], map: "idx_revocation_timestamp")
+  @@index([blockchaintx], map: "idx_revocation_tx")
+  @@map("revocationrecord")
+}
+
+model Otp {
+  id        Int       @id @default(autoincrement())
+  userid    Int?
+  code      String    @db.VarChar(10)
+  expiresat DateTime  @db.Timestamp(6)
+  createdat DateTime? @default(now()) @db.Timestamp(6)
+  users     User?     @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_otp_user")
+  @@index([code], map: "idx_otp_code")
+  @@index([expiresat], map: "idx_otp_expires")
+  @@map("otp")
+}
+
+model Alert {
+  id        Int       @id @default(autoincrement())
+  userid    Int?
+  title     String    @db.VarChar(100)
+  message   String
+  isread    Boolean?  @default(false)
+  priority  String    @db.VarChar(20)
+  createdat DateTime? @default(now()) @db.Timestamp(6)
+  users     User?     @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_alert_user")
+  @@index([isread], map: "idx_alert_read")
+  @@index([priority], map: "idx_alert_priority")
+  @@index([createdat], map: "idx_alert_created")
+  @@map("alert")
+}
+
+model ActivityLog {
+  id        Int       @id @default(autoincrement())
+  userid    Int?
+  action    String    @db.VarChar(100)
+  details   String?
+  timestamp DateTime? @default(now()) @db.Timestamp(6)
+  users     User?     @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_activity_user")
+  @@index([action], map: "idx_activity_action")
+  @@index([timestamp], map: "idx_activity_timestamp")
+  @@map("activitylog")
+}
+
+model Report {
+  id          Int       @id @default(autoincrement())
+  userid      Int?
+  reporttype  String    @db.VarChar(50)
+  filters     Json?
+  generatedat DateTime? @default(now()) @db.Timestamp(6)
+  ipfshash    String?   @db.VarChar(255)
+  users       User?     @relation(fields: [userid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userid], map: "idx_report_user")
+  @@index([reporttype], map: "idx_report_type")
+  @@index([generatedat], map: "idx_report_generated")
+  @@map("reports")
+}
+
+model DispenseRecord {
+  id             Int           @id @default(autoincrement())
+  prescriptionid Int?
+  pharmacistid   Int?
+  drugbatchid    Int?
+  quantity       Int
+  dispensedat    DateTime?     @default(now()) @db.Timestamp(6)
+  blockchaintx   String?       @db.VarChar(255)
+  drugbatch      DrugBatch?    @relation(fields: [drugbatchid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pharmacist     Pharmacist?   @relation(fields: [pharmacistid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  prescription   Prescription? @relation(fields: [prescriptionid], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([prescriptionid], map: "idx_dispense_prescription")
+  @@index([pharmacistid], map: "idx_dispense_pharmacist")
+  @@index([drugbatchid], map: "idx_dispense_batch")
+  @@index([dispensedat], map: "idx_dispense_dispensed")
+  @@index([blockchaintx], map: "idx_dispense_tx")
+  @@map("dispenserecord")
+}
+
+model BlockchainEventLog {
+  id                Int                @id @default(autoincrement())
+  eventname         String             @db.VarChar(100)
+  contractname      String             @db.VarChar(100)
+  entityid          Int?
+  entitytype        String?            @db.VarChar(50)
+  transactionhash   String             @unique @db.VarChar(255)
+  timestamp         DateTime?          @default(now()) @db.Timestamptz(6)
+  processed         Boolean?           @default(false)
+  drugbatch         DrugBatch?         @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_drugbatch")
+  prescription      Prescription?      @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_prescription")
+  supplychainrecord SupplyChainRecord? @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_supplychain")
+
+  @@index([eventname], map: "idx_blockchain_event")
+  @@index([contractname], map: "idx_blockchain_contract")
+  @@index([entityid], map: "idx_blockchain_entity")
+  @@index([entitytype], map: "idx_blockchain_entitytype")
+  @@index([transactionhash], map: "idx_blockchain_txhash")
+  @@index([timestamp], map: "idx_blockchain_timestamp")
+  @@index([processed], map: "idx_blockchain_processed")
+  @@map("blockchaineventlog")
+}

@@ -4,95 +4,291 @@ pragma solidity ^0.8.19;
 import "./UserManagement.sol";
 
 contract Prescription {
-    // Storage Variables
-    uint public prescriptionCounter;
     UserManagement public userManagement;
-    
+    uint public prescriptionCounter;
+
+    string constant DOCTOR = "doctor";
+    string constant PHARMACIST = "pharmacist";
+    string constant REGULATOR = "regulator";
+
     struct PrescriptionData {
         uint id;
-        address doctor;
-        address patient;
-        string drugDetails;
+        uint doctorUserId;
+        uint patientUserId;
+        uint drugId;
+        string dosage;
         string ipfsHash;
-        bool verified;
-        uint256 timestamp;
+        string qrCode;
+        string status;
+        uint256 issuedAt;
+        uint256 expiresAt;
+        bool isRevoked;
+        uint revokedByUserId;
+        string revocationReason;
+        uint256 revokedAt;
     }
-    
+
     mapping(uint => PrescriptionData) public prescriptions;
-    
-    // Events
-    event PrescriptionCreated(uint id, address doctor, address patient);
-    event PrescriptionVerified(uint id, address pharmacist);
-    
-    // Modifiers
+
+    event PrescriptionCreated(uint id, uint doctorUserId, uint patientUserId, uint drugId, string qrCode);
+    event PrescriptionVerified(uint id, uint pharmacistUserId);
+    event PrescriptionDispensed(uint id, uint pharmacistUserId);
+    event PrescriptionRevoked(uint indexed prescriptionId, uint revokedByUserId, string reason);
+
     modifier onlyDoctor() {
-        require(userManagement.isDoctor(msg.sender), "Only doctors can perform this action");
+        uint userId = userManagement.walletToUserId(msg.sender);
+        require(userId != 0, "User not registered");
+        require(
+            keccak256(bytes(userManagement.getRoleName(userManagement.getUser(msg.sender).roleId))) == keccak256(bytes(DOCTOR)),
+            "Only doctors can perform this action"
+        );
         _;
     }
-    
+
     modifier onlyPharmacist() {
-        require(userManagement.isPharmacist(msg.sender), "Only pharmacists can perform this action");
+        uint userId = userManagement.walletToUserId(msg.sender);
+        require(userId != 0, "User not registered");
+        require(
+            keccak256(bytes(userManagement.getRoleName(userManagement.getUser(msg.sender).roleId))) == keccak256(bytes(PHARMACIST)),
+            "Only pharmacists can perform this action"
+        );
         _;
     }
-    
+
+    modifier onlyRegulator() {
+        uint userId = userManagement.walletToUserId(msg.sender);
+        require(userId != 0, "User not registered");
+        require(
+            keccak256(bytes(userManagement.getRoleName(userManagement.getUser(msg.sender).roleId))) == keccak256(bytes(REGULATOR)),
+            "Only regulators can perform this action"
+        );
+        _;
+    }
+
+    modifier validPrescription(uint prescriptionId) {
+        require(prescriptionId > 0 && prescriptionId <= prescriptionCounter, "Invalid prescription ID");
+        _;
+    }
+
+    modifier notRevoked(uint prescriptionId) {
+        require(!prescriptions[prescriptionId].isRevoked, "Prescription has been revoked");
+        _;
+    }
+
     constructor(address _userManagementAddress) {
         userManagement = UserManagement(_userManagementAddress);
         prescriptionCounter = 0;
     }
-    
-    // Functions
+
     function createPrescription(
-        address patient, 
-        string memory drugDetails, 
-        string memory ipfsHash
+        uint patientUserId,
+        uint drugId,
+        string memory dosage,
+        string memory ipfsHash,
+        string memory qrCode,
+        uint256 expiresAt
     ) public onlyDoctor {
-        require(patient != address(0), "Invalid patient address");
-        require(bytes(drugDetails).length > 0, "Drug details cannot be empty");
+        require(patientUserId > 0, "Invalid patient ID");
+        require(drugId > 0, "Invalid drug ID");
+        require(bytes(dosage).length > 0, "Dosage cannot be empty");
         require(bytes(ipfsHash).length > 0, "IPFS hash cannot be empty");
-        
+        require(bytes(qrCode).length > 0, "QR code cannot be empty");
+        require(expiresAt > block.timestamp, "Expiry must be in the future");
+
+        uint doctorUserId = userManagement.walletToUserId(msg.sender);
         prescriptionCounter++;
-        
+
         prescriptions[prescriptionCounter] = PrescriptionData({
             id: prescriptionCounter,
-            doctor: msg.sender,
-            patient: patient,
-            drugDetails: drugDetails,
+            doctorUserId: doctorUserId,
+            patientUserId: patientUserId,
+            drugId: drugId,
+            dosage: dosage,
             ipfsHash: ipfsHash,
-            verified: false,
-            timestamp: block.timestamp
+            qrCode: qrCode,
+            status: "issued",
+            issuedAt: block.timestamp,
+            expiresAt: expiresAt,
+            isRevoked: false,
+            revokedByUserId: 0,
+            revocationReason: "",
+            revokedAt: 0
         });
-        
-        emit PrescriptionCreated(prescriptionCounter, msg.sender, patient);
+
+        emit PrescriptionCreated(prescriptionCounter, doctorUserId, patientUserId, drugId, qrCode);
     }
-    
-    function verifyPrescription(uint prescriptionId) public onlyPharmacist {
-        require(prescriptionId > 0 && prescriptionId <= prescriptionCounter, "Invalid prescription ID");
-        require(!prescriptions[prescriptionId].verified, "Prescription already verified");
-        
-        prescriptions[prescriptionId].verified = true;
-        emit PrescriptionVerified(prescriptionId, msg.sender);
+
+    function verifyPrescription(uint prescriptionId) 
+        public 
+        onlyPharmacist 
+        validPrescription(prescriptionId)
+        notRevoked(prescriptionId)
+    {
+        PrescriptionData storage p = prescriptions[prescriptionId];
+        require(keccak256(bytes(p.status)) == keccak256(bytes("issued")), "Prescription cannot be verified");
+        require(block.timestamp <= p.expiresAt, "Prescription expired");
+
+        p.status = "verified";
+        uint pharmacistUserId = userManagement.walletToUserId(msg.sender);
+        emit PrescriptionVerified(prescriptionId, pharmacistUserId);
     }
-    
-    function getPrescription(uint prescriptionId) public view returns (
-        uint id,
-        address doctor,
-        address patient,
-        string memory drugDetails,
-        string memory ipfsHash,
-        bool verified,
-        uint256 timestamp
-    ) {
-        require(prescriptionId > 0 && prescriptionId <= prescriptionCounter, "Invalid prescription ID");
+
+    function dispensePrescription(uint prescriptionId) 
+        public 
+        onlyPharmacist 
+        validPrescription(prescriptionId)
+        notRevoked(prescriptionId)
+    {
+        PrescriptionData storage p = prescriptions[prescriptionId];
+        require(keccak256(bytes(p.status)) == keccak256(bytes("verified")), "Prescription must be verified first");
+
+        p.status = "dispensed";
+        uint pharmacistUserId = userManagement.walletToUserId(msg.sender);
+        emit PrescriptionDispensed(prescriptionId, pharmacistUserId);
+    }
+
+    function revokePrescription(uint prescriptionId, string memory reason) 
+        public 
+        validPrescription(prescriptionId)
+    {
+        PrescriptionData storage p = prescriptions[prescriptionId];
+        require(!p.isRevoked, "Prescription already revoked");
         
-        PrescriptionData memory prescription = prescriptions[prescriptionId];
+        uint userId = userManagement.walletToUserId(msg.sender);
+        string memory userRole = userManagement.getRoleName(userManagement.getUser(msg.sender).roleId);
+        
+        // Only prescribing doctor or regulator can revoke
+        bool isPrescribingDoctor = p.doctorUserId == userId;
+        bool isRegulatorUser = keccak256(bytes(userRole)) == keccak256(bytes(REGULATOR));
+        
+        require(isPrescribingDoctor || isRegulatorUser, "Not authorized to revoke prescription");
+        require(bytes(reason).length > 0, "Revocation reason cannot be empty");
+
+        p.isRevoked = true;
+        p.revokedByUserId = userId;
+        p.revocationReason = reason;
+        p.revokedAt = block.timestamp;
+        p.status = "revoked";
+
+        emit PrescriptionRevoked(prescriptionId, userId, reason);
+    }
+
+    function getPrescription(uint prescriptionId) 
+        public 
+        view 
+        validPrescription(prescriptionId)
+        returns (
+            uint id,
+            uint doctorUserId,
+            uint patientUserId,
+            uint drugId,
+            string memory dosage,
+            string memory ipfsHash,
+            string memory qrCode,
+            string memory status,
+            uint256 issuedAt,
+            uint256 expiresAt,
+            bool isRevoked,
+            uint revokedByUserId,
+            string memory revocationReason,
+            uint256 revokedAt
+        ) 
+    {
+        PrescriptionData memory p = prescriptions[prescriptionId];
         return (
-            prescription.id,
-            prescription.doctor,
-            prescription.patient,
-            prescription.drugDetails,
-            prescription.ipfsHash,
-            prescription.verified,
-            prescription.timestamp
+            p.id,
+            p.doctorUserId,
+            p.patientUserId,
+            p.drugId,
+            p.dosage,
+            p.ipfsHash,
+            p.qrCode,
+            p.status,
+            p.issuedAt,
+            p.expiresAt,
+            p.isRevoked,
+            p.revokedByUserId,
+            p.revocationReason,
+            p.revokedAt
         );
+    }
+
+    function getPrescriptionStatus(uint prescriptionId) 
+        public 
+        view 
+        validPrescription(prescriptionId)
+        returns (string memory status, bool isRevoked, bool isExpired) 
+    {
+        PrescriptionData memory p = prescriptions[prescriptionId];
+        bool expired = block.timestamp > p.expiresAt;
+        return (p.status, p.isRevoked, expired);
+    }
+
+    function isPrescriptionValid(uint prescriptionId) 
+        public 
+        view 
+        validPrescription(prescriptionId)
+        returns (bool) 
+    {
+        PrescriptionData memory p = prescriptions[prescriptionId];
+        return !p.isRevoked && 
+               block.timestamp <= p.expiresAt && 
+               keccak256(bytes(p.status)) != keccak256(bytes("dispensed"));
+    }
+
+    function getPrescriptionsByPatient(uint patientUserId) 
+        public 
+        view 
+        returns (uint[] memory) 
+    {
+        require(patientUserId > 0, "Invalid patient ID");
+        
+        // Count matching prescriptions
+        uint count = 0;
+        for (uint i = 1; i <= prescriptionCounter; i++) {
+            if (prescriptions[i].patientUserId == patientUserId) {
+                count++;
+            }
+        }
+        
+        // Return array of prescription IDs
+        uint[] memory patientPrescriptions = new uint[](count);
+        uint index = 0;
+        for (uint i = 1; i <= prescriptionCounter; i++) {
+            if (prescriptions[i].patientUserId == patientUserId) {
+                patientPrescriptions[index] = i;
+                index++;
+            }
+        }
+        
+        return patientPrescriptions;
+    }
+
+    function getPrescriptionsByDoctor(uint doctorUserId) 
+        public 
+        view 
+        returns (uint[] memory) 
+    {
+        require(doctorUserId > 0, "Invalid doctor ID");
+        
+        // Count matching prescriptions
+        uint count = 0;
+        for (uint i = 1; i <= prescriptionCounter; i++) {
+            if (prescriptions[i].doctorUserId == doctorUserId) {
+                count++;
+            }
+        }
+        
+        // Return array of prescription IDs
+        uint[] memory doctorPrescriptions = new uint[](count);
+        uint index = 0;
+        for (uint i = 1; i <= prescriptionCounter; i++) {
+            if (prescriptions[i].doctorUserId == doctorUserId) {
+                doctorPrescriptions[index] = i;
+                index++;
+            }
+        }
+        
+        return doctorPrescriptions;
     }
 }

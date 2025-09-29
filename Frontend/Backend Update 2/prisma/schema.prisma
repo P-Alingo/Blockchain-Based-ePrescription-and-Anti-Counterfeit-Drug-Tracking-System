@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DOCTOR
+  PATIENT
+  PHARMACIST
+  MANUFACTURER
+  DISTRIBUTOR
+  REGULATOR
+  ADMIN
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  Doctor       Doctor?
+  Patient      Patient?
+  Pharmacist   Pharmacist?
+  Manufacturer Manufacturer?
+  Distributor  Distributor?
+  Regulator    Regulator?
+  Admin        Admin?
+  OtpCodes     Otp[]
+  QRCodes      QRCode[]
+  ActivityLogs ActivityLog[]
+  Alerts       Alert[]
+  Prescriptions Prescription[]
+  Revocations  RevocationRecord[]
+  Dispenses    DispenseRecord[]
+}
+
+model Doctor {
+  id       Int    @id @default(autoincrement())
+  user     User   @relation(fields: [userId], references: [id])
+  userId   Int    @unique
+  name     String
+  license  String @unique
+  createdAt DateTime @default(now())
+}
+
+model Patient {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  name      String
+  dob       DateTime
+  createdAt DateTime @default(now())
+}
+
+model Pharmacist {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  name      String
+  license   String @unique
+  createdAt DateTime @default(now())
+}
+
+model Manufacturer {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  companyName String
+  createdAt DateTime @default(now())
+}
+
+model Distributor {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  companyName String
+  createdAt DateTime @default(now())
+}
+
+model Regulator {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  agencyName String
+  createdAt DateTime @default(now())
+}
+
+model Admin {
+  id        Int    @id @default(autoincrement())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    Int    @unique
+  createdAt DateTime @default(now())
+}
+
+model Drug {
+  id          Int          @id @default(autoincrement())
+  name        String
+  description String
+  manufacturer Manufacturer @relation(fields: [manufacturerId], references: [id])
+  manufacturerId Int
+  createdAt   DateTime     @default(now())
+  DrugBatches DrugBatch[]
+}
+
+model Prescription {
+  id             Int       @id @default(autoincrement())
+  patient        Patient   @relation(fields: [patientId], references: [id])
+  patientId      Int
+  doctor         Doctor    @relation(fields: [doctorId], references: [id])
+  doctorId       Int
+  ipfsHash       String
+  qrCode         QRCode?   @relation(fields: [qrCodeId], references: [id])
+  qrCodeId       Int?
+  createdAt      DateTime  @default(now())
+}
+
+model DrugBatch {
+  id             Int          @id @default(autoincrement())
+  drug           Drug         @relation(fields: [drugId], references: [id])
+  drugId         Int
+  batchNumber    String
+  manufactureDate DateTime
+  expiryDate     DateTime
+  ipfsImageHash  String?
+  createdAt      DateTime     @default(now())
+  SupplyChainRecords SupplyChainRecord[]
+}
+
+model SupplyChainRecord {
+  id             Int          @id @default(autoincrement())
+  drugBatch      DrugBatch    @relation(fields: [drugBatchId], references: [id])
+  drugBatchId    Int
+  fromEntityId   Int?
+  toEntityId     Int?
+  timestamp      DateTime     @default(now())
+  eventType      String
+  transactionHash String
+  createdAt      DateTime     @default(now())
+}
+
+model RevocationRecord {
+  id            Int       @id @default(autoincrement())
+  prescription  Prescription @relation(fields: [prescriptionId], references: [id])
+  prescriptionId Int
+  revokedById   Int
+  reason        String
+  revokedAt     DateTime  @default(now())
+}
+
+model DispenseRecord {
+  id             Int       @id @default(autoincrement())
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+  prescriptionId Int
+  pharmacistId   Int
+  quantity       Int
+  dispensedAt    DateTime  @default(now())
+}
+
+model Otp {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  code        String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Alert {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  message     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  title       String
+  data        Json
+  createdAt   DateTime @default(now())
+}
+
+model QRCode {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  data        String
+  imageUrl    String
+  createdAt   DateTime @default(now())
+}
+
+model BlockchainEventLog {
+  id              Int       @id @default(autoincrement())
+  eventName       String
+  eventData       Json
+  transactionHash String
+  blockNumber     Int?
+  createdAt       DateTime  @default(now())
+
+  @@unique([eventName, transactionHash])
+  @@index([transactionHash])
+}
