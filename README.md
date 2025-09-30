@@ -86,6 +86,11 @@ npx hardhat run scripts/deploy.js --network localhost
 ```
 This will deploy your smart contracts to the Hardhat local node and print contract addresses.
 
+Run this command to test the contracts
+```bash
+npx hardhat test --network localhost
+```
+
 4. **Start backend server**
 In the project root:
 ```bash
