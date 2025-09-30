@@ -44,52 +44,61 @@ bash
 git clone https://github.com/P-Alingo/Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System.git
 cd Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System
 
-# Install backend dependencies
+### Install blockchain dependencies
+```bash
+cd Smart Contracts
+npm install --save-dev hardhat
+```
+### Install backend dependencies
+```bash
+cd Backend
 npm install
+```
 
-
-### Install frontend dependencies (client)
-bash
-cd client
+### Install frontend dependencies 
+```bash
+cd Frontend
 npm install
 cd ..
-
+```
 
 ---
-
 ## Executing Program
 
-Follow these steps in order:
+Follow these steps in order.
 
-1. *Compile smart contracts*
-bash
+1. **Compile smart contracts**
+```bash
 npx hardhat compile
+```
 
-
-2. *Run a local blockchain (Hardhat node)*
-bash
+2. **Run a local blockchain (Hardhat node)**
+Open a terminal and run:
+```bash
 npx hardhat node
-
+```
 Leave this running while you develop and deploy to localhost.
 
-3. *Deploy contracts to local network*
-bash
+3. **Deploy contracts to local network**
+In a new terminal:
+```bash
 npx hardhat run scripts/deploy.js --network localhost
-
+```
 This will deploy your smart contracts to the Hardhat local node and print contract addresses.
 
-4. *Start backend server*
-bash
+4. **Start backend server**
+In the project root:
+```bash
 npm start
 # or
 node src/index.js
+```
 
-
-5. *Start frontend (React + Vite)*
-bash
+5. **Start frontend (React + Vite)**
+```bash
 cd client
 npm run dev
-
+```
 
 ---
 
