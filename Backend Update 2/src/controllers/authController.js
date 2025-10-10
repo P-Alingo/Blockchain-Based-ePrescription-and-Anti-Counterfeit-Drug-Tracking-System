@@ -1,38 +1,89 @@
-import * as authService from "../services/authService.js";
-import * as emailService from "../services/emailService.js";
+import { 
+  registerRequestOtpService, 
+  verifyOtpService, 
+  loginRequestOtpService, 
+  loginVerifyOtpService 
+} from '../services/authService.js';
+import { generateJwt } from '../utils/jwtUtils.js';
 
-async function register(req, res, next) {
+// -----------------------------
+// Register OTP
+// -----------------------------
+export async function registerRequestOtp(req, res) {
   try {
-    const { email, password, role } = req.body;
-    const user = await authService.registerUser(email, password, role);
-    res.status(201).json({ message: "User registered", userId: user.id });
-  } catch (error) {
-    next(error);
+    const result = await registerRequestOtpService(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Failed to send OTP' });
   }
 }
 
-async function login(req, res, next) {
+// -----------------------------
+// Verify OTP (after registration)
+// -----------------------------
+export async function verifyOtp(req, res) {
   try {
-    const { email, password } = req.body;
-    const user = await authService.validateUserCredentials(email, password);
-    if (!user) return res.status(401).json({ message: "Invalid email or password" });
-    const otpCode = await authService.generateOtpForUser(user.id);
-    await emailService.sendOtpEmail(user.email, otpCode);
-    res.status(200).json({ message: "OTP sent to email" });
-  } catch (error) {
-    next(error);
+    const result = await verifyOtpService(req.body);
+
+    // Generate JWT
+    const token = generateJwt({ userId: result.userId, role: result.role });
+
+    // Role-based dashboard URL
+    const role = result.role.toLowerCase();
+    const dashboardMap = {
+      patient: '/patient/dashboard',
+      doctor: '/doctor/dashboard',
+      pharmacist: '/pharmacist/dashboard',
+      manufacturer: '/manufacturer/dashboard',
+      distributor: '/distributor/dashboard',
+      regulator: '/regulator/dashboard',
+      admin: '/admin/dashboard',
+    };
+    const dashboardUrl = dashboardMap[role] || '/dashboard';
+
+    res.json({ message: result.message, email: result.email, token, dashboardUrl });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Failed to verify OTP' });
   }
 }
 
-async function verifyOtp(req, res, next) {
+// -----------------------------
+// Login OTP Request
+// -----------------------------
+export async function loginRequestOtp(req, res) {
   try {
-    const { email, code } = req.body;
-    const token = await authService.verifyOtpAndGenerateJwt(email, code);
-    if (!token) return res.status(401).json({ message: "Invalid or expired OTP" });
-    res.status(200).json({ token });
-  } catch (error) {
-    next(error);
+    const result = await loginRequestOtpService(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Failed to send login OTP' });
   }
 }
 
-export { register, login, verifyOtp };
+// -----------------------------
+// Login OTP Verify
+// -----------------------------
+export async function loginVerifyOtp(req, res) {
+  try {
+    const result = await loginVerifyOtpService(req.body);
+
+    // Generate JWT
+    const token = generateJwt({ userId: result.userId, role: result.role });
+
+    // Role-based dashboard URL
+    const role = result.role.toLowerCase();
+    const dashboardMap = {
+      patient: '/patient/dashboard',
+      doctor: '/doctor/dashboard',
+      pharmacist: '/pharmacist/dashboard',
+      manufacturer: '/manufacturer/dashboard',
+      distributor: '/distributor/dashboard',
+      regulator: '/regulator/dashboard',
+      admin: '/admin/dashboard',
+    };
+    const dashboardUrl = dashboardMap[role] || '/dashboard';
+
+    res.json({ message: result.message, email: result.email, token, dashboardUrl });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Failed to verify login OTP' });
+  }
+}

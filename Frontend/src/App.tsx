@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 // Pages
 import Landing from "./pages/Landing";
@@ -63,6 +63,23 @@ import AdminActivityLogs from "./pages/admin/ActivityLogs";
 
 const queryClient = new QueryClient();
 
+/* ----------------------------
+   🔐 Simple Auth Guard
+   ---------------------------- */
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const userData = JSON.parse(localStorage.getItem("userData"));
+  if (!userData) return <Navigate to="/login" replace />;
+
+  if (allowedRoles && !allowedRoles.includes(userData.role)) {
+    return <Navigate to={`/${userData.role}/dashboard`} replace />;
+  }
+
+  return children;
+};
+
+/* ----------------------------
+   ⚙️ Main Application
+   ---------------------------- */
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -74,58 +91,317 @@ const App = () => (
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          
+
           {/* Doctor Routes */}
-          <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
-          <Route path="/doctor/create-prescription" element={<CreatePrescription />} />
-          <Route path="/doctor/prescriptions" element={<MyPrescriptions />} />
-          <Route path="/doctor/blockchain-verification" element={<BlockchainVerification />} />
-          <Route path="/doctor/activity-logs" element={<DoctorActivityLogs />} />
-          
+          <Route
+            path="/doctor/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["doctor"]}>
+                <DoctorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/create-prescription"
+            element={
+              <ProtectedRoute allowedRoles={["doctor"]}>
+                <CreatePrescription />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/prescriptions"
+            element={
+              <ProtectedRoute allowedRoles={["doctor"]}>
+                <MyPrescriptions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/blockchain-verification"
+            element={
+              <ProtectedRoute allowedRoles={["doctor"]}>
+                <BlockchainVerification />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["doctor"]}>
+                <DoctorActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Patient Routes */}
-          <Route path="/patient/dashboard" element={<PatientDashboard />} />
-          <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
-          <Route path="/patient/qr-viewer" element={<QRCodeViewer />} />
-          <Route path="/patient/alerts" element={<PatientAlerts />} />
-          <Route path="/patient/activity-logs" element={<PatientActivityLogs />} />
-          
+          <Route
+            path="/patient/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["patient"]}>
+                <PatientDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/prescriptions"
+            element={
+              <ProtectedRoute allowedRoles={["patient"]}>
+                <PatientPrescriptions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/qr-viewer"
+            element={
+              <ProtectedRoute allowedRoles={["patient"]}>
+                <QRCodeViewer />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/alerts"
+            element={
+              <ProtectedRoute allowedRoles={["patient"]}>
+                <PatientAlerts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["patient"]}>
+                <PatientActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Pharmacist Routes */}
-          <Route path="/pharmacist/dashboard" element={<PharmacistDashboard />} />
-          <Route path="/pharmacist/scan" element={<ScanPrescription />} />
-          <Route path="/pharmacist/verify" element={<VerifyPrescription />} />
-          <Route path="/pharmacist/dispense" element={<DispenseDrug />} />
-          <Route path="/pharmacist/inventory" element={<Inventory />} />
-          <Route path="/pharmacist/activity-logs" element={<PharmacistActivityLogs />} />
-          
+          <Route
+            path="/pharmacist/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["pharmacist"]}>
+                <PharmacistDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/scan"
+            element={
+              <ProtectedRoute allowedRoles={["pharmacist"]}>
+                <ScanPrescription />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/verify"
+            element={
+              <ProtectedRoute allowedRoles={["pharmacist"]}>
+                <VerifyPrescription />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/dispense"
+            element={
+              <ProtectedRoute allowedRoles={["pharmacist"]}>
+                <DispenseDrug />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/inventory"
+            element={
+              <ProtectedRoute allowedRoles={["pharmacist"]}>
+                <Inventory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["pharmacist"]}>
+                <PharmacistActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Manufacturer Routes */}
-          <Route path="/manufacturer/dashboard" element={<ManufacturerDashboard />} />
-          <Route path="/manufacturer/register-batch" element={<RegisterBatch />} />
-          <Route path="/manufacturer/batch-list" element={<BatchList />} />
-          <Route path="/manufacturer/blockchain-verification" element={<ManufacturerBlockchainVerification />} />
-          <Route path="/manufacturer/activity-logs" element={<ManufacturerActivityLogs />} />
-          
+          <Route
+            path="/manufacturer/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["manufacturer"]}>
+                <ManufacturerDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manufacturer/register-batch"
+            element={
+              <ProtectedRoute allowedRoles={["manufacturer"]}>
+                <RegisterBatch />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manufacturer/batch-list"
+            element={
+              <ProtectedRoute allowedRoles={["manufacturer"]}>
+                <BatchList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manufacturer/blockchain-verification"
+            element={
+              <ProtectedRoute allowedRoles={["manufacturer"]}>
+                <ManufacturerBlockchainVerification />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manufacturer/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["manufacturer"]}>
+                <ManufacturerActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Distributor Routes */}
-          <Route path="/distributor/dashboard" element={<DistributorDashboard />} />
-          <Route path="/distributor/active-shipments" element={<ActiveShipments />} />
-          <Route path="/distributor/update-shipment" element={<UpdateShipment />} />
-          <Route path="/distributor/shipment-logs" element={<ShipmentLogs />} />
-          <Route path="/distributor/activity-logs" element={<DistributorActivityLogs />} />
-          
+          <Route
+            path="/distributor/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["distributor"]}>
+                <DistributorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/distributor/active-shipments"
+            element={
+              <ProtectedRoute allowedRoles={["distributor"]}>
+                <ActiveShipments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/distributor/update-shipment"
+            element={
+              <ProtectedRoute allowedRoles={["distributor"]}>
+                <UpdateShipment />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/distributor/shipment-logs"
+            element={
+              <ProtectedRoute allowedRoles={["distributor"]}>
+                <ShipmentLogs />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/distributor/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["distributor"]}>
+                <DistributorActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Regulator Routes */}
-          <Route path="/regulator/dashboard" element={<RegulatorDashboard />} />
-          <Route path="/regulator/audits" element={<Audits />} />
-          <Route path="/regulator/reports" element={<Reports />} />
-          <Route path="/regulator/alerts" element={<RegulatorAlerts />} />
-          <Route path="/regulator/compliance" element={<ComplianceActions />} />
-          <Route path="/regulator/activity-logs" element={<RegulatorActivityLogs />} />
-          
+          <Route
+            path="/regulator/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["regulator"]}>
+                <RegulatorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/regulator/audits"
+            element={
+              <ProtectedRoute allowedRoles={["regulator"]}>
+                <Audits />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/regulator/reports"
+            element={
+              <ProtectedRoute allowedRoles={["regulator"]}>
+                <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/regulator/alerts"
+            element={
+              <ProtectedRoute allowedRoles={["regulator"]}>
+                <RegulatorAlerts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/regulator/compliance"
+            element={
+              <ProtectedRoute allowedRoles={["regulator"]}>
+                <ComplianceActions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/regulator/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["regulator"]}>
+                <RegulatorActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Admin Routes */}
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<UserManagement />} />
-          <Route path="/admin/settings" element={<SystemSettings />} />
-          <Route path="/admin/reports" element={<AdminReports />} />
-          <Route path="/admin/activity-logs" element={<AdminActivityLogs />} />
-          
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <UserManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <SystemSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/reports"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminReports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/activity-logs"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminActivityLogs />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Catch-all route */}
           <Route path="*" element={<NotFound />} />
         </Routes>

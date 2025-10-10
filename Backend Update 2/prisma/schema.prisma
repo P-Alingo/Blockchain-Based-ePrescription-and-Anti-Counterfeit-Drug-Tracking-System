@@ -322,17 +322,17 @@ model DispenseRecord {
 }
 
 model BlockchainEventLog {
-  id                Int                @id @default(autoincrement())
-  eventname         String             @db.VarChar(100)
-  contractname      String             @db.VarChar(100)
-  entityid          Int?
-  entitytype        String?            @db.VarChar(50)
-  transactionhash   String             @unique @db.VarChar(255)
-  timestamp         DateTime?          @default(now()) @db.Timestamptz(6)
-  processed         Boolean?           @default(false)
-  drugbatch         DrugBatch?         @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_drugbatch")
-  prescription      Prescription?      @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_prescription")
-  supplychainrecord SupplyChainRecord? @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_supplychain")
+  id              Int                @id @default(autoincrement())
+  eventname       String             @db.VarChar(100)
+  contractname    String             @db.VarChar(100)
+  entityid        Int?
+  entitytype      String?            @db.VarChar(50)
+  transactionhash String             @unique @db.VarChar(255)
+  timestamp       DateTime?          @default(now()) @db.Timestamptz(6)
+  processed       Boolean?           @default(false)
+  prescription    DrugBatch?         @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_prescription")
+  prescription    Prescription?      @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_prescription")
+  prescription    SupplyChainRecord? @relation(fields: [entityid], references: [id], onUpdate: NoAction, map: "fk_prescription")
 
   @@index([eventname], map: "idx_blockchain_event")
   @@index([contractname], map: "idx_blockchain_contract")

@@ -1,97 +1,116 @@
+// index.js
 import express from "express";
+import bodyParser from "body-parser";
+import dotenv from "dotenv";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
-
-import "./config/dotenv.js";
-import { logger } from "./config/logger.js";
-import { prisma } from "./config/database.js";
 import { 
-  listenToContractEvents, 
-  prescriptionContract, 
-  drugSupplyChainContract,
-  userManagementContract,
-  regulatorOversightContract 
-} from "./config/blockchain.js";
+  registerRequestOtpService, 
+  verifyOtpService, 
+  loginRequestOtpService, 
+  loginVerifyOtpService 
+} from "./services/authService.js";
+import { generateJwt } from "./utils/jwtUtils.js";
 
-import authRoutes from "./routes/authRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import roleRoutes from "./routes/roleRoutes.js";
-import doctorRoutes from "./routes/doctorRoutes.js";
-import patientRoutes from "./routes/patientRoutes.js";
-import pharmacistRoutes from "./routes/pharmacistRoutes.js";
-import manufacturerRoutes from "./routes/manufacturerRoutes.js";
-import distributorRoutes from "./routes/distributorRoutes.js";
-import regulatorRoutes from "./routes/regulatorRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js";
-import prescriptionRoutes from "./routes/prescriptionRoutes.js";
-import drugBatchRoutes from "./routes/drugBatchRoutes.js";
-import supplyChainRoutes from "./routes/supplyChainRoutes.js";
-import qrCodeRoutes from "./routes/qrCodeRoutes.js";
-import activityLogRoutes from "./routes/activityLogRoutes.js";
-import alertRoutes from "./routes/alertRoutes.js";
-import reportRoutes from "./routes/reportRoutes.js";
-import blockchainEventLogRoutes from "./routes/blockchainEventLogRoutes.js";
-import revocationRoutes from "./routes/revocationRoutes.js";
-import dispenseRecordRoutes from "./routes/dispenseRecordRoutes.js";
-
-import { errorHandler } from "./middleware/errorHandler.js";
-import { rateLimiter } from "./middleware/rateLimiter.js";
-import { requestLogger } from "./middleware/requestLogger.js";
-import { jsonParser } from "./middleware/jsonParser.js";
+dotenv.config();
 
 const app = express();
-
 app.use(cors());
-app.use(jsonParser);
-app.use(rateLimiter);
-app.use(requestLogger);
+app.use(bodyParser.json());
 
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/roles", roleRoutes);
-app.use("/api/doctors", doctorRoutes);
-app.use("/api/patients", patientRoutes);
-app.use("/api/pharmacists", pharmacistRoutes);
-app.use("/api/manufacturers", manufacturerRoutes);
-app.use("/api/distributors", distributorRoutes);
-app.use("/api/regulators", regulatorRoutes);
-app.use("/api/admins", adminRoutes);
-app.use("/api/prescriptions", prescriptionRoutes);
-app.use("/api/drugbatches", drugBatchRoutes);
-app.use("/api/supplychain", supplyChainRoutes);
-app.use("/api/qrcodes", qrCodeRoutes);
-app.use("/api/activitylogs", activityLogRoutes);
-app.use("/api/alerts", alertRoutes);
-app.use("/api/reports", reportRoutes);
-app.use("/api/blockchainevents", blockchainEventLogRoutes);
-app.use("/api/revocations", revocationRoutes);
-app.use("/api/dispenserecords", dispenseRecordRoutes);
-
-app.use(errorHandler);
-
-const PORT = process.env.PORT || 4000;
-
-async function startServer() {
-  try {
-    await prisma.$connect();
-    logger.info("Connected to database");
-    await listenToContractEvents(contract, prisma, logger);
-    app.listen(PORT, () => {
-      logger.info(`Server is running on port ${PORT}`);
-    });
-  } catch (error) {
-    logger.error("Failed to start server", error);
-    process.exit(1);
+// --- Request logger ---
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.url}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log("📦 Body:", req.body);
   }
-}
+  next();
+});
 
-await listenToContractEvents(
-  { 
-    prescriptionContract, 
-    drugSupplyChainContract,
-    userManagementContract,
-    regulatorOversightContract 
-  }, 
-  prisma, 
-  logger
-);
+// --- Health check ---
+app.get("/api/health", (req, res) => {
+  res.json({ status: "OK", message: "Server is running!" });
+});
+
+// -----------------------------
+// Registration - Request OTP
+// -----------------------------
+app.post("/api/register", async (req, res) => {
+  try {
+    const result = await registerRequestOtpService(req.body);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to register" });
+  }
+});
+
+// -----------------------------
+// Registration - Verify OTP
+// -----------------------------
+app.post("/api/register-verify-otp", async (req, res) => {
+  try {
+    const result = await verifyOtpService(req.body);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to verify OTP" });
+  }
+});
+
+// -----------------------------
+// Login - Request OTP
+// -----------------------------
+app.post("/api/login-request-otp", async (req, res) => {
+  try {
+    const result = await loginRequestOtpService(req.body);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to send OTP. Make sure registration OTP is verified first." });
+  }
+});
+
+// -----------------------------
+// Login - Verify OTP
+// -----------------------------
+app.post("/api/login-verify-otp", async (req, res) => {
+  try {
+    const result = await loginVerifyOtpService(req.body);
+
+    // Generate JWT
+    const token = generateJwt({ userId: result.userId, role: result.role });
+
+    // Send role-based dashboard URL (7 actors)
+    let dashboardUrl = '/dashboard';
+    switch (result.role.toLowerCase()) {
+      case 'patient':
+        dashboardUrl = '/patient/dashboard';
+        break;
+      case 'doctor':
+        dashboardUrl = '/doctor/dashboard';
+        break;
+      case 'admin':
+        dashboardUrl = '/admin/dashboard';
+        break;
+      case 'pharmacist':
+        dashboardUrl = '/pharmacist/dashboard';
+        break;
+      case 'distributor':
+        dashboardUrl = '/distributor/dashboard';
+        break;
+      case 'manufacturer':
+        dashboardUrl = '/manufacturer/dashboard';
+        break;
+      case 'regulator':
+        dashboardUrl = '/regulator/dashboard';
+        break;
+    }
+
+    res.json({ success: true, message: result.message, email: result.email, token, dashboardUrl, role: result.role });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to verify OTP" });
+  }
+});
+
+// --- Start server ---
+const PORT = process.env.BACKEND_PORT || 4000;
+app.listen(PORT, () => {
+  console.log(` Server running on http://localhost:${PORT}`);
+});

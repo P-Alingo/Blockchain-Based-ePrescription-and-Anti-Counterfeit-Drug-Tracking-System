@@ -1,14 +1,9 @@
-import jwt from "jsonwebtoken";
+import jwt from 'jsonwebtoken';
 
-const jwtSecret = process.env.JWT_SECRET;
-const tokenExpiry = "1h";
-
-function generateJwt(payload) {
-  return jwt.sign(payload, jwtSecret, { expiresIn: tokenExpiry });
+export function generateJwt(payload) {
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRY });
 }
 
-function verifyJwt(token) {
-  return jwt.verify(token, jwtSecret);
+export function verifyJwt(token) {
+  return jwt.verify(token, process.env.JWT_SECRET);
 }
-
-export { generateJwt, verifyJwt };

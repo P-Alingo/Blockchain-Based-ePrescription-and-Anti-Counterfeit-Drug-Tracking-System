@@ -1,18 +1,11 @@
-import { PrismaClient } from "@prisma/client";
-import { logger } from "./logger.js";
+import pkg from 'pg';
+const { Pool } = pkg;
 
-const prisma = new PrismaClient({
-  log: process.env.LOG_LEVEL === "debug" ? ["query", "info", "warn", "error"] : ["warn", "error"],
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
 });
 
-process.on("SIGINT", async () => {
-  try {
-    await prisma.$disconnect();
-    logger.info("Prisma client disconnected");
-  } catch (error) {
-    logger.error("Error during Prisma client disconnect", error);
-  }
-  process.exit(0);
-});
-
-export { prisma };
+export async function query(text, params) {
+  return pool.query(text, params);
+}
