@@ -109,6 +109,18 @@ app.post("/api/login-verify-otp", async (req, res) => {
   }
 });
 
+import { pool } from './config/database.js';
+
+(async () => {
+  try {
+    const res = await pool.query('SELECT NOW()');
+    console.log('✅ Connected to PostgreSQL at:', res.rows[0].now);
+  } catch (err) {
+    console.error('❌ Failed to connect to PostgreSQL:', err.message);
+  }
+})();
+
+
 // --- Start server ---
 const PORT = process.env.BACKEND_PORT || 4000;
 app.listen(PORT, () => {

@@ -76,7 +76,7 @@ export async function registerRequestOtpService({
 
   // Store OTP
   await query(
-    'INSERT INTO otp (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())',
+    'INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())',
     [userId, otpHash, expiresAt]
   );
 
@@ -101,7 +101,7 @@ export async function verifyOtpService({ walletAddress, otp }) {
 
   // Fetch latest unused OTP
   const otpRes = await query(
-    'SELECT * FROM otp WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
+    'SELECT * FROM otps WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
     [user.id]
   );
   if (otpRes.rowCount === 0) throw { status: 400, message: 'No OTP found for this user' };
@@ -113,7 +113,7 @@ export async function verifyOtpService({ walletAddress, otp }) {
   if (new Date(otpRow.expires_at) < new Date()) throw { status: 400, message: 'OTP expired' };
 
   // Mark OTP as used
-  await query('UPDATE otp SET used_at=NOW() WHERE id=$1', [otpRow.id]);
+  await query('UPDATE otps SET used_at=NOW() WHERE id=$1', [otpRow.id]);
 
   // Mark user verified
   await query('UPDATE users SET isverified=true, updatedat=NOW() WHERE id=$1', [user.id]);
@@ -152,7 +152,7 @@ export async function loginRequestOtpService({ walletAddress, email }) {
 
   // Store OTP
   await query(
-    'INSERT INTO otp (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())',
+    'INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())',
     [user.id, otpHash, expiresAt]
   );
 
@@ -183,7 +183,7 @@ export async function loginVerifyOtpService({ walletAddress, email, otp }) {
 
   // Fetch latest unused OTP
   const otpRes = await query(
-    'SELECT * FROM otp WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
+    'SELECT * FROM otps WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
     [user.id]
   );
   if (otpRes.rowCount === 0) throw { status: 400, message: 'No OTP found for this user' };
@@ -195,7 +195,7 @@ export async function loginVerifyOtpService({ walletAddress, email, otp }) {
   if (new Date(otpRow.expires_at) < new Date()) throw { status: 400, message: 'OTP expired' };
 
   // Mark OTP used
-  await query('UPDATE otp SET used_at=NOW() WHERE id=$1', [otpRow.id]);
+  await query('UPDATE otps SET used_at=NOW() WHERE id=$1', [otpRow.id]);
 
   return { message: '✅ OTP verified, login successful', userId: user.id, role: user.role, email: user.email };
 }
