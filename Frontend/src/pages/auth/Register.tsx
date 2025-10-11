@@ -70,19 +70,19 @@ const Register = () => {
 
     try {
       const res = await axios.post("http://localhost:4000/api/register", {
-        address: walletAddress,
-        email,
-        role,
-        fullName,
-        phoneNumber,
-        dob,
-        gender,
-        ...(role === "doctor" && { specialization: extraField }),
-        ...(role === "pharmacist" && { licenseNumber: extraField }),
-        ...(role === "manufacturer" && { companyName: extraField }),
-        ...(role === "distributor" && { distributionFirm: extraField }),
-        ...(role === "regulator" && { organizationName: extraField }),
-      });
+      walletAddress,
+      email,
+      role,
+      fullName,
+      phoneNumber,
+      dob,
+      gender,
+  ...(role === "doctor" && { specialization: extraField }),
+  ...(role === "pharmacist" && { licenseNumber: extraField }),
+  ...(role === "manufacturer" && { companyName: extraField }),
+  ...(role === "distributor" && { distributionFirm: extraField }),
+  ...(role === "regulator" && { organizationName: extraField }),
+});
 
       const data = res.data as { message?: string };
       setMessage(data?.message || "OTP sent to your email!");
@@ -103,8 +103,12 @@ const Register = () => {
     setMessage("");
 
     try {
-      const res = await axios.post<{ token?: string }>("http://localhost:4000/api/verify-otp", {
-        address: walletAddress,
+      interface VerifyOtpResponse {
+        token?: string;
+        [key: string]: any;
+      }
+      const res = await axios.post<VerifyOtpResponse>("http://localhost:4000/api/register-verify-otp", {
+        walletAddress,
         otp,
       });
 
