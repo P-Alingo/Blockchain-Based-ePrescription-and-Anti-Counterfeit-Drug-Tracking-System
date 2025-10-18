@@ -19,7 +19,7 @@ const Register = () => {
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState("");
   const [role, setRole] = useState("");
-  const [extraField, setExtraField] = useState("");
+  const [extraField, setExtraField] = useState<string | Record<string, string>>("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1);
   const [message, setMessage] = useState("");
@@ -36,140 +36,145 @@ const Register = () => {
     { value: "regulator", label: "Regulator" },
   ];
 
-  useEffect(() => {
-    setHasMetaMask(!!window.ethereum);
-  }, []);
+  useEffect(() => setHasMetaMask(!!window.ethereum), []);
 
-  // -----------------------------
-  // Connect MetaMask
-  // -----------------------------
   const connectWallet = async () => {
     if (!window.ethereum) {
       setMessage("❌ MetaMask not detected. Install it first.");
       return;
     }
-
     try {
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      });
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       setWalletAddress(accounts[0]);
       setMessage("✅ Wallet connected successfully!");
-    } catch (err) {
+    } catch {
       setMessage("❌ Failed to connect wallet. Try again.");
     }
   };
 
-  // -----------------------------
-  // Register (request OTP)
-  // -----------------------------
-  const handleRegister = async (e) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
 
     try {
-      const res = await axios.post("http://localhost:4000/api/register", {
-      walletAddress,
-      email,
-      role,
-      fullName,
-      phoneNumber,
-      dob,
-      gender,
-  ...(role === "doctor" && { specialization: extraField }),
-  ...(role === "pharmacist" && { licenseNumber: extraField }),
-  ...(role === "manufacturer" && { companyName: extraField }),
-  ...(role === "distributor" && { distributionFirm: extraField }),
-  ...(role === "regulator" && { organizationName: extraField }),
-});
+      const res = await axios.post<{ message?: string }>("http://localhost:4000/api/auth/register/request-otp", {
+        walletAddress,
+        email,
+        role,
+        fullName,
+        phoneNumber,
+        dob,
+        gender,
+        ...(role === "doctor" && typeof extraField === "object" && extraField),
+        ...(role === "pharmacist" && typeof extraField === "object" && extraField),
+        ...(role === "manufacturer" && typeof extraField === "object" && extraField),
+        ...(role === "distributor" && typeof extraField === "object" && extraField),
+        ...(role === "regulator" && typeof extraField === "string" && { organizationname: extraField }),
+      });
 
-      const data = res.data as { message?: string };
-      setMessage(data?.message || "OTP sent to your email!");
+      setMessage(res.data?.message || "OTP sent to your email!");
       setStep(2);
-    } catch (error) {
+    } catch (error: any) {
       setMessage(error.response?.data?.error || "Registration failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  // -----------------------------
-  // Verify OTP and Auto-Login
-  // -----------------------------
-  const verifyOtp = async (e) => {
+  const verifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
 
     try {
-      interface VerifyOtpResponse {
-        token?: string;
-        [key: string]: any;
-      }
-      const res = await axios.post<VerifyOtpResponse>("http://localhost:4000/api/register-verify-otp", {
+      const res = await axios.post<{ token: string }>("http://localhost:4000/api/auth/register/verify-otp", {
         walletAddress,
         otp,
       });
 
-      // ✅ Save user data to localStorage so ProtectedRoute knows you're logged in
+      // Save token and user info
       const userData = {
         email,
         role,
         walletAddress,
-        token: res.data?.token || null, // store token if backend provides one
+        token: res.data?.token || null,
       };
       localStorage.setItem("userData", JSON.stringify(userData));
 
-      setMessage("✅ Account verified! Redirecting...");
+      setMessage("✅ Account verified! Redirecting to dashboard...");
+      navigate(`/${role}/dashboard`, { replace: true });
 
-      // ✅ Redirect to role dashboard
-      setTimeout(() => {
-        navigate(`/${role}/dashboard`);
-      }, 1000);
-    } catch (error) {
+    } catch (error: any) {
       setMessage(error.response?.data?.error || "Invalid or expired OTP.");
     } finally {
       setLoading(false);
     }
   };
 
-  // -----------------------------
-  // Logout Function
-  // -----------------------------
-  const handleLogout = () => {
-    localStorage.removeItem("userData"); // clear localStorage
-    setMessage("You have been logged out.");
-    navigate("/"); // redirect to landing page
-  };
-
-  // -----------------------------
-  // Role-Specific Field Label
-  // -----------------------------
   const getExtraFieldLabel = () => {
     switch (role) {
-      case "doctor":
-        return "Specialization";
-      case "pharmacist":
-        return "License Number";
+      case "doctor": return "Specialization";
+      case "pharmacist": return "License Number";
       case "manufacturer":
-        return "Company Name";
-      case "distributor":
-        return "Distribution Firm";
-      case "regulator":
-        return "Organization Name";
-      default:
-        return "";
+      case "distributor": return "Company Name";
+      case "regulator": return "Organization Name";
+      default: return "";
     }
   };
 
-  // -----------------------------
-  // Render
-  // -----------------------------
+  const [timeLeft, setTimeLeft] = useState(120);
+  useEffect(() => {
+    if (step === 2 && timeLeft > 0) {
+      const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
+      return () => clearInterval(timer);
+    }
+  }, [step, timeLeft]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  const getTimerColor = () => {
+    if (timeLeft > 60) return "text-green-600";
+    if (timeLeft > 20) return "text-yellow-600";
+    if (timeLeft > 0) return "text-red-600";
+    return "text-gray-400";
+  };
+
+  const handleResendOtp = async () => {
+    setTimeLeft(120);
+    setLoading(true);
+    setMessage("");
+
+    try {
+      await axios.post("http://localhost:4000/api/auth/register/request-otp", {
+        walletAddress,
+        email,
+        role,
+        fullName,
+        phoneNumber,
+        dob,
+        gender,
+        ...(role === "doctor" && typeof extraField === "object" && extraField),
+        ...(role === "pharmacist" && typeof extraField === "object" && extraField),
+        ...(role === "manufacturer" && typeof extraField === "object" && extraField),
+        ...(role === "distributor" && typeof extraField === "object" && extraField),
+        ...(role === "regulator" && typeof extraField === "string" && { organizationname: extraField }),
+      });
+      setMessage("OTP resent to your email!");
+    } catch (error: any) {
+      setMessage(error.response?.data?.error || "Failed to resend OTP.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 gradient-bg opacity-5"></div>
-
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center space-x-2 mb-4">
@@ -191,179 +196,64 @@ const Register = () => {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* STEP 1: Wallet Connection */}
             {!hasMetaMask ? (
-              <div className="text-center space-y-4">
-                <p>
-                  Install{" "}
-                  <a href="https://metamask.io/" target="_blank" className="text-primary underline">
-                    MetaMask
-                  </a>{" "}
-                  to continue.
-                </p>
-              </div>
+              <p className="text-center">Install <a href="https://metamask.io/" target="_blank" className="text-primary underline">MetaMask</a> to continue.</p>
             ) : !walletAddress ? (
-              <div className="text-center space-y-4">
-                <Button
-                  onClick={connectWallet}
-                  className="w-full btn-gradient-primary py-6 text-lg flex items-center justify-center space-x-2"
-                >
-                  <Wallet className="h-5 w-5" />
-                  <span>{loading ? "Connecting..." : "Connect MetaMask Wallet"}</span>
-                </Button>
-              </div>
+              <Button onClick={connectWallet} className="w-full btn-gradient-primary py-6 text-lg flex items-center justify-center space-x-2">
+                <Wallet className="h-5 w-5" />
+                {loading ? "Connecting..." : "Connect MetaMask Wallet"}
+              </Button>
             ) : step === 1 ? (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="bg-muted p-2 rounded text-sm text-center">
                   Connected Wallet: <span className="font-mono">{walletAddress}</span>
                 </div>
-
-                {/* Common Fields */}
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                />
-
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                />
-
-                <input
-                  type="tel"
-                  placeholder="Phone Number"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                />
-
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                />
-
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                >
+                <input type="text" placeholder="Full Name" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full border rounded px-3 py-2" />
+                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border rounded px-3 py-2" />
+                <input type="tel" placeholder="Phone Number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required className="w-full border rounded px-3 py-2" />
+                <input type="date" value={dob} onChange={e => setDob(e.target.value)} required className="w-full border rounded px-3 py-2" />
+                <select value={gender} onChange={e => setGender(e.target.value)} required className="w-full border rounded px-3 py-2">
                   <option value="">Select Gender</option>
                   <option value="female">Female</option>
                   <option value="male">Male</option>
                   <option value="other">Other</option>
                 </select>
-
-                {/* Role */}
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                >
+                <select value={role} onChange={e => setRole(e.target.value)} required className="w-full border rounded px-3 py-2">
                   <option value="">Select Role</option>
-                  {userRoles.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
+                  {userRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
 
-                {/* Role-Specific Field */}
-                {getExtraFieldLabel() && (
-                  <input
-                    type="text"
-                    placeholder={getExtraFieldLabel()}
-                    value={extraField}
-                    onChange={(e) => setExtraField(e.target.value)}
-                    required
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                  />
+                {role && getExtraFieldLabel() && (
+                  <input type="text" placeholder={getExtraFieldLabel()} value={typeof extraField === "string" ? extraField : ""} onChange={e => setExtraField(e.target.value)} className="w-full border rounded px-3 py-2" />
                 )}
 
-                <Button
-                  type="submit"
-                  className="w-full btn-gradient-primary py-6 text-lg"
-                  disabled={loading}
-                >
+                <Button type="submit" className="w-full btn-gradient-primary py-6 text-lg" disabled={loading}>
                   {loading ? "Submitting..." : "Register & Send OTP"}
                 </Button>
               </form>
             ) : (
               <form onSubmit={verifyOtp} className="space-y-4">
-                <p className="text-muted-foreground text-center">
-                  An OTP has been sent to your email. It expires in 2 minutes.
-                </p>
-                <input
-                  type="text"
-                  placeholder="Enter OTP"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                />
-                <Button
-                  type="submit"
-                  className="w-full btn-gradient-primary py-6 text-lg"
-                  disabled={loading}
-                >
-                  {loading ? "Verifying..." : "Verify OTP"}
-                </Button>
+                <div className="flex flex-col items-center gap-2 w-full mb-2">
+                  <Shield className={`h-8 w-8 ${getTimerColor()}`} />
+                  <span className={`text-2xl font-bold tracking-widest ${getTimerColor()}`}>{formatTime(timeLeft)}</span>
+                </div>
+                <input type="text" placeholder="Enter OTP" value={otp} onChange={e => setOtp(e.target.value)} required className="w-full border rounded px-3 py-2" />
+                <div className="flex w-full gap-3 mt-2">
+                  <Button type="submit" className="flex-1 btn-gradient-primary py-4 text-lg font-semibold rounded-lg shadow" disabled={loading || timeLeft === 0}>
+                    {loading ? 'Verifying...' : 'Verify OTP'}
+                  </Button>
+                  <Button type="button" onClick={handleResendOtp} disabled={loading || (timeLeft > 0 && timeLeft < 120)} variant="outline" className="py-4 font-semibold rounded-lg border-primary/40">
+                    Resend
+                  </Button>
+                </div>
+                {timeLeft === 0 && <p className="text-red-600 text-center text-sm mt-2">OTP expired. Please request a new one.</p>}
               </form>
             )}
 
-            {/* Messages */}
-            {message && (
-              <div
-                className={`text-center text-sm font-semibold ${
-                  message.includes("✅")
-                    ? "text-green-600"
-                    : message.includes("❌")
-                    ? "text-red-600"
-                    : "text-gray-600"
-                }`}
-              >
-                {message}
-              </div>
-            )}
+            {message && <p className={`text-center text-sm font-semibold ${message.includes("✅") ? "text-green-600" : "text-red-600"}`}>{message}</p>}
 
-            {/* Divider */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or
-                </span>
-              </div>
-            </div>
-
-            {/* Login link */}
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link to="/login" className="text-primary hover:underline font-semibold">
-                  Sign in here
-                </Link>
-              </p>
-
-              {/* Logout button */}
-              <Button onClick={handleLogout} variant="outline" className="w-full text-red-600">
-                Logout
-              </Button>
+            <div className="text-center mt-4">
+              <Link to="/login" className="text-primary hover:underline">Already have an account? Sign in here</Link>
             </div>
           </CardContent>
         </Card>

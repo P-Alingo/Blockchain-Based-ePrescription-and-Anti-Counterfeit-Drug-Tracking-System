@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Zap, Users, CheckCircle, Star, ArrowRight, FileText, Scan, Database, TrendingUp, Instagram, Twitter, Youtube, Mail, Phone } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import heroImage from '@/assets/hero-healthcare.jpg';
 import testimonialDoctor from '@/assets/testimonial-doctor-1.jpg';
 import testimonialPharmacist from '@/assets/testimonial-pharmacist-1.jpg';
@@ -11,6 +11,29 @@ import testimonialAdmin from '@/assets/testimonial-admin-1.jpg';
 
 const Landing = () => {
   const [activeFeature, setActiveFeature] = useState(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const navigate = useNavigate();
+  const featuresRef = useRef<HTMLElement>(null);
+
+  // Handler for Learn More (scroll to features)
+  const handleLearnMore = () => {
+    if (featuresRef.current) {
+      featuresRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }; // ← THIS WAS MISSING
+
+  const handleStartJourney = () => {
+    // Check if user is already logged in
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      // User is logged in, redirect to their dashboard
+      const { role } = JSON.parse(userData);
+      navigate(`/${role}/dashboard`);
+    } else {
+      // User is not logged in, go to registration
+      navigate('/register');
+    }
+  };
 
   const features = [
     {
@@ -38,7 +61,7 @@ const Landing = () => {
   const userRoles = [
     { name: "Doctor", count: "2,500+", description: "Prescribing physicians" },
     { name: "Patient", count: "15,000+", description: "Registered patients" },
-    { name: "Pharmacist", count: "800+", description: "Licensed pharmacies" },
+    { name: "Pharm acist", count: "800+", description: "Licensed pharmacies" },
     { name: "Manufacturer", count: "150+", description: "Verified manufacturers" },
     { name: "Distributor", count: "300+", description: "Authorized distributors" },
     { name: "Regulator", count: "25+", description: "Regulatory bodies" }
@@ -127,12 +150,19 @@ const Landing = () => {
               Revolutionary blockchain-based ePrescription system that eliminates counterfeit drugs and ensures patient safety across Kenya's healthcare network.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/register">
-                <Button size="lg" className="btn-gradient-primary text-lg px-8 py-4">
-                  Start Your Journey <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
-              <Button size="lg" variant="outline" className="text-lg px-8 py-4 border-primary/30 hover:bg-primary/5">
+              <Button
+                size="lg"
+                className="btn-gradient-primary text-lg px-8 py-4"
+                onClick={handleStartJourney}
+              >
+                Start Your Journey <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="text-lg px-8 py-4 border-primary/30 hover:bg-primary/5"
+                onClick={handleLearnMore}
+              >
                 <FileText className="mr-2 w-5 h-5" />
                 Learn More
               </Button>
@@ -150,7 +180,7 @@ const Landing = () => {
       </section>
 
       {/* Features Grid */}
-      <section className="py-20 bg-muted/30">
+      <section ref={featuresRef} className="py-20 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Why Choose Our Platform?</h2>
@@ -257,17 +287,19 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-foreground/5 border-t border-muted/30 py-16 px-6 sm:px-12 lg:px-24 text-background mt-auto">
+      <footer className="bg-gradient-to-t from-background via-foreground/5 to-background border-t border-muted/30 pt-16 pb-8 px-6 sm:px-12 lg:px-24 text-background mt-auto">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           {/* Contact Info */}
           <div>
-            <h3 className="text-xl font-semibold mb-4 text-primary">Contact Us</h3>
-            <ul className="space-y-2 text-muted-foreground text-sm">
-              <li className="flex items-center space-x-2">
+            <h3 className="text-xl font-bold mb-4 text-primary flex items-center gap-2">
+              <Mail className="w-6 h-6 mr-1 text-primary" /> Contact Us
+            </h3>
+            <ul className="space-y-3 text-muted-foreground text-base">
+              <li className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-primary" />
-                <span>support@eprescribe.ke</span>
+                <span className="hover:underline cursor-pointer">support@eprescribe.ke</span>
               </li>
-              <li className="flex items-center space-x-2">
+              <li className="flex items-center gap-3">
                 <Phone className="w-5 h-5 text-primary" />
                 <span>+254 700 123 456</span>
               </li>
@@ -276,8 +308,10 @@ const Landing = () => {
 
           {/* Social Media */}
           <div>
-            <h3 className="text-xl font-semibold mb-4 text-primary">Follow Us</h3>
-            <div className="flex space-x-6 text-muted-foreground">
+            <h3 className="text-xl font-bold mb-4 text-primary flex items-center gap-2">
+              <Zap className="w-6 h-6 mr-1 text-primary" /> Follow Us
+            </h3>
+            <div className="flex space-x-6 text-muted-foreground text-lg">
               <a
                 href="https://instagram.com/eprescribe.ke"
                 target="_blank"
@@ -285,7 +319,7 @@ const Landing = () => {
                 aria-label="Instagram"
                 className="hover:text-primary transition"
               >
-                <Instagram className="w-6 h-6" />
+                <Instagram className="w-7 h-7" />
               </a>
               <a
                 href="https://twitter.com/eprescribe_ke"
@@ -294,7 +328,7 @@ const Landing = () => {
                 aria-label="Twitter"
                 className="hover:text-primary transition"
               >
-                <Twitter className="w-6 h-6" />
+                <Twitter className="w-7 h-7" />
               </a>
               <a
                 href="https://tiktok.com/@eprescribe.ke"
@@ -303,45 +337,49 @@ const Landing = () => {
                 aria-label="TikTok"
                 className="hover:text-primary transition"
               >
-                <Youtube className="w-6 h-6" />
+                <Youtube className="w-7 h-7" />
               </a>
             </div>
           </div>
 
           {/* FAQ */}
           <div>
-            <h3 className="text-xl font-semibold mb-4 text-primary">FAQs</h3>
-            <ul className="space-y-3 text-muted-foreground text-sm">
-              <li className="space-y-1">
-                <p className="font-semibold">How does ePrescribe Kenya ensure prescription security?</p>
-                <p>We use blockchain technology to create immutable records that prevent counterfeit prescriptions.</p>
-              </li>
-              <li className="space-y-1">
-                <p className="font-semibold">Can patients verify their prescriptions?</p>
-                <p>Yes, patients and pharmacists can verify prescriptions instantly using QR code scanning.</p>
-              </li>
-              <li className="space-y-1">
-                <p className="font-semibold">Who can join this platform?</p>
-                <p>Doctors, patients, pharmacists, manufacturers, distributors, and regulators across Kenya.</p>
-              </li>
-              <li className="space-y-1">
-                <p className="font-semibold">How can I contact support?</p>
-                <p>Use the contact information provided or visit our support pages.</p>
-              </li>
+            <h3 className="text-xl font-bold mb-4 text-primary flex items-center gap-2">
+              <CheckCircle className="w-6 h-6 mr-1 text-primary" /> FAQs
+            </h3>
+            <ul className="space-y-2 text-muted-foreground text-base">
+              {faqs.map((faq, idx) => (
+                <li key={idx} className="border-b border-muted/20 pb-2">
+                  <button
+                    className={`w-full text-left flex items-center justify-between font-semibold py-2 focus:outline-none transition-colors ${openFaq === idx ? 'text-primary' : ''}`}
+                    onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                    aria-expanded={openFaq === idx}
+                  >
+                    <span>{faq.question}</span>
+                    <span className={`ml-2 transition-transform ${openFaq === idx ? 'rotate-90' : ''}`}>▶</span>
+                  </button>
+                  {openFaq === idx && (
+                    <div className="pl-2 pr-1 py-2 text-sm text-muted-foreground animate-fade-in">
+                      {faq.answer}
+                    </div>
+                  )}
+                </li>
+              ))}
             </ul>
           </div>
 
           {/* About Us */}
           <div>
-            <h3 className="text-xl font-semibold mb-4 text-primary">About Us</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">
+            <h3 className="text-xl font-bold mb-4 text-primary flex items-center gap-2">
+              <Users className="w-6 h-6 mr-1 text-primary" /> About Us
+            </h3>
+            <p className="text-muted-foreground text-base leading-relaxed">
               ePrescribe Kenya is dedicated to securing Kenya's healthcare future through blockchain technology. We provide a cutting-edge digital prescription platform that empowers healthcare professionals and patients while eliminating counterfeit drugs.
             </p>
           </div>
         </div>
-
-        <div className="mt-12 text-center text-muted-foreground text-xs">
-          &copy; {new Date().getFullYear()} ePrescribe Kenya. All rights reserved.
+        <div className="mt-12 text-center text-muted-foreground text-xs tracking-wide">
+          <span className="inline-block align-middle mr-2">&copy; {new Date().getFullYear()} ePrescribe Kenya. All rights reserved.</span>
         </div>
       </footer>
     </div>

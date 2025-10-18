@@ -1,14 +1,16 @@
-// authService.js
-import crypto from 'crypto';
-import { query } from '../config/database.js';
-import { generateOtp } from '../utils/otpGenerator.js';
-import { sendOtpEmail } from '../utils/emailSender.js';
+// ===============================================================
+// authService.js – FIXED VERSION
+
+import crypto from "crypto";
+import { query } from "../config/database.js";
+import { generateOtp } from "../utils/otpGenerator.js";
+import { sendOtpEmail } from "../utils/emailSender.js";
 
 const OTP_EXPIRATION_MINUTES = Number(process.env.OTP_EXPIRATION_MINUTES) || 2;
 
-// -----------------------------
-// Registration Services
-// -----------------------------
+// ===============================================================
+// 1️⃣ REGISTER - REQUEST OTP
+// ===============================================================
 export async function registerRequestOtpService({
   walletAddress,
   email,
@@ -17,185 +19,319 @@ export async function registerRequestOtpService({
   phoneNumber,
   dob,
   gender,
+  specialization,
+  licenseno,
+  hospital,
+  pharmacy,
+  companyname,
+  organizationname,
 }) {
-  if (!walletAddress || !email || !role) {
-    throw { status: 400, message: 'Wallet, email, and role are required' };
-  }
+  if (!walletAddress || !email || !role)
+    throw { status: 400, message: "Wallet, email, and role are required" };
 
-  const existingUser = await query(
-    'SELECT * FROM users WHERE LOWER(wallet_address)=$1 OR LOWER(email)=$2',
-    [walletAddress.toLowerCase(), email.toLowerCase()]
+  const wallet = walletAddress.toLowerCase();
+  const mail = email.toLowerCase();
+
+  console.log(`🟡 Registration request: ${mail} (${wallet}) as ${role}`);
+
+  // ✅ Check if wallet/email already exist
+  const { rows: existingUsers } = await query(
+    `SELECT * FROM users WHERE LOWER(wallet_address) = $1 OR LOWER(email) = $2`,
+    [wallet, mail]
   );
 
-  let userId;
+  if (existingUsers.length > 0) {
+    const existing = existingUsers[0];
 
-  if (existingUser.rowCount === 0) {
-    // Create new user
-    const newUser = await query(
-      `INSERT INTO users
-        (wallet_address, email, role, full_name, phone_number, dob, gender, isverified, createdat, updatedat)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW(),NOW())
-       RETURNING id`,
-      [
-        walletAddress.toLowerCase(),
-        email.toLowerCase(),
-        role,
-        fullName || '',
-        phoneNumber || '',
-        dob || null,
-        gender || '',
-      ]
-    );
-    userId = newUser.rows[0].id;
-  } else {
-    // Existing user: update missing details
-    const user = existingUser.rows[0];
-    userId = user.id;
+    // Already verified → block new registration
+    if (existing.isverified) {
+      throw {
+        status: 409,
+        message:
+          "This email or wallet address is already registered and verified. Please log in instead.",
+      };
+    }
+
+    // Not yet verified → resend OTP, do NOT insert new user
+    console.log("♻️ Existing unverified user – resending OTP");
+
+    const otp = generateOtp();
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+    const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
+
     await query(
-      `UPDATE users SET
-        full_name=$1,
-        phone_number=$2,
-        dob=$3,
-        gender=$4,
-        updatedat=NOW()
-       WHERE id=$5`,
-      [
-        fullName || user.full_name,
-        phoneNumber || user.phone_number,
-        dob || user.dob,
-        gender || user.gender,
-        userId,
-      ]
+      "INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())",
+      [existing.id, otpHash, expiresAt]
     );
+
+    await sendOtpEmail(existing.email, otp);
+    console.log(`📨 OTP resent to ${existing.email}`);
+
+    return {
+      message:
+        "An existing unverified account was found. OTP has been resent to your email.",
+    };
   }
 
-  // Generate OTP
+  // ✅ No conflict – create new unverified user
+  const { rows } = await query(
+    `INSERT INTO users 
+      (wallet_address, email, role, full_name, phone_number, dob, gender, isverified, createdat, updatedat)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW(),NOW())
+     RETURNING id, email`,
+    [wallet, mail, role, fullName || "", phoneNumber || "", dob || null, gender || ""]
+  );
+
+  const userId = rows[0].id;
+  console.log(`✅ Created new user ID: ${userId}`);
+
+  // Generate user_code based on role
+  const rolePrefixes = {
+    patient: "P",
+    doctor: "D",
+    pharmacist: "PH",
+    distributor: "DIS",
+    manufacturer: "M",
+    regulator: "R",
+    admin: "A",
+  };
+
+  const prefix = rolePrefixes[role.toLowerCase()] || "U";
+
+  const { rows: countRows } = await query(
+    "SELECT COUNT(*) AS count FROM users WHERE role = $1",
+    [role]
+  );
+  const count = parseInt(countRows[0].count);
+
+  const userCode = `${prefix}${count.toString().padStart(3, "0")}`;
+
+  await query("UPDATE users SET user_code=$1 WHERE id=$2", [userCode, userId]);
+
+  console.log(`🔢 Assigned user_code: ${userCode}`);
+
+  // ✅ Insert role-specific data
+  try {
+    switch (role.toLowerCase()) {
+      case "doctor":
+        await query(
+          `INSERT INTO doctor (userid, specialization, licenseno, hospital)
+           VALUES ($1,$2,$3,$4)
+           ON CONFLICT (userid) DO UPDATE SET specialization=$2, licenseno=$3, hospital=$4`,
+          [userId, specialization, licenseno, hospital]
+        );
+        break;
+
+      case "pharmacist":
+        await query(
+          `INSERT INTO pharmacist (userid, licenseno, pharmacy)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (userid) DO UPDATE SET licenseno=$2, pharmacy=$3`,
+          [userId, licenseno, pharmacy]
+        );
+        break;
+
+      case "regulator":
+        await query(
+          `INSERT INTO regulator (userid, organizationname)
+           VALUES ($1,$2)
+           ON CONFLICT (userid) DO UPDATE SET organizationname=$2`,
+          [userId, organizationname]
+        );
+        break;
+
+      case "patient":
+        await query(
+          `INSERT INTO patient (userid, dateofbirth)
+           VALUES ($1,$2)
+           ON CONFLICT (userid) DO UPDATE SET dateofbirth=$2`,
+          [userId, dob]
+        );
+        break;
+
+      case "admin":
+        await query(
+          `INSERT INTO admin (userid)
+           VALUES ($1)
+           ON CONFLICT (userid) DO NOTHING`,
+          [userId]
+        );
+        break;
+
+      case "manufacturer":
+        await query(
+          `INSERT INTO manufacturer (userid, companyname, licenseno)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (userid) DO UPDATE SET companyname=$2, licenseno=$3`,
+          [userId, companyname, licenseno]
+        );
+        break;
+
+      case "distributor":
+        await query(
+          `INSERT INTO distributor (userid, companyname, licenseno)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (userid) DO UPDATE SET companyname=$2, licenseno=$3`,
+          [userId, companyname, licenseno]
+        );
+        break;
+    }
+  } catch (err) {
+    console.error("❌ Role table update failed:", err.message);
+    throw { status: 500, message: "Failed to save role-specific data" };
+  }
+
+  // ✅ OTP generation + email
   const otp = generateOtp();
-  const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
   const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
 
-  // Store OTP
   await query(
-    'INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())',
+    "INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())",
     [userId, otpHash, expiresAt]
   );
 
-  // Send OTP email
   await sendOtpEmail(email, otp);
-
-  return { message: 'OTP sent to your email for registration' };
+  console.log(`📨 OTP sent to ${email}`);
+  return { message: "OTP sent to your email for verification" };
 }
 
+// ===============================================================
+// 2️⃣ VERIFY REGISTRATION OTP - FIXED
+// ===============================================================
 export async function verifyOtpService({ walletAddress, otp }) {
-  if (!walletAddress || !otp) {
-    throw { status: 400, message: 'Wallet and OTP are required' };
-  }
+  if (!walletAddress || !otp)
+    throw { status: 400, message: "Wallet and OTP required" };
 
-  // Fetch user
-  const userRes = await query(
-    'SELECT * FROM users WHERE LOWER(wallet_address)=$1',
-    [walletAddress.toLowerCase()]
+  const wallet = walletAddress.toLowerCase();
+  const { rows: users } = await query(
+    "SELECT * FROM users WHERE LOWER(wallet_address)=$1",
+    [wallet]
   );
-  if (userRes.rowCount === 0) throw { status: 400, message: 'User not found' };
-  const user = userRes.rows[0];
 
-  // Fetch latest unused OTP
-  const otpRes = await query(
-    'SELECT * FROM otps WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
+  if (users.length === 0)
+    throw { status: 404, message: "User not found. Please register first." };
+
+  const user = users[0];
+  if (user.isverified)
+    throw { status: 400, message: "User already verified. Please log in." };
+
+  const { rows: otps } = await query(
+    "SELECT * FROM otps WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1",
     [user.id]
   );
-  if (otpRes.rowCount === 0) throw { status: 400, message: 'No OTP found for this user' };
 
-  const otpRow = otpRes.rows[0];
-  const providedOtpHash = crypto.createHash('sha256').update(otp).digest('hex');
+  if (otps.length === 0) throw { status: 400, message: "No OTP found" };
 
-  if (providedOtpHash !== otpRow.otp_hash) throw { status: 400, message: 'Invalid OTP' };
-  if (new Date(otpRow.expires_at) < new Date()) throw { status: 400, message: 'OTP expired' };
+  const otpRow = otps[0];
+  const providedHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-  // Mark OTP as used
-  await query('UPDATE otps SET used_at=NOW() WHERE id=$1', [otpRow.id]);
+  if (providedHash !== otpRow.otp_hash)
+    throw { status: 400, message: "Invalid OTP" };
 
-  // Mark user verified
-  await query('UPDATE users SET isverified=true, updatedat=NOW() WHERE id=$1', [user.id]);
+  if (new Date(otpRow.expires_at) < new Date())
+    throw { status: 400, message: "OTP expired" };
 
-  return {
-    message: '✅ OTP verified, user registered successfully',
-    userId: user.id,
-    role: user.role,
-    email: user.email,
+  await query("UPDATE otps SET used_at=NOW() WHERE id=$1", [otpRow.id]);
+  await query("UPDATE users SET isverified=true, updatedat=NOW() WHERE id=$1", [
+    user.id,
+  ]);
+
+  console.log(`✅ Verified user ${user.email}`);
+  
+  // ✅ RETURN userId for controller to use
+  return { 
+    message: "Registration verified successfully.",
+    userId: user.id
   };
 }
 
-// -----------------------------
-// Login Services
-// -----------------------------
+// ===============================================================
+// 3️⃣ LOGIN - REQUEST OTP
+// ===============================================================
 export async function loginRequestOtpService({ walletAddress, email }) {
-  if (!walletAddress || !email) {
-    throw { status: 400, message: 'Wallet and email are required' };
-  }
+  if (!walletAddress || !email)
+    throw { status: 400, message: "Wallet and email are required" };
 
-  // Check verified user
+  const wallet = walletAddress.toLowerCase();
+  const mail = email.toLowerCase();
+
   const userRes = await query(
-    'SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true',
-    [walletAddress.toLowerCase(), email.toLowerCase()]
+    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true",
+    [wallet, mail]
   );
-  if (userRes.rowCount === 0) {
-    throw { status: 400, message: 'User not registered or not verified' };
-  }
+
+  if (userRes.rowCount === 0)
+    throw {
+      status: 400,
+      message:
+        "No verified user found with that wallet and email. Please register first.",
+    };
 
   const user = userRes.rows[0];
-
-  // Generate login OTP
   const otp = generateOtp();
-  const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
   const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
 
-  // Store OTP
   await query(
-    'INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())',
+    "INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())",
     [user.id, otpHash, expiresAt]
   );
 
-  // Send OTP
-  try {
-    await sendOtpEmail(email, otp);
-  } catch (err) {
-    console.error('Login OTP email failed:', err.response?.data || err.message);
-    throw { status: 500, message: 'Failed to send OTP email' };
-  }
+  await sendOtpEmail(email, otp);
+  console.log(`📨 Login OTP sent to ${email}`);
 
-  return { message: 'OTP sent to your email for login', userId: user.id, email: user.email, role: user.role };
+  return { message: "Login OTP sent" };
 }
 
+// ===============================================================
+// 4️⃣ LOGIN - VERIFY OTP - FIXED
+// ===============================================================
 export async function loginVerifyOtpService({ walletAddress, email, otp }) {
-  if (!walletAddress || !email || !otp) {
-    throw { status: 400, message: 'Wallet, email, and OTP are required' };
-  }
+  if (!walletAddress || !email || !otp)
+    throw { status: 400, message: "Wallet, email, and OTP required" };
 
-  // Fetch verified user
-  const userRes = await query(
-    'SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true',
-    [walletAddress.toLowerCase(), email.toLowerCase()]
+  const wallet = walletAddress.toLowerCase();
+  const mail = email.toLowerCase();
+
+  const { rows: users } = await query(
+    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true",
+    [wallet, mail]
   );
-  if (userRes.rowCount === 0) throw { status: 400, message: 'User not registered or not verified' };
 
-  const user = userRes.rows[0];
+  if (users.length === 0)
+    throw { status: 404, message: "User not found or not verified" };
 
-  // Fetch latest unused OTP
-  const otpRes = await query(
-    'SELECT * FROM otps WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
+  const user = users[0];
+  
+  const { rows: otps } = await query(
+    "SELECT * FROM otps WHERE user_id=$1 AND used_at IS NULL ORDER BY created_at DESC LIMIT 1",
     [user.id]
   );
-  if (otpRes.rowCount === 0) throw { status: 400, message: 'No OTP found for this user' };
 
-  const otpRow = otpRes.rows[0];
-  const providedOtpHash = crypto.createHash('sha256').update(otp).digest('hex');
+  if (otps.length === 0)
+    throw { status: 400, message: "No OTP found for this user" };
 
-  if (providedOtpHash !== otpRow.otp_hash) throw { status: 400, message: 'Invalid OTP' };
-  if (new Date(otpRow.expires_at) < new Date()) throw { status: 400, message: 'OTP expired' };
+  const otpRow = otps[0];
+  const providedHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-  // Mark OTP used
-  await query('UPDATE otps SET used_at=NOW() WHERE id=$1', [otpRow.id]);
+  if (providedHash !== otpRow.otp_hash)
+    throw { status: 400, message: "Invalid OTP" };
 
-  return { message: '✅ OTP verified, login successful', userId: user.id, role: user.role, email: user.email };
+  if (new Date(otpRow.expires_at) < new Date())
+    throw { status: 400, message: "OTP expired" };
+
+  await query("UPDATE otps SET used_at=NOW() WHERE id=$1", [otpRow.id]);
+  console.log(`✅ Login successful for ${email}`);
+
+  // ✅ RETURN ALL REQUIRED DATA
+  return {
+    message: "Login successful",
+    userId: user.id,
+    role: user.role,
+    email: user.email,
+    walletAddress: user.wallet_address,
+    fullName: user.full_name,
+    userCode: user.user_code
+  };
 }

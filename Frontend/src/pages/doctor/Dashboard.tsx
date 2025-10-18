@@ -15,71 +15,43 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+interface Prescription {
+  id: string;
+  patient: string;
+  drug: string;
+  status: 'Active' | 'Dispensed';
+  date: string;
+  urgency: 'normal' | 'urgent';
+}
+
 const DoctorDashboard = () => {
+  // Get user info from localStorage
+  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+  const userName = userData.fullName || 'Doctor';
+  const userEmail = userData.email || '';
+
+  // Sidebar items
   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard', active: true },
-    { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription', active: false },
-    { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions', active: false },
-    { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/doctor/activity-logs', active: false },
+    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard' },
+    { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription' },
+    { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions' },
+    { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification' },
+    { icon: Activity, label: 'Activity Logs', path: '/doctor/activity-logs' },
   ];
 
+  // Placeholder stats (can later fetch from API)
   const stats = [
-    {
-      title: 'Total Prescriptions',
-      value: '2,847',
-      change: '+12%',
-      icon: FileText,
-      color: 'text-primary'
-    },
-    {
-      title: 'Active Prescriptions',
-      value: '127',
-      change: '+8%',
-      icon: Clock,
-      color: 'text-warning'
-    },
-    {
-      title: 'Dispensed Today',
-      value: '23',
-      change: '+15%',
-      icon: CheckCircle,
-      color: 'text-success'
-    },
-    {
-      title: 'Patients Served',
-      value: '1,542',
-      change: '+5%',
-      icon: Users,
-      color: 'text-accent'
-    }
+    { title: 'Total Prescriptions', value: '2,847', change: '+12%', icon: FileText, color: 'text-primary' },
+    { title: 'Active Prescriptions', value: '127', change: '+8%', icon: Clock, color: 'text-warning' },
+    { title: 'Dispensed Today', value: '23', change: '+15%', icon: CheckCircle, color: 'text-success' },
+    { title: 'Patients Served', value: '1,542', change: '+5%', icon: Users, color: 'text-accent' },
   ];
 
-  const recentPrescriptions = [
-    {
-      id: 'RX-2024-001',
-      patient: 'Maria Wanjiku',
-      drug: 'Amoxicillin 500mg',
-      status: 'Active',
-      date: '2024-01-15',
-      urgency: 'normal'
-    },
-    {
-      id: 'RX-2024-002',
-      patient: 'John Kimani',
-      drug: 'Metformin 850mg',
-      status: 'Dispensed',
-      date: '2024-01-14',
-      urgency: 'urgent'
-    },
-    {
-      id: 'RX-2024-003',
-      patient: 'Grace Nyong\'o',
-      drug: 'Lisinopril 10mg',
-      status: 'Active',
-      date: '2024-01-13',
-      urgency: 'normal'
-    }
+  // Placeholder recent prescriptions
+  const recentPrescriptions: Prescription[] = [
+    { id: 'RX-2024-001', patient: 'Maria Wanjiku', drug: 'Amoxicillin 500mg', status: 'Active', date: '2024-01-15', urgency: 'normal' },
+    { id: 'RX-2024-002', patient: 'John Kimani', drug: 'Metformin 850mg', status: 'Dispensed', date: '2024-01-14', urgency: 'urgent' },
+    { id: 'RX-2024-003', patient: 'Grace Nyong\'o', drug: 'Lisinopril 10mg', status: 'Active', date: '2024-01-13', urgency: 'normal' },
   ];
 
   return (
@@ -89,8 +61,8 @@ const DoctorDashboard = () => {
         active: item.path === '/doctor/dashboard'
       }))}
       userRole="doctor"
-      userName="Dr. Samuel Kimani"
-      userEmail="s.kimani@hospital.co.ke"
+      userName={userName}
+      userEmail={userEmail}
     >
       <div className="space-y-8">
         {/* Header */}
@@ -109,8 +81,8 @@ const DoctorDashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
-            <Card key={index} className="card-elevated">
+          {stats.map((stat, i) => (
+            <Card key={i} className="card-elevated">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -139,26 +111,26 @@ const DoctorDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {recentPrescriptions.map((prescription) => (
-                    <div key={prescription.id} className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                  {recentPrescriptions.map(rx => (
+                    <div key={rx.id} className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
                       <div className="space-y-1">
                         <div className="flex items-center space-x-3">
-                          <span className="font-medium">{prescription.id}</span>
-                          {prescription.urgency === 'urgent' && (
+                          <span className="font-medium">{rx.id}</span>
+                          {rx.urgency === 'urgent' && (
                             <Badge variant="destructive" className="text-xs">Urgent</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">Patient: {prescription.patient}</p>
-                        <p className="text-sm font-medium">{prescription.drug}</p>
+                        <p className="text-sm text-muted-foreground">Patient: {rx.patient}</p>
+                        <p className="text-sm font-medium">{rx.drug}</p>
                       </div>
                       <div className="text-right">
                         <Badge 
-                          variant={prescription.status === 'Active' ? 'default' : 'secondary'}
-                          className={prescription.status === 'Active' ? 'bg-warning text-warning-foreground' : ''}
+                          variant={rx.status === 'Active' ? 'default' : 'secondary'}
+                          className={rx.status === 'Active' ? 'bg-warning text-warning-foreground' : ''}
                         >
-                          {prescription.status}
+                          {rx.status}
                         </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">{prescription.date}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{rx.date}</p>
                       </div>
                     </div>
                   ))}
@@ -172,7 +144,7 @@ const DoctorDashboard = () => {
             </Card>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions & System Alerts */}
           <div className="space-y-6">
             <Card className="card-elevated">
               <CardHeader>
@@ -200,26 +172,23 @@ const DoctorDashboard = () => {
               </CardContent>
             </Card>
 
-            {/* System Alerts */}
             <Card className="card-elevated">
               <CardHeader>
                 <CardTitle>System Alerts</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3 p-3 rounded-lg bg-warning/10">
-                    <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Blockchain Sync</p>
-                      <p className="text-xs text-muted-foreground">3 prescriptions pending blockchain confirmation</p>
-                    </div>
+              <CardContent className="space-y-3">
+                <div className="flex items-start space-x-3 p-3 rounded-lg bg-warning/10">
+                  <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Blockchain Sync</p>
+                    <p className="text-xs text-muted-foreground">3 prescriptions pending blockchain confirmation</p>
                   </div>
-                  <div className="flex items-start space-x-3 p-3 rounded-lg bg-success/10">
-                    <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">System Status</p>
-                      <p className="text-xs text-muted-foreground">All systems operational</p>
-                    </div>
+                </div>
+                <div className="flex items-start space-x-3 p-3 rounded-lg bg-success/10">
+                  <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">System Status</p>
+                    <p className="text-xs text-muted-foreground">All systems operational</p>
                   </div>
                 </div>
               </CardContent>

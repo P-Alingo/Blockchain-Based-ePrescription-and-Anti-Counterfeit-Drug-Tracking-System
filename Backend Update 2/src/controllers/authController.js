@@ -1,89 +1,238 @@
-import { 
-  registerRequestOtpService, 
-  verifyOtpService, 
-  loginRequestOtpService, 
-  loginVerifyOtpService 
-} from '../services/authService.js';
-import { generateJwt } from '../utils/jwtUtils.js';
+// src/controllers/authController.js - WITH DEBUG LOGGING
+import {
+  registerRequestOtpService,
+  verifyOtpService,
+  loginRequestOtpService,
+  loginVerifyOtpService,
+} from "../services/authService.js";
+import { generateJwt } from "../utils/jwtUtils.js";
+import { userManagementContract } from "../config/blockchain.js";
+import { query } from "../config/database.js";
+import { ethers } from "ethers";
 
-// -----------------------------
-// Register OTP
-// -----------------------------
+
+// =======================================================
+// Helper: Register user on blockchain
+// =======================================================
+async function registerOnChainUser(walletAddress, role) {
+  try {
+    if (!walletAddress || !role)
+      throw new Error("Missing wallet address or role");
+
+    const privateKey = process.env.PRIVATE_KEY;
+    if (!privateKey)
+      throw new Error("Missing PRIVATE_KEY in environment variables");
+
+    const provider =
+      userManagementContract.runner?.provider ||
+      userManagementContract.provider ||
+      new ethers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
+
+    const signer = new ethers.Wallet(privateKey, provider);
+    const contractWithSigner = userManagementContract.connect(signer);
+
+    const tx = await contractWithSigner.registerUser(
+      walletAddress,
+      role,
+      "Registered via OTP verification"
+    );
+    await tx.wait();
+
+    console.log(`✅ On-chain registration: ${walletAddress} as ${role}`);
+    return true;
+  } catch (err) {
+    console.warn(`⚠️ Blockchain registration skipped: ${err.message}`);
+    return false;
+  }
+}
+
+// =======================================================
+// 1️⃣ Register Request OTP
+// =======================================================
 export async function registerRequestOtp(req, res) {
   try {
+    console.log("📨 Register Request OTP - Body:", req.body);
     const result = await registerRequestOtpService(req.body);
-    res.json(result);
+    res.json({ success: true, ...result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Failed to send OTP' });
+    console.error("❌ Register Request OTP Error:", err);
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || "Failed to send OTP",
+    });
   }
 }
 
-// -----------------------------
-// Verify OTP (after registration)
-// -----------------------------
+// =======================================================
+// 2️⃣ Verify OTP (Registration)
+// =======================================================
 export async function verifyOtp(req, res) {
   try {
+    console.log("📨 Verify Registration OTP - Body:", req.body);
     const result = await verifyOtpService(req.body);
 
-    // Generate JWT
-    const token = generateJwt({ userId: result.userId, role: result.role });
+    const userId = result.userId;
+    if (!userId)
+      throw { status: 500, message: "Missing userId from verification result" };
 
-    // Role-based dashboard URL
-    const role = result.role.toLowerCase();
+    // Fetch wallet + role (for JWT)
+    const { rows } = await query(
+      "SELECT id, wallet_address, role, email FROM users WHERE id = $1",
+      [userId]
+    );
+    const user = rows[0];
+    if (!user) throw { status: 404, message: "User not found after verification" };
+
+    const { wallet_address: walletAddress, role, email } = user;
+
+    // ✅ Generate JWT
+    const token = generateJwt({
+      userId: user.id,
+      role,
+      walletAddress,
+    });
+
+    // 🧱 Attempt blockchain registration (non-blocking)
+    registerOnChainUser(walletAddress, role).catch(console.warn);
+
+    // 🔗 Dashboard redirect map
     const dashboardMap = {
-      patient: '/patient/dashboard',
-      doctor: '/doctor/dashboard',
-      pharmacist: '/pharmacist/dashboard',
-      manufacturer: '/manufacturer/dashboard',
-      distributor: '/distributor/dashboard',
-      regulator: '/regulator/dashboard',
-      admin: '/admin/dashboard',
+      patient: "/patient/dashboard",
+      doctor: "/doctor/dashboard",
+      pharmacist: "/pharmacist/dashboard",
+      manufacturer: "/manufacturer/dashboard",
+      distributor: "/distributor/dashboard",
+      regulator: "/regulator/dashboard",
+      admin: "/admin/dashboard",
     };
-    const dashboardUrl = dashboardMap[role] || '/dashboard';
 
-    res.json({ message: result.message, email: result.email, token, dashboardUrl });
+    const dashboardUrl = dashboardMap[role?.toLowerCase()] || "/dashboard";
+
+    res.json({
+      success: true,
+      message: result.message,
+      email,
+      walletAddress,
+      role,
+      token,
+      dashboardUrl,
+    });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Failed to verify OTP' });
+    console.error("❌ Verify OTP Error:", err);
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || "Failed to verify OTP",
+    });
   }
 }
 
-// -----------------------------
-// Login OTP Request
-// -----------------------------
+// =======================================================
+// 3️⃣ Login Request OTP - WITH ENHANCED LOGGING
+// =======================================================
 export async function loginRequestOtp(req, res) {
+  console.log("\n🟢 ========== LOGIN REQUEST OTP ==========");
+  console.log("📨 Request Body:", JSON.stringify(req.body, null, 2));
+  console.log("📍 Endpoint Hit:", req.path);
+  console.log("🌐 Full URL:", req.originalUrl);
+  
   try {
+    const { walletAddress, email } = req.body;
+    
+    // Validate input
+    if (!walletAddress || !email) {
+      console.error("❌ Missing required fields");
+      return res.status(400).json({
+        success: false,
+        error: "Wallet address and email are required",
+      });
+    }
+
+    console.log("✅ Input validation passed");
+    console.log("🔄 Calling loginRequestOtpService...");
+    
     const result = await loginRequestOtpService(req.body);
-    res.json(result);
+    
+    console.log("✅ Service returned:", result);
+    console.log("🟢 ========== REQUEST OTP SUCCESS ==========\n");
+    
+    res.json({ success: true, ...result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Failed to send login OTP' });
+    console.error("\n❌ ========== LOGIN REQUEST OTP ERROR ==========");
+    console.error("Error Type:", err.constructor.name);
+    console.error("Error Status:", err.status);
+    console.error("Error Message:", err.message);
+    console.error("Full Error:", err);
+    console.error("Stack Trace:", err.stack);
+    console.error("❌ ========================================\n");
+    
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || "Failed to send login OTP",
+    });
   }
 }
 
-// -----------------------------
-// Login OTP Verify
-// -----------------------------
+// =======================================================
+// 4️⃣ Login Verify OTP
+// =======================================================
 export async function loginVerifyOtp(req, res) {
+  console.log('\n🟡 ========== LOGIN VERIFY OTP ==========');
+  console.log('📨 Request Body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const result = await loginVerifyOtpService(req.body);
+    
+    console.log('✅ loginVerifyOtpService returned:', result);
 
-    // Generate JWT
-    const token = generateJwt({ userId: result.userId, role: result.role });
+    // CRITICAL: Check if userId exists in the result
+    if (!result.userId) {
+      console.error('❌ CRITICAL: Missing userId from service. Full result:', result);
+      throw { status: 500, message: "Missing userId from login verification" };
+    }
 
-    // Role-based dashboard URL
-    const role = result.role.toLowerCase();
-    const dashboardMap = {
-      patient: '/patient/dashboard',
-      doctor: '/doctor/dashboard',
-      pharmacist: '/pharmacist/dashboard',
-      manufacturer: '/manufacturer/dashboard',
-      distributor: '/distributor/dashboard',
-      regulator: '/regulator/dashboard',
-      admin: '/admin/dashboard',
+    console.log(`✅ User ID verified: ${result.userId}`);
+
+    // ✅ Generate JWT using the userId from the service result
+    const token = generateJwt({
+      userId: result.userId,
+      role: result.role,
+      walletAddress: result.walletAddress,
+      email: result.email
+    });
+
+    console.log(`✅ JWT generated successfully for user: ${result.userId}`);
+
+    // Return the complete response
+    const responseData = {
+      success: true,
+      message: result.message || "Login successful",
+      token: token,
+      id: result.userId,
+      role: result.role,
+      email: result.email,
+      walletAddress: result.walletAddress,
+      fullName: result.fullName,
+      userCode: result.userCode
     };
-    const dashboardUrl = dashboardMap[role] || '/dashboard';
 
-    res.json({ message: result.message, email: result.email, token, dashboardUrl });
+    console.log('✅ Sending successful response to frontend');
+    console.log('🟢 ========== VERIFY OTP SUCCESS ==========\n');
+    
+    res.json(responseData);
+
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || 'Failed to verify login OTP' });
+    console.error("\n❌ ========== LOGIN VERIFY OTP ERROR ==========");
+    console.error("Error:", {
+      message: err.message,
+      status: err.status,
+      stack: err.stack
+    });
+    console.error("❌ ==========================================\n");
+    
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || "Failed to verify login OTP",
+    });
   }
+  
 }

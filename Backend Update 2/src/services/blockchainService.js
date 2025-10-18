@@ -1,5 +1,4 @@
-// This service is largely handled by config/blockchain.js event listeners.
-// Additional business logic can be implemented here if needed.
+
 // src/services/blockchainService.js
 import { contract, provider } from '../config/blockchain.js';
 import { logger } from '../config/logger.js';
