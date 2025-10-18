@@ -234,5 +234,55 @@ export async function loginVerifyOtp(req, res) {
       error: err.message || "Failed to verify login OTP",
     });
   }
-  
+
 }
+
+/**
+ * Search for patients in the users table
+ */
+export const searchAuthController = async (req, res) => {
+  try {
+    const { query: searchTerm } = req.query;  // ✅ renamed from "query" to "searchTerm"
+
+    if (!searchTerm) {
+      return res.status(400).json({ message: "Query parameter is required" });
+    }
+
+    const sql = `
+      SELECT id, full_name, email, phone_number, gender, dob, user_code
+      FROM users
+      WHERE role = 'patient'
+        AND (
+          full_name ILIKE $1 OR
+          email ILIKE $1 OR
+          phone_number ILIKE $1 OR
+          user_code ILIKE $1
+        )
+    `;
+
+    const values = [`%${searchTerm}%`];
+    const result = await query(sql, values); // ✅ now correctly calls your DB helper
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No patient found" });
+    }
+
+    const formatted = result.rows.map((row) => ({
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      phoneNumber: row.phone_number,
+      gender: row.gender,
+      dob: row.dob,
+      userCode: row.user_code,
+    }));
+
+    console.log("✅ Patients found:", formatted);
+    res.json(formatted);
+  } catch (error) {
+    console.error("❌ Error searching patients:", error);
+    res.status(500).json({ message: "Server error during patient search" });
+  }
+};
+
+

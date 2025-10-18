@@ -1,36 +1,171 @@
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  Clock, 
-  Shield,
-  Activity,
-  QrCode,
-  Plus,
-  Search
-} from 'lucide-react';
+import { useState, useEffect } from "react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { FileText, Clock, Shield, Activity } from "lucide-react";
+import axios from "axios";
+import { toast } from "sonner";
 
 const CreatePrescription = () => {
   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard', active: false },
-    { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription', active: true },
-    { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions', active: false },
-    { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/doctor/activity-logs', active: false },
+    { icon: Shield, label: "Dashboard", path: "/doctor/dashboard", active: false },
+    { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: true },
+    { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
+    { icon: Shield, label: "Blockchain Verification", path: "/doctor/blockchain-verification", active: false },
+    { icon: Activity, label: "Activity Logs", path: "/doctor/activity-logs", active: false },
   ];
+
+  const [formData, setFormData] = useState({
+    patientId: "",
+    patientName: "",
+    drugId: "",
+    drugName: "",
+    dosage: "",
+    frequency: "",
+    duration: "",
+    instructions: "",
+    issueDate: "",
+    validUntil: "",
+  });
+
+  const [patientSearch, setPatientSearch] = useState("");
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+
+  const [drugSearch, setDrugSearch] = useState("");
+  const [filteredDrugs, setFilteredDrugs] = useState<any[]>([]);
+  const [showDrugDropdown, setShowDrugDropdown] = useState(false);
+
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const userName = userData.fullName || "Doctor";
+  const userEmail = userData.email || "";
+
+  const handleChange = (key: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // --- Patient search ---
+  useEffect(() => {
+    if (!patientSearch) {
+      setFilteredPatients([]);
+      setShowPatientDropdown(false);
+      return;
+    }
+
+    const fetchPatients = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `http://localhost:4000/api/auth/search?query=${encodeURIComponent(patientSearch)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setFilteredPatients(Array.isArray(res.data) ? res.data : []);
+        setShowPatientDropdown(Array.isArray(res.data) && res.data.length > 0);
+      } catch (err) {
+        console.error("Error searching patients:", err);
+      }
+    };
+
+    fetchPatients();
+  }, [patientSearch]);
+
+  const selectPatient = (patient: any) => {
+    handleChange("patientId", patient.id);
+    handleChange("patientName", patient.full_name || patient.fullName);
+    setPatientSearch(`ID: ${patient.id} — ${patient.full_name || patient.fullName}`);
+    setShowPatientDropdown(false);
+  };
+
+  // --- Drug search ---
+  useEffect(() => {
+    if (!drugSearch) {
+      setFilteredDrugs([]);
+      setShowDrugDropdown(false);
+      return;
+    }
+
+    const fetchDrugs = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `http://localhost:4000/api/prescriptions/search/drug?q=${encodeURIComponent(drugSearch)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setFilteredDrugs(Array.isArray(res.data) ? res.data : []);
+        setShowDrugDropdown(Array.isArray(res.data) && res.data.length > 0);
+      } catch (err) {
+        console.error("Error searching drugs:", err);
+        toast.error("Failed to load drugs");
+      }
+    };
+
+    fetchDrugs();
+  }, [drugSearch]);
+
+  const selectDrug = (drug: any) => {
+    handleChange("drugId", drug.id);
+    handleChange("drugName", drug.name);
+    setDrugSearch(drug.name);
+    setShowDrugDropdown(false);
+  };
+
+  // --- Submit prescription ---
+  const handleSubmit = async () => {
+    if (!formData.patientId || !formData.drugId) return toast.error("Patient and Drug are required.");
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        "http://localhost:4000/api/prescriptions",
+        {
+          patientId: formData.patientId,
+          drugId: formData.drugId,
+          dosage: formData.dosage,
+          frequency: formData.frequency,
+          duration: formData.duration,
+          instructions: formData.instructions,
+          issueDate: formData.issueDate,
+          validUntil: formData.validUntil,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Prescription successfully created!");
+
+      setFormData({
+        patientId: "",
+        patientName: "",
+        drugId: "",
+        drugName: "",
+        dosage: "",
+        frequency: "",
+        duration: "",
+        instructions: "",
+        issueDate: "",
+        validUntil: "",
+      });
+      setPatientSearch("");
+      setDrugSearch("");
+      setFilteredPatients([]);
+      setFilteredDrugs([]);
+      setShowPatientDropdown(false);
+      setShowDrugDropdown(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error creating prescription");
+    }
+  };
+
+  const allRequiredFilled =
+    formData.patientId && formData.drugId && formData.dosage && formData.frequency && formData.duration;
 
   return (
     <DashboardLayout
-      sidebarItems={sidebarItems}
+      sidebarItems={sidebarItems.map((item) => ({ ...item, active: item.path === "/doctor/create-prescription" }))}
       userRole="doctor"
-      userName="Dr. Samuel Kimani"
-      userEmail="s.kimani@hospital.co.ke"
+      userName={userName}
+      userEmail={userEmail}
     >
       <div className="space-y-8">
         <div>
@@ -39,146 +174,133 @@ const CreatePrescription = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
+          {/* Left panel: Patient + Prescription */}
           <div className="lg:col-span-2 space-y-6">
-            <Card className="card-elevated">
+            {/* Patient Info */}
+            <Card className="card-elevated relative">
               <CardHeader>
                 <CardTitle>Patient Information</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex space-x-2">
-                  <div className="flex-1">
-                    <Label htmlFor="patientId">Patient ID or Search</Label>
-                    <Input 
-                      id="patientId" 
-                      placeholder="Enter patient ID or name"
-                      className="focus:ring-primary"
-                    />
-                  </div>
-                  <Button variant="outline" className="mt-6">
-                    <Search className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="patientName">Full Name</Label>
-                    <Input 
-                      id="patientName" 
-                      placeholder="Patient full name"
-                      className="focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="patientAge">Age</Label>
-                    <Input 
-                      id="patientAge" 
-                      type="number"
-                      placeholder="Age"
-                      className="focus:ring-primary"
-                    />
-                  </div>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="patientPhone">Phone Number</Label>
-                    <Input 
-                      id="patientPhone" 
-                      placeholder="+254 700 000 000"
-                      className="focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="patientGender">Gender</Label>
-                    <Select>
-                      <SelectTrigger className="focus:ring-primary">
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <CardContent>
+                <div className="relative">
+                  <Label htmlFor="patientSearch">Patient ID / Name</Label>
+                  <Input
+                    id="patientSearch"
+                    placeholder="Search patient"
+                    value={patientSearch}
+                    onChange={(e) => setPatientSearch(e.target.value)}
+                  />
+                  {showPatientDropdown && filteredPatients.length > 0 && (
+                    <div className="absolute z-10 bg-white border rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto">
+                      {filteredPatients.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => selectPatient(p)}
+                          className="p-2 hover:bg-blue-50 cursor-pointer text-sm"
+                        >
+                          ID: {p.id} — {p.full_name || p.fullName}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
+            {/* Prescription Details */}
             <Card className="card-elevated">
               <CardHeader>
                 <CardTitle>Prescription Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="drugName">Drug Name</Label>
-                  <Select>
-                    <SelectTrigger className="focus:ring-primary">
-                      <SelectValue placeholder="Search and select drug" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="amoxicillin">Amoxicillin 500mg</SelectItem>
-                      <SelectItem value="metformin">Metformin 850mg</SelectItem>
-                      <SelectItem value="lisinopril">Lisinopril 10mg</SelectItem>
-                      <SelectItem value="atorvastatin">Atorvastatin 20mg</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Drug Search */}
+                <div className="relative">
+                  <Label htmlFor="drugSearch">Drug Name</Label>
+                  <Input
+                    id="drugSearch"
+                    placeholder="Search and select drug"
+                    value={drugSearch}
+                    onChange={(e) => setDrugSearch(e.target.value)}
+                  />
+                  {showDrugDropdown && filteredDrugs.length > 0 && (
+                    <div className="absolute z-10 bg-white border rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto">
+                      {filteredDrugs.map((drug) => (
+                        <div
+                          key={drug.id}
+                          onClick={() => selectDrug(drug)}
+                          className="p-2 hover:bg-blue-50 cursor-pointer text-sm"
+                        >
+                          {drug.name} {drug.dosageunit} ({drug.formulation})
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <div className="grid md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="dosage">Dosage</Label>
-                    <Input 
-                      id="dosage" 
+                    <Input
+                      id="dosage"
                       placeholder="e.g., 500mg"
-                      className="focus:ring-primary"
+                      value={formData.dosage}
+                      onChange={(e) => handleChange("dosage", e.target.value)}
                     />
                   </div>
                   <div>
                     <Label htmlFor="frequency">Frequency</Label>
-                    <Select>
-                      <SelectTrigger className="focus:ring-primary">
-                        <SelectValue placeholder="Select frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="once">Once daily</SelectItem>
-                        <SelectItem value="twice">Twice daily</SelectItem>
-                        <SelectItem value="thrice">Three times daily</SelectItem>
-                        <SelectItem value="four">Four times daily</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select
+                      value={formData.frequency}
+                      onChange={(e) => handleChange("frequency", e.target.value)}
+                      className="w-full border rounded-md p-2"
+                    >
+                      <option value="">Select frequency</option>
+                      <option value="Once daily">Once daily</option>
+                      <option value="Twice daily">Twice daily</option>
+                      <option value="Three times daily">Three times daily</option>
+                      <option value="Four times daily">Four times daily</option>
+                    </select>
                   </div>
                   <div>
                     <Label htmlFor="duration">Duration (Days)</Label>
-                    <Input 
-                      id="duration" 
+                    <Input
+                      id="duration"
                       type="number"
                       placeholder="e.g., 7"
-                      className="focus:ring-primary"
+                      value={formData.duration}
+                      onChange={(e) => handleChange("duration", e.target.value)}
                     />
                   </div>
                 </div>
+
                 <div>
                   <Label htmlFor="instructions">Special Instructions</Label>
-                  <Textarea 
+                  <Textarea
                     id="instructions"
                     placeholder="Take with food, avoid alcohol, etc."
-                    className="focus:ring-primary"
+                    value={formData.instructions}
+                    onChange={(e) => handleChange("instructions", e.target.value)}
                     rows={3}
                   />
                 </div>
+
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="issueDate">Issue Date</Label>
-                    <Input 
-                      id="issueDate" 
+                    <Input
+                      id="issueDate"
                       type="date"
-                      className="focus:ring-primary"
+                      value={formData.issueDate}
+                      onChange={(e) => handleChange("issueDate", e.target.value)}
                     />
                   </div>
                   <div>
                     <Label htmlFor="validUntil">Valid Until</Label>
-                    <Input 
-                      id="validUntil" 
+                    <Input
+                      id="validUntil"
                       type="date"
-                      className="focus:ring-primary"
+                      value={formData.validUntil}
+                      onChange={(e) => handleChange("validUntil", e.target.value)}
                     />
                   </div>
                 </div>
@@ -186,45 +308,43 @@ const CreatePrescription = () => {
             </Card>
           </div>
 
+          {/* Right panel: Summary & submit */}
           <div className="space-y-6">
             <Card className="card-elevated">
               <CardHeader>
                 <CardTitle>Prescription Summary</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent>
                 <div className="p-4 rounded-lg bg-muted/30 space-y-2">
-                  <p className="text-sm font-medium">Patient: <span className="text-muted-foreground">Not selected</span></p>
-                  <p className="text-sm font-medium">Drug: <span className="text-muted-foreground">Not selected</span></p>
-                  <p className="text-sm font-medium">Dosage: <span className="text-muted-foreground">-</span></p>
-                  <p className="text-sm font-medium">Duration: <span className="text-muted-foreground">-</span></p>
+                  <p className="text-sm font-medium">
+                    Patient: <span className="text-muted-foreground">{formData.patientName || "Not selected"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Drug: <span className="text-muted-foreground">{formData.drugName || "Not selected"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Dosage: <span className="text-muted-foreground">{formData.dosage || "-"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Frequency: <span className="text-muted-foreground">{formData.frequency || "-"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Duration: <span className="text-muted-foreground">{formData.duration || "-"}</span> days
+                  </p>
+                  <p className="text-sm font-medium">
+                    Instructions: <span className="text-muted-foreground">{formData.instructions || "-"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Issue Date: <span className="text-muted-foreground">{formData.issueDate || "-"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Valid Until: <span className="text-muted-foreground">{formData.validUntil || "-"}</span>
+                  </p>
                 </div>
-                <div className="space-y-3">
-                  <Button className="w-full btn-gradient-primary" disabled>
-                    <QrCode className="mr-2 w-4 h-4" />
-                    Generate Prescription
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Save as Draft
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle>Blockchain Security</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-medium">Blockchain Protection</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  This prescription will be secured on the blockchain with an immutable timestamp and verification hash.
-                </p>
-                <Badge className="bg-primary/10 text-primary border-primary/20">
-                  Anti-Counterfeit Protected
-                </Badge>
+                <Button onClick={handleSubmit} disabled={!allRequiredFilled} className="mt-4">
+                  Create Prescription
+                </Button>
               </CardContent>
             </Card>
           </div>

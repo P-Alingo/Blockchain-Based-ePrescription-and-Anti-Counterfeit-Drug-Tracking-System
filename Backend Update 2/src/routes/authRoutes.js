@@ -5,7 +5,9 @@ import {
   verifyOtp,
   loginRequestOtp,
   loginVerifyOtp,
+  searchAuthController, // 
 } from "../controllers/authController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js"; // ✅ Import your middleware
 
 const router = express.Router();
 
@@ -20,5 +22,10 @@ router.post("/register/verify-otp", verifyOtp);
 // -------------------
 router.post("/login/request-otp", loginRequestOtp);
 router.post("/login/verify-otp", loginVerifyOtp);
+
+// -------------------
+// User Search (Protected)
+// -------------------
+router.get("/search", authMiddleware, searchAuthController);
 
 export default router;

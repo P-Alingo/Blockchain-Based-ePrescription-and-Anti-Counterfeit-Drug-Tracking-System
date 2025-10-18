@@ -5,6 +5,7 @@ import cors from "cors";
 import { pool } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
+import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -65,6 +66,7 @@ app._router.stack.forEach((middleware) => {
   }
 });
 app.use("/api/users", usersRoutes);
+app.use("/api/prescriptions", prescriptionRoutes);
 // ===============================
 // Start Server
 // ===============================
