@@ -8,7 +8,7 @@ import { FileText, QrCode, Bell, Activity, Clock, CheckCircle, Shield } from "lu
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = "http://localhost:4000/api/auth";
 
 interface User {
   id: number;
@@ -47,46 +47,33 @@ const PatientDashboard = () => {
         const storedUserData = localStorage.getItem("userData");
         if (!storedUserData) return navigate("/login");
 
-        const { id, token, role } = JSON.parse(storedUserData);
+        const { token, role } = JSON.parse(storedUserData);
         if (!token || role !== "patient") {
           localStorage.removeItem("userData");
           localStorage.removeItem("token");
           return navigate("/login");
         }
 
-        interface DashboardResponse {
-          id: number;
-          fullName?: string;
-          email: string;
-          walletAddress: string;
-          role: string;
-          activePrescriptions?: any[];
-          totalPrescriptions?: number;
-          alerts?: any[];
-          recentPrescriptions?: any[];
-        }
-
-        const response = await axios.get<DashboardResponse>(`${API_BASE}/users/${id}/dashboard`, {
+        const response = await axios.get(`${API_BASE}/dashboard`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         console.log("Dashboard response:", response.data);
 
-        // Map API top-level response to state
-        setUser({
-          id: response.data.id,
-          fullName: response.data.fullName,
-          email: response.data.email,
-          walletAddress: response.data.walletAddress,
-          role: response.data.role,
-        });
+        // Adjust this destructuring based on your actual API response structure
+        const {
+          activePrescriptions,
+          totalPrescriptions,
+          alerts,
+          recentPrescriptions,
+          walletAddress,
+          email,
+          id,
+          fullName,
+        } = (response.data as any).data || response.data;
 
-        setDashboard({
-          activePrescriptions: response.data.activePrescriptions || [],
-          totalPrescriptions: response.data.totalPrescriptions || 0,
-          alerts: response.data.alerts || [],
-          recentPrescriptions: response.data.recentPrescriptions || [],
-        });
+        setUser({ id, email, walletAddress, role, fullName });
+        setDashboard({ activePrescriptions, totalPrescriptions, alerts, recentPrescriptions });
       } catch (err: any) {
         console.error("Dashboard fetch failed:", err);
         setError(err.response?.data?.message || err.message || "Failed to load dashboard");
@@ -98,63 +85,63 @@ const PatientDashboard = () => {
     fetchDashboard();
   }, [navigate]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-muted-foreground">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          Loading dashboard...
-        </div>
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen text-muted-foreground">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        Loading dashboard...
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6">
-            <div className="text-center text-destructive mb-4">
-              <Shield className="h-12 w-12 mx-auto mb-2" />
-              <h2 className="text-xl font-bold">Failed to Load Dashboard</h2>
-              <p className="text-sm mt-2">{error}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={() => window.location.reload()} className="flex-1">
-                Try Again
-              </Button>
-              <Button onClick={() => navigate("/login")} variant="outline" className="flex-1">
-                Back to Login
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  if (error) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Card className="max-w-md w-full">
+        <CardContent className="pt-6">
+          <div className="text-center text-destructive mb-4">
+            <Shield className="h-12 w-12 mx-auto mb-2" />
+            <h2 className="text-xl font-bold">Failed to Load Dashboard</h2>
+            <p className="text-sm mt-2">{error}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => window.location.reload()} className="flex-1">Try Again</Button>
+            <Button onClick={() => navigate("/login")} variant="outline" className="flex-1">Back to Login</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-  if (!user || !dashboard) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-destructive">
-        Failed to load user data. Please log in again.
-      </div>
-    );
-  }
+  if (!user || !dashboard) return (
+    <div className="flex items-center justify-center min-h-screen text-destructive">
+      Failed to load user data. Please log in again.
+    </div>
+  );
 
   const activePrescriptions = dashboard.activePrescriptions || [];
 
   return (
     <DashboardLayout
-      sidebarItems={sidebarItems.map((item) => ({ ...item, active: item.path === "/patient/dashboard" }))}
-      userRole="patient"
-      userName={user.walletAddress ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}` : "Patient"}
-      userEmail={user.email}
-    >
-      <div className="space-y-8">
+      sidebarItems={sidebarItems.map((item) => ({
+    ...item,
+    active: item.path === "/patient/dashboard",
+  }))}
+  userRole="patient"
+  userName={
+    user.fullName ||
+    (user.walletAddress
+      ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`
+      : "Patient")
+  }
+  userEmail={user.email}
+>
+           <div className="space-y-8">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-green-600">Welcome Back!</h1>
+            <h1 className="text-3xl font-bold text-green-600">
+              Welcome Back{user && user.fullName ? `, ${user.fullName}` : ""}!
+            </h1>
             <p className="text-muted-foreground">Track your prescriptions and medication schedule</p>
           </div>
           <Link to="/patient/qr-viewer">
@@ -181,7 +168,7 @@ const PatientDashboard = () => {
             <CardContent className="p-6 flex justify-between items-center">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Prescriptions</p>
-                <p className="text-2xl font-bold">{dashboard.totalPrescriptions}</p>
+                <p className="text-2xl font-bold">{dashboard.totalPrescriptions || 0}</p>
               </div>
               <CheckCircle className="w-6 h-6 text-green-600" />
             </CardContent>

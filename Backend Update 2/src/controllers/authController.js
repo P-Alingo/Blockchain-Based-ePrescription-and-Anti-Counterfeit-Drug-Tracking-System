@@ -285,4 +285,78 @@ export const searchAuthController = async (req, res) => {
   }
 };
 
+// =======================================================
+// 6️⃣ Patient Dashboard
+// =======================================================
+export const getPatientDashboard = async (req, res) => {
+  try {
+    const userId = req.user?.id; // ✅ user ID from auth middleware
+    if (!userId) {
+      console.warn("❌ No userId found in authMiddleware payload");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    console.log(`📨 Fetching dashboard for userId: ${userId}`);
+
+    // 1️⃣ Fetch user info
+    const { rows: users } = await query(
+      "SELECT id, full_name, email, wallet_address, role FROM users WHERE id=$1",
+      [userId]
+    );
+
+    if (users.length === 0) {
+      console.warn(`❌ User not found for ID ${userId}`);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const user = users[0];
+
+    // 2️⃣ Get the corresponding patient record
+    const { rows: patientRows } = await query(
+      "SELECT id FROM patient WHERE userid=$1",
+      [userId]
+    );
+
+    if (patientRows.length === 0) {
+      console.warn(`❌ Patient record not found for userId ${userId}`);
+      return res.status(404).json({ message: "Patient record not found" });
+    }
+
+    const patientId = patientRows[0].id;
+
+    // 3️⃣ Fetch prescriptions for this patient
+    const { rows: prescriptions } = await query(
+      "SELECT * FROM prescription WHERE patient_id=$1 ORDER BY issue_date DESC",
+      [patientId]
+    );
+
+    // 4️⃣ Filter active prescriptions (case-insensitive)
+    const activePrescriptions = prescriptions.filter(
+      p => p.status?.toLowerCase() === "active"
+    );
+
+    // 5️⃣ Placeholder for alerts (can expand later)
+    const alerts = [];
+
+    console.log(
+      `✅ Found ${prescriptions.length} prescriptions, ${activePrescriptions.length} active`
+    );
+
+    // 6️⃣ Return structured dashboard response
+    res.json({
+      id: user.id,
+      fullName: user.full_name,
+      email: user.email,
+      walletAddress: user.wallet_address,
+      role: user.role,
+      totalPrescriptions: prescriptions.length,
+      activePrescriptions,
+      alerts,
+      recentPrescriptions: prescriptions.slice(0, 5),
+    });
+  } catch (err) {
+    console.error("❌ getPatientDashboard error:", err);
+    res.status(500).json({ message: "Failed to fetch dashboard" });
+  }
+};
 

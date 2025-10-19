@@ -1,65 +1,94 @@
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  Clock, 
-  CheckCircle, 
+import { useEffect, useState } from "react";
+import axios from "axios";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  FileText,
+  Clock,
+  CheckCircle,
   AlertTriangle,
   Users,
   Activity,
   Shield,
   Plus,
-  TrendingUp
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
+  TrendingUp,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface Prescription {
   id: string;
-  patient: string;
-  drug: string;
-  status: 'Active' | 'Dispensed';
+  patient_name: string;
+  drug_name: string;
+  status: "Active" | "Dispensed";
   date: string;
-  urgency: 'normal' | 'urgent';
+  valid_until?: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: number;
+  instructions?: string;
 }
 
+const formatDate = (dateStr: string | undefined) => {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+};
+
 const DoctorDashboard = () => {
-  // Get user info from localStorage
-  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-  const userName = userData.fullName || 'Doctor';
-  const userEmail = userData.email || '';
+  const [recentPrescriptions, setRecentPrescriptions] = useState<Prescription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sidebar items
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const userName = userData.fullName || "Doctor";
+  const userEmail = userData.email || "";
+
   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/doctor/dashboard' },
-    { icon: FileText, label: 'Create Prescription', path: '/doctor/create-prescription' },
-    { icon: Clock, label: 'My Prescriptions', path: '/doctor/prescriptions' },
-    { icon: Shield, label: 'Blockchain Verification', path: '/doctor/blockchain-verification' },
-    { icon: Activity, label: 'Activity Logs', path: '/doctor/activity-logs' },
+    { icon: Shield, label: "Dashboard", path: "/doctor/dashboard" },
+    { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription" },
+    { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions" },
+    { icon: Shield, label: "Blockchain Verification", path: "/doctor/blockchain-verification" },
+    { icon: Activity, label: "Activity Logs", path: "/doctor/activity-logs" },
   ];
 
-  // Placeholder stats (can later fetch from API)
   const stats = [
-    { title: 'Total Prescriptions', value: '2,847', change: '+12%', icon: FileText, color: 'text-primary' },
-    { title: 'Active Prescriptions', value: '127', change: '+8%', icon: Clock, color: 'text-warning' },
-    { title: 'Dispensed Today', value: '23', change: '+15%', icon: CheckCircle, color: 'text-success' },
-    { title: 'Patients Served', value: '1,542', change: '+5%', icon: Users, color: 'text-accent' },
+    { title: "Total Prescriptions", value: "2,847", change: "+12%", icon: FileText, color: "text-primary" },
+    { title: "Active Prescriptions", value: "127", change: "+8%", icon: Clock, color: "text-warning" },
+    { title: "Dispensed Today", value: "23", change: "+15%", icon: CheckCircle, color: "text-success" },
+    { title: "Patients Served", value: "1,542", change: "+5%", icon: Users, color: "text-accent" },
   ];
 
-  // Placeholder recent prescriptions
-  const recentPrescriptions: Prescription[] = [
-    { id: 'RX-2024-001', patient: 'Maria Wanjiku', drug: 'Amoxicillin 500mg', status: 'Active', date: '2024-01-15', urgency: 'normal' },
-    { id: 'RX-2024-002', patient: 'John Kimani', drug: 'Metformin 850mg', status: 'Dispensed', date: '2024-01-14', urgency: 'urgent' },
-    { id: 'RX-2024-003', patient: 'Grace Nyong\'o', drug: 'Lisinopril 10mg', status: 'Active', date: '2024-01-13', urgency: 'normal' },
-  ];
+  useEffect(() => {
+    const fetchRecentPrescriptions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get("/api/doctor/recent-prescriptions", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        let prescriptions: Prescription[] = [];
+        if (Array.isArray(res.data)) {
+          prescriptions = res.data;
+        }
+
+        setRecentPrescriptions(prescriptions);
+      } catch (err) {
+        console.error("Failed to fetch recent prescriptions:", err);
+        setError("Unable to load recent prescriptions");
+        setRecentPrescriptions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRecentPrescriptions();
+  }, []);
 
   return (
     <DashboardLayout
-      sidebarItems={sidebarItems.map(item => ({
-        ...item,
-        active: item.path === '/doctor/dashboard'
-      }))}
+      sidebarItems={sidebarItems.map((item) => ({ ...item, active: item.path === "/doctor/dashboard" }))}
       userRole="doctor"
       userName={userName}
       userEmail={userEmail}
@@ -68,11 +97,13 @@ const DoctorDashboard = () => {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-blue-600">Doctor Dashboard</h1>
+            <h1 className="text-3xl font-bold text-blue-600">
+              Welcome Back{userName ? `, ${userName}` : ""}!
+            </h1>
             <p className="text-muted-foreground">Manage prescriptions and monitor blockchain verification</p>
           </div>
           <Link to="/doctor/create-prescription">
-            <Button className="btn-gradient-primary">
+            <Button className="btn-gradient-primary flex items-center">
               <Plus className="mr-2 w-5 h-5" />
               New Prescription
             </Button>
@@ -110,31 +141,39 @@ const DoctorDashboard = () => {
                 <CardTitle>Recent Prescriptions</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {recentPrescriptions.map(rx => (
-                    <div key={rx.id} className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-3">
-                          <span className="font-medium">{rx.id}</span>
-                          {rx.urgency === 'urgent' && (
-                            <Badge variant="destructive" className="text-xs">Urgent</Badge>
-                          )}
+                {loading ? (
+                  <p className="text-muted-foreground">Loading prescriptions...</p>
+                ) : error ? (
+                  <p className="text-destructive">{error}</p>
+                ) : (
+                  <div className="space-y-4">
+                    {recentPrescriptions.map((rx) => (
+                      <div key={rx.id} className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-3">
+                            <span className="font-medium">#{rx.id}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">Patient: {rx.patient_name}</p>
+                          <p className="text-sm font-medium">{rx.drug_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Dosage: {rx.dosage || "-"} | Frequency: {rx.frequency || "-"} | Duration: {rx.duration ?? "-"} days
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Issued: {formatDate(rx.date)} | Valid Until: {formatDate(rx.valid_until)}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">Patient: {rx.patient}</p>
-                        <p className="text-sm font-medium">{rx.drug}</p>
+                        <div className="text-right">
+                          <Badge
+                            variant={rx.status === "Active" ? "default" : "secondary"}
+                            className={rx.status === "Active" ? "bg-warning text-warning-foreground" : ""}
+                          >
+                            {rx.status}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <Badge 
-                          variant={rx.status === 'Active' ? 'default' : 'secondary'}
-                          className={rx.status === 'Active' ? 'bg-warning text-warning-foreground' : ''}
-                        >
-                          {rx.status}
-                        </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">{rx.date}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-6">
                   <Link to="/doctor/prescriptions">
                     <Button variant="outline" className="w-full">View All Prescriptions</Button>
@@ -152,19 +191,19 @@ const DoctorDashboard = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Link to="/doctor/create-prescription">
-                  <Button className="w-full btn-gradient-primary">
+                  <Button className="w-full btn-gradient-primary flex items-center">
                     <FileText className="mr-2 w-4 h-4" />
                     Create Prescription
                   </Button>
                 </Link>
                 <Link to="/doctor/blockchain-verification">
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full flex items-center">
                     <Shield className="mr-2 w-4 h-4" />
                     Verify on Blockchain
                   </Button>
                 </Link>
                 <Link to="/doctor/activity-logs">
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full flex items-center">
                     <Activity className="mr-2 w-4 h-4" />
                     View Activity Logs
                   </Button>

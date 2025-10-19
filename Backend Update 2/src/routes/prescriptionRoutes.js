@@ -6,21 +6,30 @@ import {
   deletePrescription,
   searchPatients,
   searchDrugs,
+  getRecentPrescriptions,
+  getPatientPrescriptions,
 } from "../controllers/prescriptionController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// Apply auth middleware globally
 router.use(authMiddleware);
 
-// CRUD
+// SEARCH routes
+router.get("/search/patient", searchPatients);
+router.get("/search/drug", searchDrugs);
+
+// Doctor-specific routes
+router.get("/doctor/recent-prescriptions", getRecentPrescriptions);
+
+// Patient-specific routes
+router.get("/patient", getPatientPrescriptions);
+
+// CRUD routes
 router.post("/", createPrescription);
 router.get("/", listPrescriptions);
 router.get("/:id", getPrescription);
 router.delete("/:id", deletePrescription);
-
-// Search
-router.get("/search/patient", searchPatients);
-router.get("/search/drug", searchDrugs);
 
 export default router;

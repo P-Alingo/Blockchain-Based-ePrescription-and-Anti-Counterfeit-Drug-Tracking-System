@@ -1,346 +1,396 @@
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  QrCode, 
+import { useEffect, useState } from "react";
+import axios from "axios";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  FileText,
+  QrCode,
   Bell,
   Activity,
   Search,
-  Calendar,
   Download,
-  Eye,
   Shield,
-  Pill
-} from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface Prescription {
+  id: string;
+  doctor: string;
+  hospital?: string;
+  drug: string;
+  dosage: string;
+  duration: string;
+  issued: string;
+  expires?: string;
+  completed?: string;
+  expired?: string;
+  daysLeft?: number;
+  taken: number;
+  total: number;
+  status: "Active" | "Completed" | "Expired";
+}
 
 const MyPrescriptions = () => {
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [filteredPrescriptions, setFilteredPrescriptions] = useState<Prescription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [doctorFilter, setDoctorFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+
   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: false },
-    { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: true },
-    { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: false },
-    { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/patient/activity-logs', active: false },
+    { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
+    { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: true },
+    { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: false },
+    { icon: Bell, label: "My Alerts", path: "/patient/alerts", active: false },
+    { icon: Activity, label: "Activity Logs", path: "/patient/activity-logs", active: false },
   ];
 
-  const activePrescriptions = [
-    {
-      id: 'RX-2024-001',
-      doctor: 'Dr. Samuel Kimani',
-      hospital: 'Kenyatta National Hospital',
-      drug: 'Amoxicillin 500mg',
-      dosage: '1 tablet, 3 times daily',
-      duration: '7 days',
-      issued: '2024-01-15',
-      expires: '2024-01-22',
-      daysLeft: 5,
-      taken: 4,
-      total: 21
-    },
-    {
-      id: 'RX-2024-003',
-      doctor: 'Dr. Grace Wanjiku',
-      hospital: 'Aga Khan University Hospital',
-      drug: 'Lisinopril 10mg',
-      dosage: '1 tablet, once daily',
-      duration: '30 days',
-      issued: '2024-01-13',
-      expires: '2024-02-12',
-      daysLeft: 28,
-      taken: 3,
-      total: 30
-    },
-    {
-      id: 'RX-2024-005',
-      doctor: 'Dr. Peter Mwangi',
-      hospital: 'Nairobi Hospital',
-      drug: 'Metformin 850mg',
-      dosage: '1 tablet, 2 times daily',
-      duration: '30 days',
-      issued: '2024-01-10',
-      expires: '2024-02-09',
-      daysLeft: 25,
-      taken: 12,
-      total: 60
+  // ✅ Fetch patient prescriptions from backend
+  useEffect(() => {
+    const fetchPrescriptions = async () => {
+      try {
+        const storedUserData = localStorage.getItem("userData");
+        if (!storedUserData) {
+          console.error("⚠️ No user data found in localStorage");
+          setError("User not logged in.");
+          return;
+        }
+
+        const { token } = JSON.parse(storedUserData);
+
+        const res = await axios.get<{ prescriptions: any[] }>(
+          "http://localhost:4000/api/prescriptions/patient",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        const data = Array.isArray(res.data?.prescriptions)
+          ? res.data.prescriptions
+          : [];
+
+        console.log("✅ API Response:", data);
+
+        const mapped: Prescription[] = data.map((p: any) => ({
+          id: p.id?.toString() || "",
+          doctor: p.doctor_name || p.doctor || "Unknown Doctor",
+          hospital: p.hospital || "N/A",
+          drug: p.drug_name || p.drug || "Unknown Drug",
+          dosage: p.dosage || "-",
+          duration: p.duration?.toString() || "-",
+          issued: p.issue_date
+            ? new Date(p.issue_date).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "-",
+          expires: p.valid_until
+            ? new Date(p.valid_until).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "-",
+          completed: p.completed || "",
+          expired: p.expired || "",
+          daysLeft:
+            p.status === "Active" && (p.valid_until || p.expires)
+              ? Math.ceil(
+                  (new Date(p.valid_until || p.expires).getTime() -
+                    new Date().getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              : undefined,
+          taken: p.taken || 0,
+          total: p.total || 1,
+          status: p.status || "Active",
+        }));
+
+        setPrescriptions(mapped);
+        setFilteredPrescriptions(mapped);
+      } catch (err) {
+        console.error("❌ Error fetching prescriptions:", err);
+        setError("Failed to load prescriptions.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPrescriptions();
+  }, []);
+
+  // ✅ Filtering logic
+  useEffect(() => {
+    let filtered = [...prescriptions];
+
+    if (search.trim() !== "") {
+      filtered = filtered.filter(
+        (p) =>
+          (p.id ?? "").toLowerCase().includes(search.toLowerCase()) ||
+          (p.drug ?? "").toLowerCase().includes(search.toLowerCase()) ||
+          (p.doctor ?? "").toLowerCase().includes(search.toLowerCase())
+      );
     }
-  ];
 
-  const completedPrescriptions = [
-    {
-      id: 'RX-2024-002',
-      doctor: 'Dr. John Doe',
-      hospital: 'Mater Hospital',
-      drug: 'Paracetamol 500mg',
-      dosage: '2 tablets, 4 times daily',
-      duration: '5 days',
-      issued: '2024-01-08',
-      completed: '2024-01-13',
-      taken: 40,
-      total: 40
+    if (doctorFilter !== "all") {
+      filtered = filtered.filter((p) => p.doctor === doctorFilter);
     }
-  ];
 
-  const expiredPrescriptions = [
-    {
-      id: 'RX-2024-004',
-      doctor: 'Dr. Sarah Johnson',
-      hospital: 'MP Shah Hospital',
-      drug: 'Ibuprofen 400mg',
-      dosage: '1 tablet, 3 times daily',
-      duration: '10 days',
-      issued: '2023-12-20',
-      expired: '2023-12-30',
-      taken: 15,
-      total: 30
+    if (dateFilter !== "all") {
+      const now = new Date();
+      filtered = filtered.filter((p) => {
+        const issuedDate = new Date(p.issued);
+        const diffDays = (now.getTime() - issuedDate.getTime()) / (1000 * 60 * 60 * 24);
+        switch (dateFilter) {
+          case "week":
+            return diffDays <= 7;
+          case "month":
+            return diffDays <= 30;
+          case "quarter":
+            return diffDays <= 90;
+          case "year":
+            return diffDays <= 365;
+          default:
+            return true;
+        }
+      });
     }
-  ];
 
-  const getProgressPercentage = (taken: number, total: number) => {
-    return Math.round((taken / total) * 100);
+    setFilteredPrescriptions(filtered);
+  }, [search, doctorFilter, dateFilter, prescriptions]);
+
+  const getProgressPercentage = (taken: number, total: number) =>
+    total === 0 ? 0 : Math.round((taken / total) * 100);
+
+  const activePrescriptions = filteredPrescriptions.filter((p) => p.status === "Active");
+  const completedPrescriptions = filteredPrescriptions.filter((p) => p.status === "Completed");
+  const expiredPrescriptions = filteredPrescriptions.filter((p) => p.status === "Expired");
+
+  // ✅ Export to CSV
+  const exportToCSV = () => {
+    if (!filteredPrescriptions.length) {
+      alert("No prescriptions to export.");
+      return;
+    }
+
+    const headers = [
+      "ID",
+      "Doctor",
+      "Hospital",
+      "Drug",
+      "Dosage",
+      "Duration",
+      "Issued",
+      "Expires",
+      "Status",
+      "Taken",
+      "Total",
+    ];
+
+    const rows = filteredPrescriptions.map((p) => [
+      p.id,
+      p.doctor,
+      p.hospital,
+      p.drug,
+      p.dosage,
+      p.duration,
+      p.issued,
+      p.expires,
+      p.status,
+      p.taken,
+      p.total,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "my_prescriptions.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  return (
-    <DashboardLayout
-      sidebarItems={sidebarItems}
-      userRole="patient"
-      userName="Maria Wanjiku"
-      userEmail="maria.w@gmail.com"
-    >
-      <div className="space-y-8">
-        <div className="flex justify-between items-center">
-          <div>
-           <h1 className="text-3xl font-bold text-green-600">My Prescriptions</h1>
-            <p className="text-muted-foreground">View and manage all your prescription history</p>
-          </div>
-          <Button className="btn-gradient-primary">
-            <Download className="mr-2 w-4 h-4" />
-            Export Summary
-          </Button>
-        </div>
-
-        <Card className="card-elevated">
-          <CardHeader>
-            <CardTitle>Search & Filter</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input 
-                    placeholder="Search by prescription ID, drug name, or doctor..."
-                    className="pl-10 focus:ring-primary"
-                  />
-                </div>
-              </div>
-              <Select>
-                <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Doctor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Doctors</SelectItem>
-                  <SelectItem value="kimani">Dr. Samuel Kimani</SelectItem>
-                  <SelectItem value="wanjiku">Dr. Grace Wanjiku</SelectItem>
-                  <SelectItem value="mwangi">Dr. Peter Mwangi</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select>
-                <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="quarter">This Quarter</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="card-elevated">
-          <CardContent className="p-0">
-            <Tabs defaultValue="active" className="w-full">
-              <div className="p-6 pb-0">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="active">Active (3)</TabsTrigger>
-                  <TabsTrigger value="completed">Completed (1)</TabsTrigger>
-                  <TabsTrigger value="expired">Expired (1)</TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="active" className="p-6 pt-4">
-                <div className="space-y-6">
-                  {activePrescriptions.map((prescription) => (
-                    <div key={prescription.id} className="p-6 rounded-lg border bg-muted/30">
-                      <div className="flex flex-col lg:flex-row justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <h3 className="text-xl font-semibold">{prescription.drug}</h3>
-                            <Badge className="bg-warning text-warning-foreground">Active</Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {prescription.daysLeft} days left
-                            </Badge>
-                          </div>
-                          
-                          <div className="grid md:grid-cols-2 gap-3 mb-4">
-                            <div>
-                              <p className="text-sm"><span className="font-medium">Prescription ID:</span> {prescription.id}</p>
-                              <p className="text-sm"><span className="font-medium">Doctor:</span> {prescription.doctor}</p>
-                              <p className="text-sm"><span className="font-medium">Hospital:</span> {prescription.hospital}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm"><span className="font-medium">Dosage:</span> {prescription.dosage}</p>
-                              <p className="text-sm"><span className="font-medium">Duration:</span> {prescription.duration}</p>
-                              <p className="text-sm"><span className="font-medium">Expires:</span> {prescription.expires}</p>
-                            </div>
-                          </div>
-
-                          <div className="mb-4">
-                            <div className="flex justify-between text-sm mb-2">
-                              <span>Progress: {prescription.taken}/{prescription.total} doses</span>
-                              <span>{getProgressPercentage(prescription.taken, prescription.total)}%</span>
-                            </div>
-                            <div className="w-full bg-muted rounded-full h-2">
-                              <div 
-                                className="bg-primary rounded-full h-2 transition-all"
-                                style={{ width: `${getProgressPercentage(prescription.taken, prescription.total)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 min-w-[120px]">
-                          <Button size="sm" className="btn-gradient-primary">
-                            <QrCode className="mr-1 w-3 h-3" />
-                            QR Code
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Pill className="mr-1 w-3 h-3" />
-                            Mark Taken
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Eye className="mr-1 w-3 h-3" />
-                            Details
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="completed" className="p-6 pt-4">
-                <div className="space-y-6">
-                  {completedPrescriptions.map((prescription) => (
-                    <div key={prescription.id} className="p-6 rounded-lg border bg-muted/30">
-                      <div className="flex flex-col lg:flex-row justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <h3 className="text-xl font-semibold">{prescription.drug}</h3>
-                            <Badge className="bg-success text-success-foreground">Completed</Badge>
-                          </div>
-                          
-                          <div className="grid md:grid-cols-2 gap-3 mb-4">
-                            <div>
-                              <p className="text-sm"><span className="font-medium">Prescription ID:</span> {prescription.id}</p>
-                              <p className="text-sm"><span className="font-medium">Doctor:</span> {prescription.doctor}</p>
-                              <p className="text-sm"><span className="font-medium">Hospital:</span> {prescription.hospital}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm"><span className="font-medium">Dosage:</span> {prescription.dosage}</p>
-                              <p className="text-sm"><span className="font-medium">Duration:</span> {prescription.duration}</p>
-                              <p className="text-sm"><span className="font-medium">Completed:</span> {prescription.completed}</p>
-                            </div>
-                          </div>
-
-                          <div className="mb-4">
-                            <div className="flex justify-between text-sm mb-2">
-                              <span>Completed: {prescription.taken}/{prescription.total} doses</span>
-                              <span>100%</span>
-                            </div>
-                            <div className="w-full bg-muted rounded-full h-2">
-                              <div className="bg-success rounded-full h-2 w-full"></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 min-w-[120px]">
-                          <Button variant="outline" size="sm">
-                            <Eye className="mr-1 w-3 h-3" />
-                            View Details
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Download className="mr-1 w-3 h-3" />
-                            Download
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="expired" className="p-6 pt-4">
-                <div className="space-y-6">
-                  {expiredPrescriptions.map((prescription) => (
-                    <div key={prescription.id} className="p-6 rounded-lg border bg-muted/30 opacity-75">
-                      <div className="flex flex-col lg:flex-row justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <h3 className="text-xl font-semibold">{prescription.drug}</h3>
-                            <Badge className="bg-destructive text-destructive-foreground">Expired</Badge>
-                          </div>
-                          
-                          <div className="grid md:grid-cols-2 gap-3 mb-4">
-                            <div>
-                              <p className="text-sm"><span className="font-medium">Prescription ID:</span> {prescription.id}</p>
-                              <p className="text-sm"><span className="font-medium">Doctor:</span> {prescription.doctor}</p>
-                              <p className="text-sm"><span className="font-medium">Hospital:</span> {prescription.hospital}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm"><span className="font-medium">Dosage:</span> {prescription.dosage}</p>
-                              <p className="text-sm"><span className="font-medium">Duration:</span> {prescription.duration}</p>
-                              <p className="text-sm"><span className="font-medium">Expired:</span> {prescription.expired}</p>
-                            </div>
-                          </div>
-
-                          <div className="mb-4">
-                            <div className="flex justify-between text-sm mb-2">
-                              <span>Taken: {prescription.taken}/{prescription.total} doses</span>
-                              <span>{getProgressPercentage(prescription.taken, prescription.total)}%</span>
-                            </div>
-                            <div className="w-full bg-muted rounded-full h-2">
-                              <div 
-                                className="bg-destructive rounded-full h-2"
-                                style={{ width: `${getProgressPercentage(prescription.taken, prescription.total)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 min-w-[120px]">
-                          <Button variant="outline" size="sm" disabled>
-                            <Eye className="mr-1 w-3 h-3" />
-                            View Details
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+  const renderPrescriptionCard = (p: Prescription) => (
+    <div key={p.id} className="p-6 rounded-lg border bg-muted/30 mb-4">
+      <div className="flex justify-between items-center mb-2">
+        <h2 className="text-lg font-semibold">{p.drug}</h2>
+        <Badge
+          variant={
+            p.status === "Active"
+              ? "secondary"
+              : p.status === "Completed"
+              ? "default"
+              : "destructive"
+          }
+        >
+          {p.status}
+        </Badge>
       </div>
-    </DashboardLayout>
+      <p><strong>Doctor:</strong> {p.doctor}</p>
+      <p><strong>Hospital:</strong> {p.hospital}</p>
+      <p><strong>Dosage:</strong> {p.dosage}</p>
+      <p><strong>Duration:</strong> {p.duration} days</p>
+      <p><strong>Issued:</strong> {p.issued}</p>
+      <p><strong>Expires:</strong> {p.expires || "-"}</p>
+      {p.status === "Active" && (
+        <div className="mt-2">
+          <div className="w-full h-2 bg-gray-200 rounded-full">
+            <div
+              className="h-2 bg-green-500 rounded-full"
+              style={{ width: `${getProgressPercentage(p.taken, p.total)}%` }}
+            ></div>
+          </div>
+          <p className="text-sm mt-1">{p.taken} of {p.total} taken</p>
+        </div>
+      )}
+    </div>
   );
+
+  // Get userName and userEmail from localStorage or set default values
+  const storedUserData = localStorage.getItem("userData");
+  let userName = "Patient";
+  let userEmail = "";
+  if (storedUserData) {
+    try {
+      const userData = JSON.parse(storedUserData);
+      // Use fullName, name, or username if available, else fallback to email
+      userName = userData.fullName || userData.name || userData.username || userData.email || "Patient";
+      userEmail = userData.email || "";
+    } catch (e) {
+      // fallback to defaults
+    }
+  }
+
+return (
+  <DashboardLayout
+    sidebarItems={sidebarItems.map((item) => ({
+      ...item,
+      active: item.path === "/patient/prescriptions",
+    }))}
+    userRole="patient"
+    userName={userName}
+    userEmail={userEmail}
+  >
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-green-600">My Prescriptions</h1>
+          <p className="text-muted-foreground">View and manage all your prescription history</p>
+        </div>
+        <Button className="btn-gradient-primary" onClick={exportToCSV}>
+          <Download className="mr-2 w-4 h-4" />
+          Export Summary
+        </Button>
+      </div>
+
+      {/* Search & Filter */}
+      <Card className="card-elevated">
+        <CardHeader>
+          <CardTitle>Search & Filter</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Search by prescription ID, drug name, or doctor..."
+                className="pl-10 focus:ring-primary"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <Select value={doctorFilter} onValueChange={setDoctorFilter}>
+              <SelectTrigger className="w-full md:w-48">
+                <SelectValue placeholder="Doctor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Doctors</SelectItem>
+                {Array.from(new Set(prescriptions.map((p) => p.doctor))).map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-full md:w-48">
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="quarter">This Quarter</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Prescriptions Tabs */}
+      <Card className="card-elevated">
+        <CardContent className="p-0">
+          <Tabs defaultValue="active" className="w-full">
+            <div className="p-6 pb-0">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="active">Active ({activePrescriptions.length})</TabsTrigger>
+                <TabsTrigger value="completed">Completed ({completedPrescriptions.length})</TabsTrigger>
+                <TabsTrigger value="expired">Expired ({expiredPrescriptions.length})</TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="active" className="p-6 pt-4">
+              {loading ? (
+                <p>Loading prescriptions...</p>
+              ) : activePrescriptions.length === 0 ? (
+                <p>No active prescriptions found.</p>
+              ) : (
+                activePrescriptions.map(renderPrescriptionCard)
+              )}
+            </TabsContent>
+
+            <TabsContent value="completed" className="p-6 pt-4">
+              {completedPrescriptions.length === 0 ? (
+                <p>No completed prescriptions found.</p>
+              ) : (
+                completedPrescriptions.map(renderPrescriptionCard)
+              )}
+            </TabsContent>
+
+            <TabsContent value="expired" className="p-6 pt-4">
+              {expiredPrescriptions.length === 0 ? (
+                <p>No expired prescriptions found.</p>
+              ) : (
+                expiredPrescriptions.map(renderPrescriptionCard)
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  </DashboardLayout>
+);
 };
 
 export default MyPrescriptions;

@@ -1,255 +1,303 @@
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  QrCode, 
+import React, { useEffect, useState } from "react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  FileText,
+  QrCode,
   Bell,
   Activity,
   Download,
   Share2,
   Maximize2,
-  Smartphone,
   Shield,
-  AlertCircle
-} from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+  AlertCircle,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import axios from "axios";
+import { saveAs } from "file-saver";
+import { toast } from "@/components/ui/use-toast";
+import { QRCodeCanvas } from "qrcode.react";
+
+interface Prescription {
+  id: string;
+  doctor_name: string;
+  drug_name: string;
+  dosage: string;
+  issue_date: string;
+  valid_until: string;
+  qr_code?: string;
+  status: string;
+}
 
 const QRCodeViewer = () => {
   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/patient/dashboard', active: false },
-    { icon: FileText, label: 'My Prescriptions', path: '/patient/prescriptions', active: false },
-    { icon: QrCode, label: 'QR Code Viewer', path: '/patient/qr-viewer', active: true },
-    { icon: Bell, label: 'My Alerts', path: '/patient/alerts', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/patient/activity-logs', active: false },
+    { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
+    { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: false },
+    { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: true },
+    { icon: Bell, label: "My Alerts", path: "/patient/alerts", active: false },
+    { icon: Activity, label: "Activity Logs", path: "/patient/activity-logs", active: false },
   ];
 
-  const activePrescriptions = [
-    {
-      id: 'RX-2024-001',
-      doctor: 'Dr. Samuel Kimani',
-      drug: 'Amoxicillin 500mg',
-      dosage: '1 tablet, 3x daily',
-      expires: '2024-01-22',
-      daysLeft: 5,
-      qrCode: 'QR001',
-      status: 'Active'
-    },
-    {
-      id: 'RX-2024-003',
-      doctor: 'Dr. Grace Wanjiku',
-      drug: 'Lisinopril 10mg',
-      dosage: '1 tablet, once daily',
-      expires: '2024-02-12',
-      daysLeft: 28,
-      qrCode: 'QR003',
-      status: 'Active'
-    },
-    {
-      id: 'RX-2024-005',
-      doctor: 'Dr. Peter Mwangi',
-      drug: 'Metformin 850mg',
-      dosage: '1 tablet, 2x daily',
-      expires: '2024-02-09',
-      daysLeft: 25,
-      qrCode: 'QR005',
-      status: 'Active'
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [userName, setUserName] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  useEffect(() => {
+    const fetchPrescriptions = async () => {
+      const storedUserData = localStorage.getItem("userData");
+      if (!storedUserData) {
+        toast({
+          title: "Unauthorized",
+          description: "Session expired. Please log in again.",
+          variant: "destructive",
+        });
+        window.location.href = "/login";
+        return;
+      }
+
+      const { token, fullName, name, username, email } = JSON.parse(storedUserData);
+      setUserName(fullName || name || username || email || "Patient");
+      setUserEmail(email || "");
+
+      try {
+        const res = await axios.get<{ prescriptions: Prescription[] }>(
+          "http://localhost:4000/api/prescriptions/patient",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (res.data.prescriptions && res.data.prescriptions.length > 0) {
+          setPrescriptions(res.data.prescriptions);
+          setSelectedId(res.data.prescriptions[0].id);
+        } else {
+          setPrescriptions([]);
+        }
+      } catch (err: any) {
+        console.error("❌ Error fetching prescriptions:", err.message);
+        toast({
+          title: "Error Fetching Data",
+          description:
+            err.code === "ERR_NETWORK"
+              ? "Cannot connect to the server. Check your backend URL."
+              : "Failed to load prescriptions.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPrescriptions();
+  }, []);
+
+  const selectedPrescription = prescriptions.find((p) => p.id === selectedId);
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "N/A";
+    const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
+    if (isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString("en-GB", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      weekday: "short",
+    });
+  };
+
+  const exportCSV = () => {
+    if (prescriptions.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No prescriptions found to export.",
+        variant: "destructive",
+      });
+      return;
     }
-  ];
 
-  const selectedPrescription = activePrescriptions[0]; // Default selection
+    const headers = "Prescription ID,Drug,Doctor,Dosage,Issued,Expires,Status\n";
+    const rows = prescriptions
+      .map(
+        (p) =>
+          `${p.id},"${p.drug_name}","${p.doctor_name}","${p.dosage}","${formatDate(
+            p.issue_date
+          )}","${formatDate(p.valid_until)}","${p.status}"`
+      )
+      .join("\n");
+
+    const csvData = new Blob([headers + rows], { type: "text/csv;charset=utf-8" });
+    saveAs(csvData, "prescriptions.csv");
+
+    toast({
+      title: "Export Successful",
+      description: "Your prescriptions were exported successfully.",
+    });
+  };
 
   return (
     <DashboardLayout
       sidebarItems={sidebarItems}
       userRole="patient"
-      userName="Maria Wanjiku"
-      userEmail="maria.w@gmail.com"
+      userName={userName}
+      userEmail={userEmail}
     >
       <div className="space-y-8">
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-           <h1 className="text-3xl font-bold text-green-600">QR Code Viewer</h1>
-            <p className="text-muted-foreground">Show prescription QR codes for pharmacy scanning</p>
+            <h1 className="text-3xl font-bold text-green-600">QR Code Viewer</h1>
+            <p className="text-muted-foreground">
+              View and manage your prescription QR codes directly from your doctor.
+            </p>
           </div>
+          <Button variant="outline" onClick={exportCSV}>
+            <Download className="mr-2 w-4 h-4" /> Export CSV
+          </Button>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* QR Code Display */}
-          <div className="lg:col-span-2">
-            <Card className="card-elevated">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>Prescription QR Code</CardTitle>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Maximize2 className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Share2 className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center space-y-6">
-                  {/* QR Code Placeholder */}
-                  <div className="mx-auto w-80 h-80 bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-dashed border-primary/30 rounded-xl flex items-center justify-center">
-                    <div className="text-center space-y-4">
-                      <QrCode className="w-24 h-24 mx-auto text-primary/50" />
-                      <div className="space-y-2">
-                        <p className="font-semibold text-lg">{selectedPrescription.id}</p>
-                        <p className="text-sm text-muted-foreground">QR Code for Pharmacy Scanning</p>
-                        <Badge className="bg-primary/10 text-primary border-primary/20">
-                          Blockchain Verified
-                        </Badge>
-                      </div>
+        {/* Main Content */}
+        {loading ? (
+          <p>Loading prescriptions...</p>
+        ) : prescriptions.length === 0 ? (
+          <p className="text-muted-foreground">No prescriptions found.</p>
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <Card className="shadow-md rounded-2xl">
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Prescription QR Code</CardTitle>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        <Maximize2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        <Share2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={exportCSV}>
+                        <Download className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
+                </CardHeader>
 
-                  {/* Prescription Details */}
-                  <div className="p-6 rounded-lg bg-muted/30 text-left space-y-3">
-                    <h3 className="font-semibold text-lg mb-4">Prescription Details</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p><span className="font-medium">Drug:</span> {selectedPrescription.drug}</p>
-                        <p><span className="font-medium">Doctor:</span> {selectedPrescription.doctor}</p>
-                        <p><span className="font-medium">Dosage:</span> {selectedPrescription.dosage}</p>
+                <CardContent>
+                  {selectedPrescription ? (
+                    <div className="text-center space-y-6">
+                      <div className="mx-auto w-80 h-80 bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-dashed border-primary/30 rounded-xl flex items-center justify-center">
+                        <QRCodeCanvas
+                          value={JSON.stringify({
+                            PrescriptionID: selectedPrescription.id,
+                            Drug: selectedPrescription.drug_name,
+                            Doctor: selectedPrescription.doctor_name,
+                            Dosage: selectedPrescription.dosage,
+                            Issued: formatDate(selectedPrescription.issue_date),
+                            Expires: formatDate(selectedPrescription.valid_until),
+                            Status: selectedPrescription.status,
+                          })}
+                          size={230}
+                          bgColor="#ffffff"
+                          fgColor="#064e3b" // deep green aesthetic
+                          level="H"
+                          includeMargin
+                        />
                       </div>
-                      <div>
-                        <p><span className="font-medium">Prescription ID:</span> {selectedPrescription.id}</p>
-                        <p><span className="font-medium">Expires:</span> {selectedPrescription.expires}</p>
-                        <p><span className="font-medium">Days Left:</span> {selectedPrescription.daysLeft}</p>
+
+                      <div className="p-6 rounded-lg bg-muted/30 text-left space-y-3">
+                        <h3 className="font-semibold text-lg mb-4">
+                          Prescription Details
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p>
+                              <span className="font-medium">Drug:</span>{" "}
+                              {selectedPrescription.drug_name}
+                            </p>
+                            <p>
+                              <span className="font-medium">Doctor:</span>{" "}
+                              {selectedPrescription.doctor_name}
+                            </p>
+                            <p>
+                              <span className="font-medium">Dosage:</span>{" "}
+                              {selectedPrescription.dosage}
+                            </p>
+                          </div>
+                          <div>
+                            <p>
+                              <span className="font-medium">Issued:</span>{" "}
+                              {formatDate(selectedPrescription.issue_date)}
+                            </p>
+                            <p>
+                              <span className="font-medium">Expires:</span>{" "}
+                              {formatDate(selectedPrescription.valid_until)}
+                            </p>
+                            <p>
+                              <span className="font-medium">Status:</span>{" "}
+                              <Badge>{selectedPrescription.status}</Badge>
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Select a prescription to view its QR code.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
-                  {/* Instructions */}
-                  <div className="p-4 rounded-lg bg-primary/10 text-left">
-                    <div className="flex items-start space-x-3">
-                      <Smartphone className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-medium text-primary mb-1">How to use this QR Code:</p>
-                        <ul className="text-muted-foreground space-y-1">
-                          <li>1. Show this QR code to your pharmacist</li>
-                          <li>2. Pharmacist will scan to verify prescription authenticity</li>
-                          <li>3. Wait for blockchain verification confirmation</li>
-                          <li>4. Receive your medication once verified</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Prescription Selector */}
-          <div className="space-y-6">
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle>Select Prescription</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Select defaultValue={selectedPrescription.id}>
+            <div className="space-y-6">
+              <Card className="shadow-md rounded-2xl">
+                <CardHeader>
+                  <CardTitle>Select Prescription</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select value={selectedId} onValueChange={setSelectedId}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose prescription to display" />
+                      <SelectValue placeholder="Choose prescription" />
                     </SelectTrigger>
                     <SelectContent>
-                      {activePrescriptions.map((prescription) => (
-                        <SelectItem key={prescription.id} value={prescription.id}>
+                      {prescriptions.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
                           <div className="text-left">
-                            <div className="font-medium">{prescription.drug}</div>
-                            <div className="text-xs text-muted-foreground">{prescription.id}</div>
+                            <div className="font-medium">{p.drug_name}</div>
+                            <div className="text-xs text-muted-foreground">{p.id}</div>
                           </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </CardContent>
+              </Card>
 
-                {activePrescriptions.map((prescription) => (
-                  <div 
-                    key={prescription.id} 
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                      prescription.id === selectedPrescription.id 
-                        ? 'bg-primary/10 border-primary' 
-                        : 'bg-muted/30 hover:bg-muted/50'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-sm">{prescription.drug}</span>
-                        <Badge 
-                          variant={prescription.daysLeft > 7 ? 'default' : 'destructive'}
-                          className="text-xs"
-                        >
-                          {prescription.daysLeft}d left
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{prescription.id}</p>
-                      <p className="text-xs text-muted-foreground">by {prescription.doctor}</p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Security Info */}
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <AlertCircle className="w-5 h-5 text-warning" />
-                  <span>Security Notice</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-start space-x-2">
-                  <div className="w-2 h-2 bg-success rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Your QR codes are protected by blockchain technology</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-2 h-2 bg-success rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Each scan is logged and verified in real-time</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Only show QR codes to authorized pharmacists</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-2 h-2 bg-destructive rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Report any suspicious scanning attempts</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button className="w-full btn-gradient-primary">
-                  <Maximize2 className="mr-2 w-4 h-4" />
-                  Fullscreen View
-                </Button>
-                <Button variant="outline" className="w-full">
-                  <Download className="mr-2 w-4 h-4" />
-                  Save as Image
-                </Button>
-                <Button variant="outline" className="w-full">
-                  <Share2 className="mr-2 w-4 h-4" />
-                  Share QR Code
-                </Button>
-              </CardContent>
-            </Card>
+              <Card className="shadow-md rounded-2xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-500" />
+                    <span>Security Notice</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p>✅ Your QR codes contain signed prescription details</p>
+                  <p>⚠️ Show them only to licensed pharmacists</p>
+                  <p>🚨 Report any suspicious or duplicate codes immediately</p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   );

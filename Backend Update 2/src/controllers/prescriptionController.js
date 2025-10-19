@@ -1,4 +1,7 @@
+import QRCode from "qrcode";
 import {
+  getRecentPrescriptionsService,
+  getPatientPrescriptionsService,
   createPrescription as createPrescriptionService,
   getPrescriptionsByDoctor,
   getPrescriptionById,
@@ -18,13 +21,18 @@ export async function searchPatients(req, res) {
       return res.status(400).json({ message: "Missing search query" });
     }
 
-    const patients = await searchPatientsService(q.trim());
+    // Clean the query (remove "ID: 49 — " if present)
+    const decoded = decodeURIComponent(q).trim();
+    const cleanedQuery = decoded.replace(/ID:\s*\d+\s*—\s*/g, "").trim();
+
+    const patients = await searchPatientsService(cleanedQuery);
     return res.status(200).json(patients);
   } catch (error) {
     console.error("❌ Error searching patients:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
+
 
 /**
  * 🔍 Search drugs by name
@@ -45,21 +53,22 @@ export async function searchDrugs(req, res) {
 }
 
 /**
- * ➕ Create a new prescription
+ * ➕ Create a new prescription (auto-generates a QR code)
  */
 export async function createPrescription(req, res) {
   try {
-    const userId = req.user.id; // Logged-in doctor user ID
+    const userId = req.user.id;
 
-    // Get corresponding doctor.id
+    // 1️⃣ Verify doctor exists
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
     if (doctorResult.rowCount === 0) {
       return res.status(404).json({ message: "Doctor profile not found" });
     }
     const doctorId = doctorResult.rows[0].id;
 
+    // 2️⃣ Extract body data
     let {
-      patientId, // frontend now sends patient.patient_id directly
+      patientId,
       drugId,
       dosage,
       frequency,
@@ -69,24 +78,24 @@ export async function createPrescription(req, res) {
       validUntil,
     } = req.body;
 
-    // ✅ Map patientId directly (Option B)
+    // 3️⃣ Verify patient
     const patientResult = await query("SELECT id FROM patient WHERE id = $1", [patientId]);
     if (patientResult.rowCount === 0) {
       return res.status(404).json({ message: "Patient not found" });
     }
     const patientTableId = patientResult.rows[0].id;
 
-    // Validate required fields
+    // 4️⃣ Validate required fields
     if (!patientTableId || !drugId || !dosage || !frequency || !duration || !issueDate || !validUntil) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Trim strings and cast numeric values
     dosage = dosage.trim();
     frequency = frequency.trim();
     instructions = instructions ? instructions.trim() : "";
     duration = Number(duration);
 
+    // 5️⃣ Create the prescription
     const prescription = await createPrescriptionService({
       doctorId,
       patientId: patientTableId,
@@ -99,15 +108,85 @@ export async function createPrescription(req, res) {
       validUntil,
     });
 
+    // 6️⃣ Generate QR data
+    const qrData = JSON.stringify({
+      prescription_id: prescription.id,
+      patient_id: patientTableId,
+      doctor_id: doctorId,
+      drug_id: drugId,
+      dosage,
+      frequency,
+      duration,
+      instructions,
+      issue_date: issueDate,
+      valid_until: validUntil,
+      status: "Active",
+    });
+
+    // Alternatively, encode a verification URL instead of raw JSON:
+    // const qrData = `https://eprescribe-kenya.vercel.app/verify/${prescription.id}`;
+
+    // 7️⃣ Generate QR code image (as base64 Data URL)
+    const qrCodeImage = await QRCode.toDataURL(qrData, {
+      errorCorrectionLevel: "H",
+      color: {
+        dark: "#166534", // deep green for healthcare theme
+        light: "#FFFFFF",
+      },
+      width: 400,
+      margin: 2,
+    });
+
+    // 8️⃣ Save QR image in DB
+    await query("UPDATE prescription SET qrcode = $1 WHERE id = $2", [qrCodeImage, prescription.id]);
+
+    // 9️⃣ Return the new prescription with QR
     return res.status(201).json({
       message: "Prescription created successfully",
-      prescription,
+      prescription: { ...prescription, qrcode: qrCodeImage },
     });
   } catch (error) {
     console.error("❌ Error creating prescription:", error);
     return res.status(500).json({ message: error.message || "Failed to create prescription" });
   }
 }
+export const searchPatientPrescriptions = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim() === "") {
+      return res.status(400).json({ message: "Search query is required" });
+    }
+
+    // Decode and clean query text
+    const decodedQuery = decodeURIComponent(q).trim();
+    const cleanedQuery = decodedQuery.replace(/ID:\s*\d+\s*—\s*/g, "").trim();
+
+    // You can now search by name OR numeric ID
+    const queryIsNumber = /^\d+$/.test(cleanedQuery);
+    let prescriptions;
+
+    if (queryIsNumber) {
+      prescriptions = await db.query(
+        "SELECT * FROM prescriptions WHERE id = $1",
+        [cleanedQuery]
+      );
+    } else {
+      prescriptions = await db.query(
+        "SELECT * FROM prescriptions WHERE LOWER(patient_name) LIKE LOWER($1)",
+        [`%${cleanedQuery}%`]
+      );
+    }
+
+    if (prescriptions.rows.length === 0) {
+      return res.status(404).json({ message: "No prescriptions found" });
+    }
+
+    res.json(prescriptions.rows);
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ message: "Server error while searching prescriptions" });
+  }
+};
 
 /**
  * 📋 List prescriptions for logged-in doctor
@@ -116,13 +195,12 @@ export async function listPrescriptions(req, res) {
   try {
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
-    if (doctorResult.rowCount === 0) {
-      return res.status(404).json({ message: "Doctor profile not found" });
-    }
-    const doctorId = doctorResult.rows[0].id;
+    if (doctorResult.rowCount === 0) return res.status(404).json({ message: "Doctor profile not found" });
 
+    const doctorId = doctorResult.rows[0].id;
     const prescriptions = await getPrescriptionsByDoctor(doctorId);
-    return res.status(200).json(prescriptions);
+
+    return res.status(200).json(prescriptions ?? []);
   } catch (error) {
     console.error("❌ Error listing prescriptions:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -182,3 +260,75 @@ export async function deletePrescription(req, res) {
     return res.status(500).json({ message: "Internal server error" });
   }
 }
+
+/**
+ * 📋 Get the 5 most recent prescriptions for the logged-in doctor
+ */
+export const getRecentPrescriptions = async (req, res) => {
+  try {
+    const doctorId = req.user?.id;
+    if (!doctorId) {
+      return res.status(401).json({ message: "Unauthorized: No doctor ID found" });
+    }
+
+    const [prescriptions] = await query(
+      `
+      SELECT p.id, p.drug_name, p.dosage, p.issue_date, p.expiry_date, p.status,
+             pt.full_name AS patient_name
+      FROM prescriptions p
+      JOIN users pt ON p.patient_id = pt.id
+      WHERE p.doctor_id = ?
+      ORDER BY p.issue_date DESC
+      LIMIT 10
+      `,
+      [doctorId]
+    );
+
+    // Format dates nicely
+    const formattedPrescriptions = prescriptions.map((p) => ({
+      ...p,
+      issue_date: p.issue_date ? new Date(p.issue_date).toLocaleDateString("en-GB") : null,
+      expiry_date: p.expiry_date ? new Date(p.expiry_date).toLocaleDateString("en-GB") : null,
+    }));
+
+    return res.status(200).json({ prescriptions: formattedPrescriptions });
+  } catch (error) {
+    console.error("❌ Error fetching recent prescriptions:", error.message);
+    return res.status(500).json({
+      message: "Failed to fetch recent prescriptions",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * 📋 Get all prescriptions for the logged-in patient
+ */
+export const getPatientPrescriptions = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    console.log("🧠 Patient userId:", userId);
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized: No user ID found" });
+    }
+
+    const prescriptions = await getPatientPrescriptionsService(userId);
+
+    if (!prescriptions || prescriptions.length === 0) {
+      console.log("⚠️ No prescriptions found for userId:", userId);
+      return res.status(200).json({ prescriptions: [] });
+    }
+
+    console.log("✅ Found prescriptions:", prescriptions.length);
+    return res.status(200).json({ prescriptions });
+  } catch (error) {
+    console.error("❌ Error fetching prescriptions:", error.message);
+    return res.status(500).json({
+      message: "Failed to fetch prescriptions",
+      error: error.message,
+    });
+  }
+};

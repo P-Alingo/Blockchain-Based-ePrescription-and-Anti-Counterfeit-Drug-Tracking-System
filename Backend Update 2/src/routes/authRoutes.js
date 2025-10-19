@@ -5,7 +5,8 @@ import {
   verifyOtp,
   loginRequestOtp,
   loginVerifyOtp,
-  searchAuthController, // 
+  searchAuthController,
+  getPatientDashboard, // ✅ Import the new dashboard controller
 } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js"; // ✅ Import your middleware
 
@@ -27,5 +28,10 @@ router.post("/login/verify-otp", loginVerifyOtp);
 // User Search (Protected)
 // -------------------
 router.get("/search", authMiddleware, searchAuthController);
+
+// -------------------
+// Patient Dashboard (Protected)
+// -------------------
+router.get("/dashboard", authMiddleware, getPatientDashboard);
 
 export default router;
