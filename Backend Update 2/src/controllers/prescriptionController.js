@@ -3,6 +3,8 @@ import {
   getPrescriptionsByDoctor,
   getPrescriptionById,
   deletePrescription as deletePrescriptionService,
+  searchPatients as searchPatientsService,
+  searchDrugs as searchDrugsService,
 } from "../services/prescriptionService.js";
 import { query } from "../config/database.js";
 
@@ -12,20 +14,12 @@ import { query } from "../config/database.js";
 export async function searchPatients(req, res) {
   try {
     const { q } = req.query;
-    if (!q || q.trim().length < 2) {
-      return res.status(400).json({ message: "Please provide a valid search query" });
+    if (!q || q.trim().length < 1) {
+      return res.status(400).json({ message: "Missing search query" });
     }
 
-    const sql = `
-      SELECT id, fullname, age, gender, phone_number
-      FROM patient
-      WHERE fullname ILIKE $1 OR CAST(id AS TEXT) = $2
-      LIMIT 10;
-    `;
-    const values = [`%${q}%`, q];
-    const { rows } = await query(sql, values);
-
-    return res.status(200).json(rows);
+    const patients = await searchPatientsService(q.trim());
+    return res.status(200).json(patients);
   } catch (error) {
     console.error("❌ Error searching patients:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -33,13 +27,31 @@ export async function searchPatients(req, res) {
 }
 
 /**
- * ➕ Create new prescription
+ * 🔍 Search drugs by name
+ */
+export async function searchDrugs(req, res) {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 1) {
+      return res.status(400).json({ message: "Missing search query" });
+    }
+
+    const drugs = await searchDrugsService(q.trim());
+    return res.status(200).json(drugs);
+  } catch (error) {
+    console.error("❌ Error searching drugs:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/**
+ * ➕ Create a new prescription
  */
 export async function createPrescription(req, res) {
   try {
-    const userId = req.user.id; // users.id from JWT
+    const userId = req.user.id; // Logged-in doctor user ID
 
-    // ✅ Get the corresponding doctor.id
+    // Get corresponding doctor.id
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
     if (doctorResult.rowCount === 0) {
       return res.status(404).json({ message: "Doctor profile not found" });
@@ -47,7 +59,7 @@ export async function createPrescription(req, res) {
     const doctorId = doctorResult.rows[0].id;
 
     let {
-      patientId,
+      patientId, // frontend now sends patient.patient_id directly
       drugId,
       dosage,
       frequency,
@@ -57,20 +69,27 @@ export async function createPrescription(req, res) {
       validUntil,
     } = req.body;
 
+    // ✅ Map patientId directly (Option B)
+    const patientResult = await query("SELECT id FROM patient WHERE id = $1", [patientId]);
+    if (patientResult.rowCount === 0) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+    const patientTableId = patientResult.rows[0].id;
+
     // Validate required fields
-    if (!patientId || !drugId || !dosage || !frequency || !duration || !issueDate || !validUntil) {
+    if (!patientTableId || !drugId || !dosage || !frequency || !duration || !issueDate || !validUntil) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Trim strings and ensure numeric values
+    // Trim strings and cast numeric values
     dosage = dosage.trim();
     frequency = frequency.trim();
     instructions = instructions ? instructions.trim() : "";
     duration = Number(duration);
 
     const prescription = await createPrescriptionService({
-      doctorId, // now correct doctor.id
-      patientId,
+      doctorId,
+      patientId: patientTableId,
       drugId,
       dosage,
       frequency,
@@ -91,11 +110,10 @@ export async function createPrescription(req, res) {
 }
 
 /**
- * 📋 List prescriptions (for logged-in doctor)
+ * 📋 List prescriptions for logged-in doctor
  */
 export async function listPrescriptions(req, res) {
   try {
-    // get doctor.id for list
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
     if (doctorResult.rowCount === 0) {
@@ -112,12 +130,12 @@ export async function listPrescriptions(req, res) {
 }
 
 /**
- * 📄 Get a single prescription (restricted to the doctor)
+ * 📄 Get a single prescription (restricted to doctor)
  */
 export async function getPrescription(req, res) {
   try {
     const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid prescription ID" });
 
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
@@ -139,12 +157,12 @@ export async function getPrescription(req, res) {
 }
 
 /**
- * ❌ Delete prescription (only if owned by the doctor)
+ * ❌ Delete prescription (only if owned by doctor)
  */
 export async function deletePrescription(req, res) {
   try {
     const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid prescription ID" });
 
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
@@ -162,28 +180,5 @@ export async function deletePrescription(req, res) {
   } catch (error) {
     console.error("❌ Error deleting prescription:", error);
     return res.status(500).json({ message: "Internal server error" });
-  }
-}
-
-/**
- * 🔍 Search drugs by name
- */
-export async function searchDrugs(req, res) {
-  try {
-    const { q } = req.query;
-    if (!q || q.trim().length < 1) return res.status(400).json({ message: "Missing search query" });
-
-    const result = await query(
-      `SELECT id, name, code, formulation, dosageunit
-       FROM drug
-       WHERE LOWER(name) LIKE LOWER($1)
-       ORDER BY name ASC
-       LIMIT 10;`,
-      [`%${q}%`]
-    );
-    res.status(200).json(result.rows);
-  } catch (err) {
-    console.error("❌ Error searching drugs:", err);
-    res.status(500).json({ message: "Error fetching drug list" });
   }
 }

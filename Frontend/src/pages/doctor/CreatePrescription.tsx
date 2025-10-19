@@ -47,59 +47,64 @@ const CreatePrescription = () => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
-  // --- Patient search ---
+  // Generic search function
+  const fetchSearchResults = async (url: string, queryValue: string) => {
+    if (!queryValue.trim()) return [];
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${url}?q=${encodeURIComponent(queryValue.trim())}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      console.error(`Error fetching from ${url}:`, err);
+      toast.error(`Failed to fetch results`);
+      return [];
+    }
+  };
+
+  // Patient search
   useEffect(() => {
-    if (!patientSearch) {
+    if (!patientSearch.trim()) {
       setFilteredPatients([]);
       setShowPatientDropdown(false);
       return;
     }
 
     const fetchPatients = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `http://localhost:4000/api/auth/search?query=${encodeURIComponent(patientSearch)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setFilteredPatients(Array.isArray(res.data) ? res.data : []);
-        setShowPatientDropdown(Array.isArray(res.data) && res.data.length > 0);
-      } catch (err) {
-        console.error("Error searching patients:", err);
-      }
+      const results = await fetchSearchResults(
+        "http://localhost:4000/api/prescriptions/search/patient",
+        patientSearch
+      );
+      setFilteredPatients(results);
+      setShowPatientDropdown(results.length > 0);
     };
 
     fetchPatients();
   }, [patientSearch]);
 
   const selectPatient = (patient: any) => {
-    handleChange("patientId", patient.id);
-    handleChange("patientName", patient.full_name || patient.fullName);
-    setPatientSearch(`ID: ${patient.id} — ${patient.full_name || patient.fullName}`);
+    handleChange("patientId", patient.patient_id);
+    handleChange("patientName", patient.full_name);
+    setPatientSearch(patient.full_name);
     setShowPatientDropdown(false);
   };
 
-  // --- Drug search ---
+  // Drug search
   useEffect(() => {
-    if (!drugSearch) {
+    if (!drugSearch.trim()) {
       setFilteredDrugs([]);
       setShowDrugDropdown(false);
       return;
     }
 
     const fetchDrugs = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `http://localhost:4000/api/prescriptions/search/drug?q=${encodeURIComponent(drugSearch)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setFilteredDrugs(Array.isArray(res.data) ? res.data : []);
-        setShowDrugDropdown(Array.isArray(res.data) && res.data.length > 0);
-      } catch (err) {
-        console.error("Error searching drugs:", err);
-        toast.error("Failed to load drugs");
-      }
+      const results = await fetchSearchResults(
+        "http://localhost:4000/api/prescriptions/search/drug",
+        drugSearch
+      );
+      setFilteredDrugs(results);
+      setShowDrugDropdown(results.length > 0);
     };
 
     fetchDrugs();
@@ -112,9 +117,13 @@ const CreatePrescription = () => {
     setShowDrugDropdown(false);
   };
 
-  // --- Submit prescription ---
+  // Submit prescription
   const handleSubmit = async () => {
     if (!formData.patientId || !formData.drugId) return toast.error("Patient and Drug are required.");
+    if (!formData.dosage || !formData.frequency || !formData.duration)
+      return toast.error("Complete all prescription details.");
+    if (new Date(formData.issueDate) > new Date(formData.validUntil))
+      return toast.error("Valid Until cannot be before Issue Date.");
 
     try {
       const token = localStorage.getItem("token");
@@ -123,10 +132,10 @@ const CreatePrescription = () => {
         {
           patientId: formData.patientId,
           drugId: formData.drugId,
-          dosage: formData.dosage,
-          frequency: formData.frequency,
-          duration: formData.duration,
-          instructions: formData.instructions,
+          dosage: formData.dosage.trim(),
+          frequency: formData.frequency.trim(),
+          duration: Number(formData.duration),
+          instructions: formData.instructions.trim(),
           issueDate: formData.issueDate,
           validUntil: formData.validUntil,
         },
@@ -134,6 +143,7 @@ const CreatePrescription = () => {
       );
       toast.success("Prescription successfully created!");
 
+      // Reset form
       setFormData({
         patientId: "",
         patientName: "",
@@ -158,7 +168,11 @@ const CreatePrescription = () => {
   };
 
   const allRequiredFilled =
-    formData.patientId && formData.drugId && formData.dosage && formData.frequency && formData.duration;
+    formData.patientId &&
+    formData.drugId &&
+    formData.dosage.trim() &&
+    formData.frequency.trim() &&
+    formData.duration;
 
   return (
     <DashboardLayout
@@ -174,7 +188,7 @@ const CreatePrescription = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left panel: Patient + Prescription */}
+          {/* Left panel */}
           <div className="lg:col-span-2 space-y-6">
             {/* Patient Info */}
             <Card className="card-elevated relative">
@@ -182,28 +196,26 @@ const CreatePrescription = () => {
                 <CardTitle>Patient Information</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="relative">
-                  <Label htmlFor="patientSearch">Patient ID / Name</Label>
-                  <Input
-                    id="patientSearch"
-                    placeholder="Search patient"
-                    value={patientSearch}
-                    onChange={(e) => setPatientSearch(e.target.value)}
-                  />
-                  {showPatientDropdown && filteredPatients.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto">
-                      {filteredPatients.map((p) => (
-                        <div
-                          key={p.id}
-                          onClick={() => selectPatient(p)}
-                          className="p-2 hover:bg-blue-50 cursor-pointer text-sm"
-                        >
-                          ID: {p.id} — {p.full_name || p.fullName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <Label htmlFor="patientSearch">Patient Name</Label>
+                <Input
+                  id="patientSearch"
+                  placeholder="Search patient"
+                  value={patientSearch}
+                  onChange={(e) => setPatientSearch(e.target.value)}
+                />
+                {showPatientDropdown && filteredPatients.length > 0 && (
+                  <div className="absolute z-10 bg-white border rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto">
+                    {filteredPatients.map((p) => (
+                      <div
+                        key={p.patient_id}
+                        onClick={() => selectPatient(p)}
+                        className="p-2 hover:bg-blue-50 cursor-pointer text-sm"
+                      >
+                        ID: {p.patient_id} — {p.full_name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -213,29 +225,27 @@ const CreatePrescription = () => {
                 <CardTitle>Prescription Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Drug Search */}
-                <div className="relative">
-                  <Label htmlFor="drugSearch">Drug Name</Label>
-                  <Input
-                    id="drugSearch"
-                    placeholder="Search and select drug"
-                    value={drugSearch}
-                    onChange={(e) => setDrugSearch(e.target.value)}
-                  />
-                  {showDrugDropdown && filteredDrugs.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto">
-                      {filteredDrugs.map((drug) => (
-                        <div
-                          key={drug.id}
-                          onClick={() => selectDrug(drug)}
-                          className="p-2 hover:bg-blue-50 cursor-pointer text-sm"
-                        >
-                          {drug.name} {drug.dosageunit} ({drug.formulation})
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {/* Drug search */}
+                <Label htmlFor="drugSearch">Drug Name</Label>
+                <Input
+                  id="drugSearch"
+                  placeholder="Search and select drug"
+                  value={drugSearch}
+                  onChange={(e) => setDrugSearch(e.target.value)}
+                />
+                {showDrugDropdown && filteredDrugs.length > 0 && (
+                  <div className="absolute z-10 bg-white border rounded-md mt-1 w-full shadow-lg max-h-40 overflow-y-auto">
+                    {filteredDrugs.map((drug) => (
+                      <div
+                        key={drug.id}
+                        onClick={() => selectDrug(drug)}
+                        className="p-2 hover:bg-blue-50 cursor-pointer text-sm"
+                      >
+                        {drug.name} {drug.dosageunit} ({drug.formulation})
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid md:grid-cols-3 gap-4">
                   <div>
@@ -308,7 +318,7 @@ const CreatePrescription = () => {
             </Card>
           </div>
 
-          {/* Right panel: Summary & submit */}
+          {/* Right panel */}
           <div className="space-y-6">
             <Card className="card-elevated">
               <CardHeader>

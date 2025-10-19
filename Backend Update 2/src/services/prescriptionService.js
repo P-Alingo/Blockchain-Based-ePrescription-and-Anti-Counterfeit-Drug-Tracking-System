@@ -1,25 +1,26 @@
-// services/prescriptionService.js
 import { query } from "../config/database.js";
 import QRCode from "qrcode";
 
 /**
- * Generate a QR code as a Base64 image
+ * 🔹 Generate a QR code as a Base64 image
+ * @param {string} data
+ * @returns {Promise<string>} Base64 QR code image
  */
 export async function generateQrCode(data) {
   try {
-    const qrImage = await QRCode.toDataURL(data, { width: 250 });
-    return qrImage;
+    return await QRCode.toDataURL(data, { width: 250 });
   } catch (err) {
-    console.error("QR generation error:", err);
+    console.error("❌ QR generation error:", err);
     throw new Error("Failed to generate QR code");
   }
 }
 
 /**
- * Create a new prescription (with QR code generation and automatic status)
+ * ➕ Create a new prescription (with QR code and automatic status)
+ * @param {object} params
  */
 export async function createPrescription({
-  doctorId, // must be doctor.id
+  doctorId,
   patientId,
   drugId,
   dosage,
@@ -29,134 +30,157 @@ export async function createPrescription({
   issueDate,
   validUntil,
 }) {
-  try {
-    // Validate required fields
-    if (!doctorId) throw new Error("doctorId is required");
-    if (!patientId || !drugId || !dosage || !frequency || !duration || !issueDate || !validUntil) {
-      throw new Error("Missing required fields for prescription");
-    }
-
-    // Step 0️⃣ - Determine status based on current date
-    const today = new Date();
-    const issueDateObj = new Date(issueDate);
-    const validUntilObj = new Date(validUntil);
-
-    let status = "Pending"; // default
-    if (!isNaN(issueDateObj.getTime()) && !isNaN(validUntilObj.getTime())) {
-      if (today < issueDateObj) status = "Pending";
-      else if (today > validUntilObj) status = "Expired";
-      else status = "Active";
-    }
-
-    // Step 1️⃣ - Generate temporary QR code (will update after getting ID)
-    let qrImage = await generateQrCode("https://your-frontend-domain.com/prescription/temporary");
-
-    // Step 2️⃣ - Insert prescription with QR code and status
-    const insertText = `
-      INSERT INTO prescription
-        (doctor_id, patient_id, drug_id, dosage, frequency, duration, instructions, issue_date, valid_until, qrcode, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      RETURNING *;
-    `;
-    const insertValues = [
-      doctorId,
-      patientId,
-      drugId,
-      dosage.trim(),
-      frequency.trim(),
-      Number(duration),
-      instructions ? instructions.trim() : "",
-      issueDate,
-      validUntil,
-      qrImage,
-      status, // always non-null
-    ];
-
-    const insertResult = await query(insertText, insertValues);
-    const prescriptionId = insertResult.rows[0].id;
-
-    // Step 3️⃣ - Generate final QR code with real prescription ID
-    qrImage = await generateQrCode(`https://your-frontend-domain.com/prescription/${prescriptionId}`);
-
-    // Step 4️⃣ - Update the record with the final QR code
-    const updateText = `
-      UPDATE prescription
-      SET qrcode = $1
-      WHERE id = $2;
-    `;
-    await query(updateText, [qrImage, prescriptionId]);
-
-    // Step 5️⃣ - Fetch the complete prescription
-    const result = await query(`SELECT * FROM prescription WHERE id = $1;`, [prescriptionId]);
-    return result.rows[0];
-  } catch (err) {
-    console.error("❌ Error creating prescription:", err);
-    throw err;
+  if (!doctorId) throw new Error("doctorId is required");
+  if (!patientId) throw new Error("patientId is required");
+  if (!drugId) throw new Error("drugId is required");
+  if (!dosage || !frequency || !duration || !issueDate || !validUntil) {
+    throw new Error("Missing required fields for prescription");
   }
-}
 
-/**
- * Get all prescriptions by a specific doctor
- */
-export async function getPrescriptionsByDoctor(doctorId) {
-  if (!doctorId) throw new Error("doctorId is required");
-  const text = `
-    SELECT *
-    FROM prescription
-    WHERE doctor_id = $1
-    ORDER BY issue_date DESC;
-  `;
-  const result = await query(text, [doctorId]);
-  return result.rows;
-}
+  // Clean and normalize inputs
+  dosage = dosage.trim();
+  frequency = frequency.trim();
+  instructions = instructions ? instructions.trim() : "";
+  duration = Number(duration);
+  if (isNaN(duration)) throw new Error("Duration must be a number");
 
-/**
- * Get a single prescription by ID (restricted to the doctor who issued it)
- */
-export async function getPrescriptionById(id, doctorId) {
-  if (!doctorId) throw new Error("doctorId is required");
-  const text = `
-    SELECT *
-    FROM prescription
-    WHERE id = $1 AND doctor_id = $2;
+  // Parse and validate dates
+  const today = new Date();
+  const issueDateObj = new Date(issueDate);
+  const validUntilObj = new Date(validUntil);
+  if (isNaN(issueDateObj) || isNaN(validUntilObj)) {
+    throw new Error("Invalid dates provided");
+  }
+
+  // Determine prescription status
+  let status = "Pending";
+  if (today >= issueDateObj && today <= validUntilObj) status = "Active";
+  else if (today > validUntilObj) status = "Expired";
+
+  // Step 1️⃣: Temporary QR code before ID is known
+  let qrImage = await generateQrCode("https://your-frontend-domain.com/prescription/temporary");
+
+  // Step 2️⃣: Insert prescription into database
+  const insertText = `
+    INSERT INTO prescription
+      (doctor_id, patient_id, drug_id, dosage, frequency, duration, instructions, issue_date, valid_until, qrcode, status)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    RETURNING *;
   `;
-  const result = await query(text, [id, doctorId]);
+  const insertValues = [
+    doctorId,
+    patientId,
+    drugId,
+    dosage,
+    frequency,
+    duration,
+    instructions,
+    issueDate,
+    validUntil,
+    qrImage,
+    status,
+  ];
+
+  const insertResult = await query(insertText, insertValues);
+  const prescriptionId = insertResult.rows[0].id;
+
+  // Step 3️⃣: Generate final QR code with actual prescription ID
+  qrImage = await generateQrCode(`https://your-frontend-domain.com/prescription/${prescriptionId}`);
+
+  // Step 4️⃣: Update the prescription with the final QR code
+  await query(`UPDATE prescription SET qrcode = $1 WHERE id = $2`, [qrImage, prescriptionId]);
+
+  // Step 5️⃣: Return the full prescription
+  const result = await query(`SELECT id, doctor_id, patient_id, drug_id, dosage, frequency, duration, instructions, issue_date, valid_until, qrcode, status FROM prescription WHERE id = $1;`, [prescriptionId]);
   return result.rows[0];
 }
 
 /**
- * Delete a prescription (only if owned by the logged-in doctor)
+ * 📋 Get all prescriptions for a specific doctor
+ */
+export async function getPrescriptionsByDoctor(doctorId) {
+  if (!doctorId) throw new Error("doctorId is required");
+
+  const result = await query(
+    `SELECT id, doctor_id, patient_id, drug_id, dosage, frequency, duration, instructions, issue_date, valid_until, qrcode, status 
+     FROM prescription 
+     WHERE doctor_id = $1 
+     ORDER BY issue_date DESC;`,
+    [doctorId]
+  );
+  return result.rows;
+}
+
+/**
+ * 📄 Get a single prescription by ID (doctor only)
+ */
+export async function getPrescriptionById(id, doctorId) {
+  if (!doctorId) throw new Error("doctorId is required");
+
+  const result = await query(
+    `SELECT id, doctor_id, patient_id, drug_id, dosage, frequency, duration, instructions, issue_date, valid_until, qrcode, status 
+     FROM prescription 
+     WHERE id = $1 AND doctor_id = $2;`,
+    [id, doctorId]
+  );
+  return result.rows[0];
+}
+
+/**
+ * ❌ Delete a prescription (doctor only)
  */
 export async function deletePrescription(id, doctorId) {
   if (!doctorId) throw new Error("doctorId is required");
-  const checkText = `
-    SELECT id FROM prescription WHERE id = $1 AND doctor_id = $2;
-  `;
-  const checkResult = await query(checkText, [id, doctorId]);
 
+  const checkResult = await query(
+    `SELECT id FROM prescription WHERE id = $1 AND doctor_id = $2;`,
+    [id, doctorId]
+  );
   if (checkResult.rowCount === 0) return false;
 
-  const deleteText = `DELETE FROM prescription WHERE id = $1;`;
-  await query(deleteText, [id]);
+  await query(`DELETE FROM prescription WHERE id = $1 AND doctor_id = $2;`, [id, doctorId]);
   return true;
 }
 
 /**
- * Search drugs by name
+ * 🔍 Search drugs by name
  */
 export async function searchDrugs(queryString) {
-  try {
-    const result = await query(
-      `SELECT id, name, code, formulation, dosageunit
-       FROM drug
-       WHERE LOWER(name) LIKE LOWER($1)
-       ORDER BY name ASC
-       LIMIT 10;`,
-      [`%${queryString}%`]
-    );
-    return result.rows;
-  } catch (err) {
-    console.error("❌ Error searching drugs:", err);
-    throw new Error("Failed to fetch drug list");
-  }
+  if (!queryString || queryString.trim().length === 0) return [];
+
+  const result = await query(
+    `SELECT id, name, code, formulation, dosageunit
+     FROM drug
+     WHERE LOWER(name) LIKE LOWER($1)
+     ORDER BY name ASC
+     LIMIT 10;`,
+    [`%${queryString.trim()}%`]
+  );
+
+  return result.rows;
+}
+
+/**
+ * 🔍 Search patients by name or ID (joins users table)
+ */
+export async function searchPatients(queryString) {
+  if (!queryString || queryString.trim().length === 0) return [];
+
+  const result = await query(
+    `SELECT 
+        p.id AS patient_id, 
+        u.id AS user_id, 
+        u.full_name, 
+        u.phone_number, 
+        u.gender, 
+        u.dob
+     FROM patient p
+     JOIN users u ON u.id = p.userid
+     WHERE LOWER(u.full_name) LIKE LOWER($1) OR CAST(p.id AS TEXT) = $2
+     ORDER BY u.full_name ASC
+     LIMIT 10;`,
+    [`%${queryString.trim()}%`, queryString.trim()]
+  );
+
+  return result.rows;
 }
