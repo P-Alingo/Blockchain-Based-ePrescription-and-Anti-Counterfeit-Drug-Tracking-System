@@ -6,11 +6,10 @@ import {
   loginRequestOtp,
   loginVerifyOtp,
   searchAuthController,
-  getPatientDashboard, // ✅ Import the new dashboard controller
+  getPatientDashboard, 
+  getDoctorDashboard,
 } from "../controllers/authController.js";
-import { authMiddleware } from "../middleware/authMiddleware.js"; // ✅ Import your middleware
-
-const router = express.Router();
+import { authMiddleware } from "../middleware/authMiddleware.js"; const router = express.Router();
 
 // -------------------
 // Registration Routes
@@ -33,5 +32,10 @@ router.get("/search", authMiddleware, searchAuthController);
 // Patient Dashboard (Protected)
 // -------------------
 router.get("/dashboard", authMiddleware, getPatientDashboard);
+
+// -------------------
+// Doctor Dashboard (Protected)
+// -------------------
+router.get("/doctor/dashboard", authMiddleware, getDoctorDashboard);
 
 export default router;

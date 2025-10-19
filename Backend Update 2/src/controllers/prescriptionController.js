@@ -1,6 +1,5 @@
 import QRCode from "qrcode";
 import {
-  getRecentPrescriptionsService,
   getPatientPrescriptionsService,
   createPrescription as createPrescriptionService,
   getPrescriptionsByDoctor,
@@ -260,46 +259,6 @@ export async function deletePrescription(req, res) {
     return res.status(500).json({ message: "Internal server error" });
   }
 }
-
-/**
- * 📋 Get the 5 most recent prescriptions for the logged-in doctor
- */
-export const getRecentPrescriptions = async (req, res) => {
-  try {
-    const doctorId = req.user?.id;
-    if (!doctorId) {
-      return res.status(401).json({ message: "Unauthorized: No doctor ID found" });
-    }
-
-    const [prescriptions] = await query(
-      `
-      SELECT p.id, p.drug_name, p.dosage, p.issue_date, p.expiry_date, p.status,
-             pt.full_name AS patient_name
-      FROM prescriptions p
-      JOIN users pt ON p.patient_id = pt.id
-      WHERE p.doctor_id = ?
-      ORDER BY p.issue_date DESC
-      LIMIT 10
-      `,
-      [doctorId]
-    );
-
-    // Format dates nicely
-    const formattedPrescriptions = prescriptions.map((p) => ({
-      ...p,
-      issue_date: p.issue_date ? new Date(p.issue_date).toLocaleDateString("en-GB") : null,
-      expiry_date: p.expiry_date ? new Date(p.expiry_date).toLocaleDateString("en-GB") : null,
-    }));
-
-    return res.status(200).json({ prescriptions: formattedPrescriptions });
-  } catch (error) {
-    console.error("❌ Error fetching recent prescriptions:", error.message);
-    return res.status(500).json({
-      message: "Failed to fetch recent prescriptions",
-      error: error.message,
-    });
-  }
-};
 
 /**
  * 📋 Get all prescriptions for the logged-in patient

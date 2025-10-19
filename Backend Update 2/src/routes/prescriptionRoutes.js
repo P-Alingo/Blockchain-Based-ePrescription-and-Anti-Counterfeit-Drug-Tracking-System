@@ -6,7 +6,6 @@ import {
   deletePrescription,
   searchPatients,
   searchDrugs,
-  getRecentPrescriptions,
   getPatientPrescriptions,
 } from "../controllers/prescriptionController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -19,9 +18,6 @@ router.use(authMiddleware);
 // SEARCH routes
 router.get("/search/patient", searchPatients);
 router.get("/search/drug", searchDrugs);
-
-// Doctor-specific routes
-router.get("/doctor/recent-prescriptions", getRecentPrescriptions);
 
 // Patient-specific routes
 router.get("/patient", getPatientPrescriptions);

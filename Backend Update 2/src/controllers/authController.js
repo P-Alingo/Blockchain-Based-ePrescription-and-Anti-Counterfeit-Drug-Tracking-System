@@ -360,3 +360,71 @@ export const getPatientDashboard = async (req, res) => {
   }
 };
 
+// ---------------------------
+// 7️⃣ Doctor Dashboard (fixed)
+// ---------------------------
+export const getDoctorDashboard = async (req, res) => {
+  try {
+    const doctorUserId = req.user?.id; // Logged-in user's ID
+    if (!doctorUserId) {
+      console.warn("❌ No doctorId found in auth middleware");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // ---------------------------
+    // Fetch Stats
+    // ---------------------------
+    const statsQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE p.status IN ('Active','Dispensed')) AS total_prescriptions,
+        COUNT(*) FILTER (WHERE p.status = 'Active') AS active_prescriptions,
+        COUNT(*) FILTER (WHERE p.status = 'Dispensed' AND p.issue_date = CURRENT_DATE) AS dispensed_today,
+        COUNT(DISTINCT p.patient_id) AS patients_served
+      FROM prescription p
+      JOIN doctor d ON d.id = p.doctor_id
+      WHERE d.userid = $1
+    `;
+    const statsResult = await query(statsQuery, [doctorUserId]);
+    const stats = statsResult.rows[0] || {
+      total_prescriptions: 0,
+      active_prescriptions: 0,
+      dispensed_today: 0,
+      patients_served: 0,
+    };
+
+    // ---------------------------
+    // Fetch Recent Prescriptions (latest 10)
+    // ---------------------------
+    const prescriptionsQuery = `
+      SELECT p.id,
+             u.full_name AS patient_name,
+             dr.name AS drug_name,
+             p.dosage,
+             p.frequency,
+             p.duration,
+             p.instructions,
+             p.issue_date,
+             p.valid_until,
+             p.qrcode,
+             p.status
+      FROM prescription p
+      JOIN doctor d ON d.id = p.doctor_id
+      JOIN patient pt ON pt.id = p.patient_id
+      JOIN users u ON u.id = pt.userid
+      JOIN drug dr ON dr.id = p.drug_id
+      WHERE d.userid = $1
+      ORDER BY p.issue_date DESC
+      LIMIT 10
+    `;
+    const prescriptionsResult = await query(prescriptionsQuery, [doctorUserId]);
+    const recentPrescriptions = prescriptionsResult.rows || [];
+
+    return res.json({
+      stats,
+      recentPrescriptions,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching doctor dashboard:", error);
+    return res.status(500).json({ message: "Unable to fetch dashboard data" });
+  }
+};

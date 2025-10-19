@@ -67,6 +67,7 @@ app._router.stack.forEach((middleware) => {
 });
 app.use("/api/users", usersRoutes);
 app.use("/api/prescriptions", prescriptionRoutes);
+
 // ===============================
 // Start Server
 // ===============================

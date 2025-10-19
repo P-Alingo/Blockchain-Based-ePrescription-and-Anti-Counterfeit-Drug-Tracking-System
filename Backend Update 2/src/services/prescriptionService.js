@@ -233,36 +233,6 @@ export async function searchPatients(queryString) {
 }
 
 /**
- * 📋 Get recent prescriptions for a doctor
- */
-export async function getRecentPrescriptionsService(doctorId, limit = 5) {
-  const result = await query(
-    `SELECT 
-        p.id,
-        p.dosage,
-        p.frequency,
-        p.duration,
-        p.instructions,
-        p.issue_date,
-        p.valid_until,
-        p.qrcode,
-        p.status,
-        pat.id AS patient_id,
-        u.full_name AS patient_name,
-        d.name AS drug_name
-     FROM prescription p
-     JOIN patient pat ON pat.id = p.patient_id
-     JOIN users u ON u.id = pat.userid
-     JOIN drug d ON d.id = p.drug_id
-     WHERE p.doctor_id = $1
-     ORDER BY p.issue_date DESC
-     LIMIT $2;`,
-    [doctorId, limit]
-  );
-  console.log("✅ Recent prescriptions found:", result.rows.length);
-  return result.rows ?? [];
-}
-/**
  * 📋 Get all prescriptions for the logged-in patient
  */
 export async function getPatientPrescriptionsService(userId) {
