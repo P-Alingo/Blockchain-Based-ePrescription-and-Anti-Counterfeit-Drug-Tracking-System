@@ -22,7 +22,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.url}`);
   if (req.body && Object.keys(req.body).length > 0) {
-    console.log("📦 Body:", req.body);
+    console.log(" Body:", req.body);
   }
   next();
 });
@@ -52,7 +52,7 @@ app.use("/api/auth", authRoutes);
 })();
 
 // 🔍 Debug: Print all registered routes
-console.log('\n📋 Registered Routes:');
+console.log('\n Registered Routes:');
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {
     console.log(`  ${Object.keys(middleware.route.methods)[0].toUpperCase()} ${middleware.route.path}`);
@@ -73,5 +73,5 @@ app.use('/api/users', userManagementRoutes);
 // ===============================
 const PORT = process.env.BACKEND_PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(` Server running on http://localhost:${PORT}`);
 });

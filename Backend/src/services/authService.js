@@ -1,5 +1,5 @@
-// ===============================================================
-// authService.js – FIXED VERSION
+
+// authService.js
 
 import crypto from "crypto";
 import { query } from "../config/database.js";
@@ -15,8 +15,8 @@ export async function registerRequestOtpService({
   walletAddress,
   email,
   role,
-  fullName,
-  phoneNumber,
+  full_name,
+  phone_number,
   dob,
   gender,
   specialization,
@@ -79,7 +79,7 @@ export async function registerRequestOtpService({
       (wallet_address, email, role, full_name, phone_number, dob, gender, isverified, createdat, updatedat)
      VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW(),NOW())
      RETURNING id, email`,
-    [wallet, mail, role, fullName || "", phoneNumber || "", dob || null, gender || ""]
+    [wallet, mail, role, full_name || "", phone_number || "", dob || null, gender || ""]
   );
 
   const userId = rows[0].id;
@@ -195,7 +195,6 @@ export async function registerRequestOtpService({
   console.log(`📨 OTP sent to ${email}`);
   return { message: "OTP sent to your email for verification" };
 }
-
 // ===============================================================
 // 2️⃣ VERIFY REGISTRATION OTP - FIXED
 // ===============================================================
