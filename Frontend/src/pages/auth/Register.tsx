@@ -12,20 +12,22 @@ declare global {
 }
 
 const Register = () => {
+  const navigate = useNavigate();
+
   const [walletAddress, setWalletAddress] = useState("");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [dob, setDob] = useState("");
+  const [dob, setDob] = useState(""); // always required
   const [gender, setGender] = useState("");
   const [role, setRole] = useState("");
-  const [extraField, setExtraField] = useState<string | Record<string, string>>("");
+  const [extraFields, setExtraFields] = useState<Record<string, string>>({});
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasMetaMask, setHasMetaMask] = useState(false);
-  const navigate = useNavigate();
+  const [timeLeft, setTimeLeft] = useState(120);
 
   const userRoles = [
     { value: "doctor", label: "Doctor" },
@@ -57,22 +59,45 @@ const Register = () => {
     setLoading(true);
     setMessage("");
 
-    try {
-      const res = await axios.post<{ message?: string }>("http://localhost:4000/api/auth/register/request-otp", {
-        walletAddress,
-        email,
-        role,
-        fullName,
-        phoneNumber,
-        dob,
-        gender,
-        ...(role === "doctor" && typeof extraField === "object" && extraField),
-        ...(role === "pharmacist" && typeof extraField === "object" && extraField),
-        ...(role === "manufacturer" && typeof extraField === "object" && extraField),
-        ...(role === "distributor" && typeof extraField === "object" && extraField),
-        ...(role === "regulator" && typeof extraField === "string" && { organizationname: extraField }),
-      });
+    if (!fullName || !email || !phoneNumber || !dob || !gender || !role) {
+      setMessage("❌ Please fill all required fields.");
+      setLoading(false);
+      return;
+    }
 
+    // Validate role-specific fields
+    const roleFieldErrors: Record<string, string[]> = {
+      doctor: ["licenseno", "specialization", "hospital"],
+      pharmacist: ["licenseno", "pharmacy"],
+      manufacturer: ["companyname", "licenseno"],
+      distributor: ["companyname", "licenseno"],
+      regulator: ["organizationname"],
+    };
+
+    if (role !== "patient") {
+      const missingFields = roleFieldErrors[role]?.filter(f => !extraFields[f]);
+      if (missingFields?.length) {
+        setMessage(`❌ Please fill all ${role} fields: ${missingFields.join(", ")}`);
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      // Send full registration data including role-specific fields
+      const res = await axios.post<{ message?: string }>(
+        "http://localhost:4000/api/auth/register/request-otp",
+        {
+          walletAddress,
+          email,
+          fullName,
+          phoneNumber,
+          dob,
+          gender,
+          role,
+          ...extraFields, // Include all extra fields
+        }
+      );
       setMessage(res.data?.message || "OTP sent to your email!");
       setStep(2);
     } catch (error: any) {
@@ -88,23 +113,16 @@ const Register = () => {
     setMessage("");
 
     try {
-      const res = await axios.post<{ token: string }>("http://localhost:4000/api/auth/register/verify-otp", {
-        walletAddress,
-        otp,
-      });
+      const res = await axios.post<{ token: string }>(
+        "http://localhost:4000/api/auth/register/verify-otp",
+        { walletAddress, otp }
+      );
 
-      // Save token and user info
-      const userData = {
-        email,
-        role,
-        walletAddress,
-        token: res.data?.token || null,
-      };
+      const userData = { email, role, walletAddress, token: res.data?.token || null };
       localStorage.setItem("userData", JSON.stringify(userData));
 
       setMessage("✅ Account verified! Redirecting to dashboard...");
       navigate(`/${role}/dashboard`, { replace: true });
-
     } catch (error: any) {
       setMessage(error.response?.data?.error || "Invalid or expired OTP.");
     } finally {
@@ -114,28 +132,27 @@ const Register = () => {
 
   const getExtraFieldLabel = () => {
     switch (role) {
-      case "doctor": return "Specialization";
-      case "pharmacist": return "License Number";
+      case "doctor": return ["License Number", "Specialization", "Hospital"];
+      case "pharmacist": return ["License Number", "Pharmacy"];
       case "manufacturer":
-      case "distributor": return "Company Name";
-      case "regulator": return "Organization Name";
-      default: return "";
+      case "distributor": return ["Company Name", "License Number"];
+      case "regulator": return ["Organization Name"];
+      default: return [];
     }
   };
-
-  const [timeLeft, setTimeLeft] = useState(120);
-  useEffect(() => {
-    if (step === 2 && timeLeft > 0) {
-      const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
-      return () => clearInterval(timer);
-    }
-  }, [step, timeLeft]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
+
+  useEffect(() => {
+    if (step === 2 && timeLeft > 0) {
+      const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
+      return () => clearInterval(timer);
+    }
+  }, [step, timeLeft]);
 
   const getTimerColor = () => {
     if (timeLeft > 60) return "text-green-600";
@@ -153,16 +170,12 @@ const Register = () => {
       await axios.post("http://localhost:4000/api/auth/register/request-otp", {
         walletAddress,
         email,
-        role,
         fullName,
         phoneNumber,
         dob,
         gender,
-        ...(role === "doctor" && typeof extraField === "object" && extraField),
-        ...(role === "pharmacist" && typeof extraField === "object" && extraField),
-        ...(role === "manufacturer" && typeof extraField === "object" && extraField),
-        ...(role === "distributor" && typeof extraField === "object" && extraField),
-        ...(role === "regulator" && typeof extraField === "string" && { organizationname: extraField }),
+        role,
+        ...extraFields,
       });
       setMessage("OTP resent to your email!");
     } catch (error: any) {
@@ -170,6 +183,29 @@ const Register = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    localStorage.removeItem("userData");
+    localStorage.removeItem("token");
+    setWalletAddress("");
+    setStep(1);
+    setOtp("");
+    setMessage("You have been logged out.");
+
+    if (window.ethereum) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_revokePermissions",
+          params: [{ eth_accounts: {} }],
+        });
+      } catch {
+        console.warn("Wallet revoke not supported.");
+      }
+      window.ethereum.removeAllListeners("accountsChanged");
+    }
+
+    setTimeout(() => navigate("/"), 1500);
   };
 
   return (
@@ -194,10 +230,11 @@ const Register = () => {
               Follow the steps below to register your account securely.
             </p>
           </CardHeader>
-
           <CardContent className="space-y-6">
             {!hasMetaMask ? (
-              <p className="text-center">Install <a href="https://metamask.io/" target="_blank" className="text-primary underline">MetaMask</a> to continue.</p>
+              <p className="text-center">
+                Install <a href="https://metamask.io/" target="_blank" className="text-primary underline">MetaMask</a> to continue.
+              </p>
             ) : !walletAddress ? (
               <Button onClick={connectWallet} className="w-full btn-gradient-primary py-6 text-lg flex items-center justify-center space-x-2">
                 <Wallet className="h-5 w-5" />
@@ -208,6 +245,7 @@ const Register = () => {
                 <div className="bg-muted p-2 rounded text-sm text-center">
                   Connected Wallet: <span className="font-mono">{walletAddress}</span>
                 </div>
+
                 <input type="text" placeholder="Full Name" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full border rounded px-3 py-2" />
                 <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border rounded px-3 py-2" />
                 <input type="tel" placeholder="Phone Number" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required className="w-full border rounded px-3 py-2" />
@@ -218,14 +256,26 @@ const Register = () => {
                   <option value="male">Male</option>
                   <option value="other">Other</option>
                 </select>
-                <select value={role} onChange={e => setRole(e.target.value)} required className="w-full border rounded px-3 py-2">
+                <select value={role} onChange={e => { setRole(e.target.value); setExtraFields({}); }} required className="w-full border rounded px-3 py-2">
                   <option value="">Select Role</option>
                   {userRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
 
-                {role && getExtraFieldLabel() && (
-                  <input type="text" placeholder={getExtraFieldLabel()} value={typeof extraField === "string" ? extraField : ""} onChange={e => setExtraField(e.target.value)} className="w-full border rounded px-3 py-2" />
-                )}
+                {/* Role-specific fields */}
+                {role && getExtraFieldLabel().map((label, idx) => {
+                  const key = Object.keys(extraFields)[idx] || label.toLowerCase().replace(/\s/g, '');
+                  return (
+                    <input
+                      key={label}
+                      type="text"
+                      placeholder={label}
+                      value={extraFields[key] || ""}
+                      onChange={e => setExtraFields(prev => ({ ...prev, [key]: e.target.value }))}
+                      required
+                      className="w-full border rounded px-3 py-2"
+                    />
+                  );
+                })}
 
                 <Button type="submit" className="w-full btn-gradient-primary py-6 text-lg" disabled={loading}>
                   {loading ? "Submitting..." : "Register & Send OTP"}
@@ -252,8 +302,13 @@ const Register = () => {
 
             {message && <p className={`text-center text-sm font-semibold ${message.includes("✅") ? "text-green-600" : "text-red-600"}`}>{message}</p>}
 
-            <div className="text-center mt-4">
+            <div className="text-center mt-4 space-y-2">
               <Link to="/login" className="text-primary hover:underline">Already have an account? Sign in here</Link>
+              {walletAddress && (
+                <Button onClick={handleLogout} variant="outline" className="w-full text-red-600 mt-2">
+                  Disconnect Wallet
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
