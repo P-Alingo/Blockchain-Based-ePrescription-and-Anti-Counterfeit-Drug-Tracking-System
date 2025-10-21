@@ -6,7 +6,9 @@ import {
   addUser,
   updateUser,
   deleteUser,
-  syncUserToBlockchain
+  syncUserToBlockchain,
+  restoreUser,
+  getDeletedUsers
 } from '../controllers/userManagementController.js';
 
 const router = express.Router();
@@ -21,6 +23,9 @@ router.get('/search', searchUsers);
 // Get all users
 router.get('/', getAllUsers);
 
+// Get deleted users (admin only)
+router.get('/deleted', getDeletedUsers);
+
 // Get single user by ID
 router.get('/:id', getUserById);
 
@@ -30,8 +35,11 @@ router.post('/', addUser);
 // Update user by ID
 router.put('/:id', updateUser);
 
-// Delete user by ID
+// Delete user by ID (soft delete)
 router.delete('/:id', deleteUser);
+
+// Restore soft-deleted user
+router.patch('/:id/restore', restoreUser);
 
 // Sync user to blockchain (sets status to active)
 router.post('/:id/sync-blockchain', syncUserToBlockchain);

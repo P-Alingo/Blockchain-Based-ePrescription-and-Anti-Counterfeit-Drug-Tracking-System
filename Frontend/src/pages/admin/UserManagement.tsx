@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   Settings, Users, Cog, FileText, Activity,
-  Search, Plus, Edit, Trash2, Eye, Filter, X, Save
+  Search, Plus, Edit, Trash2, Eye, Filter, X, Save, RotateCcw, Archive
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface User {
   id: string;
@@ -24,10 +25,12 @@ interface User {
   status?: "pending" | "active" | "suspended";
   createdat?: string;
   updatedat?: string;
+  is_deleted?: boolean;
 }
 
 const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [deletedUsers, setDeletedUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -36,6 +39,7 @@ const UserManagement = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [syncingUserId, setSyncingUserId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("active");
 
   const sidebarItems = [
     { icon: Settings, label: "Dashboard", path: "/admin/dashboard", active: false },
@@ -61,6 +65,20 @@ const UserManagement = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch deleted users
+  const fetchDeletedUsers = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/users/deleted`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setDeletedUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch deleted users:", err);
     }
   };
 
@@ -128,16 +146,48 @@ const UserManagement = () => {
   };
 
   const handleDelete = async (userId: string) => {
-    if (!window.confirm("Are you sure you want to delete this user?")) return;
+    if (!window.confirm("Are you sure you want to delete this user? This will suspend them on the blockchain but keep their record.")) return;
     if (!token) return;
     try {
       const res = await fetch(`${API_URL}/api/users/${userId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Failed to delete user");
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      alert("User deleted successfully!");
+      
+      // Remove from active users and add to deleted users
+      const deletedUser = users.find(u => u.id === userId);
+      if (deletedUser) {
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        setDeletedUsers(prev => [...prev, { ...deletedUser, is_deleted: true }]);
+      }
+      
+      alert("User soft deleted successfully!");
     } catch (err) {
       console.error(err);
       alert("Failed to delete user");
+    }
+  };
+
+  const handleRestore = async (userId: string) => {
+    if (!window.confirm("Are you sure you want to restore this user?")) return;
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/users/${userId}/restore`, { 
+        method: "PATCH", 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      
+      if (!res.ok) throw new Error("Failed to restore user");
+      
+      // Remove from deleted users and add back to active users
+      const restoredUser = deletedUsers.find(u => u.id === userId);
+      if (restoredUser) {
+        setDeletedUsers(prev => prev.filter(u => u.id !== userId));
+        setUsers(prev => [...prev, { ...restoredUser, is_deleted: false, status: 'active' }]);
+      }
+      
+      alert("User restored successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to restore user");
     }
   };
 
@@ -148,7 +198,13 @@ const UserManagement = () => {
       const res = await fetch(`${API_URL}/api/users/${userId}/sync-blockchain`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Failed to sync user to blockchain");
       const updatedUser = await fetchUser(userId);
-      if (updatedUser) setUsers(prev => prev.map(u => u.id === userId ? updatedUser : u));
+      if (updatedUser) {
+        if (activeTab === "active") {
+          setUsers(prev => prev.map(u => u.id === userId ? updatedUser : u));
+        } else {
+          setDeletedUsers(prev => prev.map(u => u.id === userId ? updatedUser : u));
+        }
+      }
       alert("✅ User successfully synced to blockchain!");
     } catch (err) {
       console.error(err);
@@ -158,12 +214,21 @@ const UserManagement = () => {
     }
   };
 
-  const filteredUsers = users.filter(user =>
+  const filteredUsers = (activeTab === "active" ? users : deletedUsers).filter(user =>
     (roleFilter === "all" || user.role === roleFilter) &&
     (statusFilter === "all" || statusFilter === (user.status || "pending"))
   );
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { 
+    fetchUsers(); 
+    fetchDeletedUsers();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "deleted") {
+      fetchDeletedUsers();
+    }
+  }, [activeTab]);
 
   const getRoleColor = (role: string) => {
     const colors: Record<string, string> = {
@@ -173,6 +238,7 @@ const UserManagement = () => {
       manufacturer: "bg-orange-100 text-orange-700",
       distributor: "bg-cyan-100 text-cyan-700",
       regulator: "bg-red-100 text-red-700",
+      admin: "bg-gray-100 text-gray-700",
     };
     return colors[role] || "bg-gray-100 text-gray-700";
   };
@@ -186,6 +252,88 @@ const UserManagement = () => {
     }
   };
 
+  const renderUserTable = (userList: User[], isDeleted = false) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>User</TableHead>
+          <TableHead>Role</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {userList.map((user) => (
+          <TableRow key={user.id} className={isDeleted ? "bg-muted/50" : ""}>
+            <TableCell>
+              <div className="space-y-1">
+                <p className="text-sm font-medium">
+                  {user.full_name}
+                  {isDeleted && <Badge variant="outline" className="ml-2 text-xs">Deleted</Badge>}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {user.is_deleted ? '[DELETED]' : user.email}
+                </p>
+                <p className="text-xs text-muted-foreground">ID: {user.id}</p>
+              </div>
+            </TableCell>
+            <TableCell>
+              <Badge className={getRoleColor(user.role)}>{user.role}</Badge>
+            </TableCell>
+            <TableCell>
+              <Badge variant={getStatusColor(user.status || "pending")}>
+                {user.status || "pending"}
+              </Badge>
+            </TableCell>
+            <TableCell className="flex gap-1">
+              <Button variant="ghost" size="sm" onClick={() => viewUser(user.id)}>
+                <Eye className="h-3 w-3" />
+              </Button>
+              
+              {!isDeleted && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => viewUser(user.id, true)}>
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-green-600 hover:text-green-800"
+                    onClick={() => handleSyncBlockchain(user.id)}
+                    disabled={syncingUserId === user.id}
+                  >
+                    <Plus className="h-3 w-3" />
+                    {syncingUserId === user.id ? "Syncing..." : "Sync"}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-destructive hover:text-destructive" 
+                    onClick={() => handleDelete(user.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </>
+              )}
+              
+              {isDeleted && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-600 hover:text-green-800"
+                  onClick={() => handleRestore(user.id)}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Restore
+                </Button>
+              )}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="admin" userName="System Admin" userEmail="admin@eprescribe.go.ke">
       <div className="space-y-8">
@@ -196,90 +344,82 @@ const UserManagement = () => {
           </div>
         </div>
 
-        {/* Filters & Search */}
+        {/* Tabs for Active/Deleted Users */}
         <Card>
           <CardHeader>
             <CardTitle>User Directory</CardTitle>
             <CardDescription>Search and filter registered users</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && searchUsers()}
-                  placeholder="Search users by name, email, or ID..."
-                  className="pl-10"
-                />
-              </div>
-              <Select onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-full md:w-40"><SelectValue placeholder="Role" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="doctor">Doctor</SelectItem>
-                  <SelectItem value="patient">Patient</SelectItem>
-                  <SelectItem value="pharmacist">Pharmacist</SelectItem>
-                  <SelectItem value="manufacturer">Manufacturer</SelectItem>
-                  <SelectItem value="distributor">Distributor</SelectItem>
-                  <SelectItem value="regulator">Regulator</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" onClick={searchUsers}><Filter className="mr-2 h-4 w-4" />Filter</Button>
-            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="active">
+                  <Users className="h-4 w-4 mr-2" />
+                  Active Users ({users.length})
+                </TabsTrigger>
+                <TabsTrigger value="deleted">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Deleted Users ({deletedUsers.length})
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Users Table */}
-            {loading ? <p>Loading users...</p> : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">{user.full_name}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
-                          <p className="text-xs text-muted-foreground">ID: {user.id}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell><Badge className={getRoleColor(user.role)}>{user.role}</Badge></TableCell>
-                      <TableCell><Badge variant={getStatusColor(user.status || "pending")}>{user.status || "pending"}</Badge></TableCell>
-                      <TableCell className="flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => viewUser(user.id)}><Eye className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => viewUser(user.id, true)}><Edit className="h-3 w-3" /></Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-green-600 hover:text-green-800"
-                          onClick={() => handleSyncBlockchain(user.id)}
-                          disabled={syncingUserId === user.id}
-                        >
-                          <Plus className="h-3 w-3" />{syncingUserId === user.id ? "Syncing..." : "Sync"}
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(user.id)}><Trash2 className="h-3 w-3" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+              <TabsContent value={activeTab} className="space-y-4">
+                {/* Filters & Search */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && searchUsers()}
+                      placeholder="Search users by name, email, or ID..."
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select onValueChange={setRoleFilter}>
+                    <SelectTrigger className="w-full md:w-40">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      <SelectItem value="doctor">Doctor</SelectItem>
+                      <SelectItem value="patient">Patient</SelectItem>
+                      <SelectItem value="pharmacist">Pharmacist</SelectItem>
+                      <SelectItem value="manufacturer">Manufacturer</SelectItem>
+                      <SelectItem value="distributor">Distributor</SelectItem>
+                      <SelectItem value="regulator">Regulator</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full md:w-40">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={searchUsers}>
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filter
+                  </Button>
+                </div>
+
+                {/* Users Table */}
+                {loading ? (
+                  <p>Loading users...</p>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {activeTab === "active" ? "No active users found" : "No deleted users found"}
+                  </div>
+                ) : (
+                  renderUserTable(filteredUsers, activeTab === "deleted")
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
@@ -288,8 +428,13 @@ const UserManagement = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
             <Card className="w-full max-w-md">
               <CardHeader className="flex justify-between items-center">
-                <CardTitle>{editMode ? "Edit User" : "View User"}</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => { setModalOpen(false); setSelectedUser(null); }}><X /></Button>
+                <CardTitle>
+                  {editMode ? "Edit User" : "View User"}
+                  {selectedUser.is_deleted && <Badge variant="outline" className="ml-2">Deleted</Badge>}
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => { setModalOpen(false); setSelectedUser(null); }}>
+                  <X />
+                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {["full_name","email","role","wallet_address","phone_number","gender","dob","user_code"].map(field => (
@@ -298,7 +443,7 @@ const UserManagement = () => {
                     <Input
                       value={(selectedUser as any)[field] || ""}
                       onChange={(e) => editMode && setSelectedUser({ ...selectedUser, [field]: e.target.value })}
-                      disabled={!editMode}
+                      disabled={!editMode || selectedUser.is_deleted}
                     />
                   </div>
                 ))}
@@ -307,13 +452,13 @@ const UserManagement = () => {
                   <Select
                     value={selectedUser.status || "pending"}
                     onValueChange={(val) => {
-                      if (editMode && selectedUser) {
+                      if (editMode && selectedUser && !selectedUser.is_deleted) {
                         const updatedUser = { ...selectedUser, status: val as "pending"|"active"|"suspended" };
                         setSelectedUser(updatedUser);
                         setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
                       }
                     }}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedUser.is_deleted}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -325,11 +470,19 @@ const UserManagement = () => {
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
                   {editMode ? (
-                    <Button onClick={handleSave}><Save className="mr-1 h-4 w-4" />Save</Button>
+                    <Button onClick={handleSave} disabled={selectedUser.is_deleted}>
+                      <Save className="mr-1 h-4 w-4" />
+                      Save
+                    </Button>
                   ) : (
-                    <Button onClick={handleEdit}><Edit className="mr-1 h-4 w-4" />Edit</Button>
+                    <Button onClick={handleEdit} disabled={selectedUser.is_deleted}>
+                      <Edit className="mr-1 h-4 w-4" />
+                      Edit
+                    </Button>
                   )}
-                  <Button variant="ghost" onClick={() => { setModalOpen(false); setSelectedUser(null); }}>Close</Button>
+                  <Button variant="ghost" onClick={() => { setModalOpen(false); setSelectedUser(null); }}>
+                    Close
+                  </Button>
                 </div>
               </CardContent>
             </Card>

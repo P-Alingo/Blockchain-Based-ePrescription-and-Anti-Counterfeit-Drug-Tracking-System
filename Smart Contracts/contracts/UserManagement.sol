@@ -160,20 +160,22 @@ contract UserManagement {
         emit UserStatusUpdated(wallet, newStatus);
     }
 
-    function removeUser(address wallet)
-        public
-        onlyAdmin
-        userExists(wallet)
-    {
-        if (admins[wallet]) {
-            admins[wallet] = false;
-            emit AdminRemoved(wallet);
-        }
-
-        users[wallet].status = Status.Suspended;
-        users[wallet].exists = false;
-        emit UserRemoved(wallet);
+   function removeUser(address wallet)
+    public
+    onlyAdmin
+    userExists(wallet)
+{
+    if (admins[wallet]) {
+        admins[wallet] = false;
+        emit AdminRemoved(wallet);
     }
+
+    // CHANGE: Only suspend, don't mark as non-existent
+    users[wallet].status = Status.Suspended;
+    emit UserStatusUpdated(wallet, Status.Suspended);
+    // REMOVE: users[wallet].exists = false;
+    // REMOVE: emit UserRemoved(wallet);
+}
 
     // ---------------- Admin Management ----------------
     function addAdmin(address wallet)
@@ -213,15 +215,15 @@ contract UserManagement {
     }
 
     function getUserStatus(address wallet)
-        public
-        view
-        userExists(wallet)
-        returns (string memory)
-    {
-        if (users[wallet].status == Status.Pending) return "pending";
-        if (users[wallet].status == Status.Active) return "active";
-        return "suspended";
-    }
+    public
+    view
+    userExists(wallet)  // This will now work for suspended users
+    returns (string memory)
+{
+    if (users[wallet].status == Status.Pending) return "pending";
+    if (users[wallet].status == Status.Active) return "active";
+    return "suspended";  // Suspended users still "exist"
+}
 
     // ---------------- Role Check Helpers ----------------
     function hasRole(address wallet, string memory roleName)

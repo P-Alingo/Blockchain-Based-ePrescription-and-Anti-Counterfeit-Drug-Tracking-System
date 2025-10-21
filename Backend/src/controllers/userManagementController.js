@@ -59,6 +59,21 @@ const statusToEnum = (status) => {
   }
 };
 
+// Check if is_deleted column exists
+const checkIsDeletedColumnExists = async () => {
+  try {
+    const { rows } = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='users' AND column_name='is_deleted'
+    `);
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Error checking is_deleted column:', error);
+    return false;
+  }
+};
+
 // Contract connection verification
 const verifyContractConnection = async () => {
   try {
@@ -71,7 +86,7 @@ const verifyContractConnection = async () => {
   }
 };
 
-// Check if user exists on blockchain
+// Check if user exists on blockchain - FIXED VERSION
 const checkUserExistsOnChain = async (walletAddress) => {
   try {
     // Try to get user role - if this succeeds, user exists
@@ -79,6 +94,8 @@ const checkUserExistsOnChain = async (walletAddress) => {
     console.log(`✅ User ${walletAddress} exists on chain with role: ${role}`);
     return true;
   } catch (error) {
+    // After fixing the contract, suspended users should still exist
+    // So this error should only occur for truly non-existent users
     if (error.reason === 'User does not exist') {
       console.log(`❌ User ${walletAddress} does not exist on blockchain`);
       return false;
@@ -270,11 +287,36 @@ const syncUserOnChain = async (user) => {
 // Controller Functions
 // ===========================
 
-// Get all users
+// Get all users (exclude deleted by default)
 export const getAllUsers = async (req, res) => {
   try {
-    const { rows } = await client.query('SELECT * FROM users ORDER BY createdat DESC');
-    res.json({ success: true, users: rows });
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    const includeDeleted = req.query.includeDeleted === 'true';
+    
+    let query = 'SELECT * FROM users';
+    let params = [];
+    
+    if (hasIsDeletedColumn && !includeDeleted) {
+      query += ' WHERE is_deleted = FALSE';
+    }
+    
+    query += ' ORDER BY createdat DESC';
+    
+    const { rows } = await client.query(query, params);
+    
+    // Sanitize deleted user data
+    const sanitizedUsers = hasIsDeletedColumn ? rows.map(user => ({
+      ...user,
+      email: user.is_deleted ? '[DELETED]' : user.email,
+      phone_number: user.is_deleted ? '[DELETED]' : user.phone_number,
+      wallet_address: user.is_deleted ? '[DELETED]' : user.wallet_address
+    })) : rows;
+    
+    res.json({ 
+      success: true, 
+      users: sanitizedUsers,
+      hasSoftDelete: hasIsDeletedColumn
+    });
   } catch (err) {
     console.error('❌ getAllUsers error:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch users' });
@@ -286,25 +328,49 @@ export const getUserById = async (req, res) => {
   try {
     const { rows } = await client.query('SELECT * FROM users WHERE id=$1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ success: false, message: 'User not found' });
-    res.json({ success: true, user: rows[0] });
+    
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    let user = rows[0];
+    
+    // Sanitize if user is deleted
+    if (hasIsDeletedColumn && user.is_deleted) {
+      user = {
+        ...user,
+        email: '[DELETED]',
+        phone_number: '[DELETED]',
+        wallet_address: '[DELETED]'
+      };
+    }
+    
+    res.json({ success: true, user });
   } catch (err) {
     console.error('❌ getUserById error:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch user' });
   }
 };
 
-// Search users
+// Search users (exclude deleted)
 export const searchUsers = async (req, res) => {
   const term = req.query.query;
   if (!term) return res.status(400).json({ success: false, message: 'Query is required' });
 
   try {
-    const { rows } = await client.query(
-      `SELECT * FROM users WHERE full_name ILIKE $1 OR email ILIKE $1 OR phone_number ILIKE $1 ORDER BY createdat DESC`,
-      [`%${term}%`]
-    );
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    
+    let query = `SELECT * FROM users 
+                 WHERE (full_name ILIKE $1 OR email ILIKE $1 OR phone_number ILIKE $1)`;
+    let params = [`%${term}%`];
+    
+    if (hasIsDeletedColumn) {
+      query += ' AND is_deleted = FALSE';
+    }
+    
+    query += ' ORDER BY createdat DESC';
+
+    const { rows } = await client.query(query, params);
 
     if (!rows.length) return res.status(404).json({ success: false, message: 'No users found' });
+    
     res.json({ success: true, users: rows });
   } catch (err) {
     console.error('❌ searchUsers error:', err);
@@ -324,11 +390,20 @@ export const addUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid wallet address format' });
     }
 
-    const { rows } = await client.query(
-      `INSERT INTO users (full_name, email, role, wallet_address, status, createdat, updatedat)
-       VALUES ($1,$2,$3,$4,'pending',NOW(),NOW()) RETURNING *`,
-      [full_name, email, role, wallet_address]
-    );
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    
+    let query, params;
+    if (hasIsDeletedColumn) {
+      query = `INSERT INTO users (full_name, email, role, wallet_address, status, is_deleted, createdat, updatedat)
+               VALUES ($1,$2,$3,$4,'pending',false,NOW(),NOW()) RETURNING *`;
+      params = [full_name, email, role, wallet_address];
+    } else {
+      query = `INSERT INTO users (full_name, email, role, wallet_address, status, createdat, updatedat)
+               VALUES ($1,$2,$3,$4,'pending',NOW(),NOW()) RETURNING *`;
+      params = [full_name, email, role, wallet_address];
+    }
+
+    const { rows } = await client.query(query, params);
 
     res.json({ success: true, user: rows[0], message: 'User added with status pending' });
   } catch (err) {
@@ -456,27 +531,42 @@ export const syncUserToBlockchain = async (req, res) => {
   }
 };
 
-// Delete user and suspend on blockchain
+// Delete user - soft delete with blockchain suspension
 export const deleteUser = async (req, res) => {
   const userId = req.params.id;
 
   try {
-    const { rows } = await client.query('DELETE FROM users WHERE id=$1 RETURNING *', [userId]);
-    if (!rows.length) return res.status(404).json({ success: false, message: 'User not found' });
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    
+    let query, params;
+    
+    if (hasIsDeletedColumn) {
+      // Soft delete - mark as deleted instead of removing
+      query = 'UPDATE users SET is_deleted = TRUE, status = $1, updatedat = NOW() WHERE id = $2 RETURNING *';
+      params = ['suspended', userId];
+    } else {
+      // Fallback to hard delete if column doesn't exist
+      query = 'DELETE FROM users WHERE id = $1 RETURNING *';
+      params = [userId];
+    }
+
+    const { rows } = await client.query(query, params);
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     const user = rows[0];
 
+    // Update blockchain status to suspended
     if (user.wallet_address) {
       try {
         const isConnected = await verifyContractConnection();
         if (isConnected) {
-          // Check if user exists on chain before trying to suspend
           const userExists = await checkUserExistsOnChain(user.wallet_address);
           if (userExists) {
             await updateUserStatusOnChain(user.wallet_address, statusToEnum('suspended'));
-            log(`✅ User ${user.full_name} suspended on blockchain`);
-          } else {
-            console.log(`ℹ️ User ${user.wallet_address} not found on blockchain, skipping suspension`);
+            console.log(`✅ User ${user.full_name} suspended on blockchain`);
           }
         }
       } catch (blockchainError) {
@@ -485,10 +575,111 @@ export const deleteUser = async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'User deleted from database' });
+    const response = {
+      success: true, 
+      message: hasIsDeletedColumn 
+        ? 'User soft deleted and suspended on blockchain' 
+        : 'User deleted from database',
+      user: hasIsDeletedColumn ? {
+        ...user,
+        // Sanitize sensitive information for deleted users
+        email: user.is_deleted ? '[DELETED]' : user.email,
+        phone_number: user.is_deleted ? '[DELETED]' : user.phone_number,
+        wallet_address: user.is_deleted ? '[DELETED]' : user.wallet_address
+      } : user
+    };
+
+    res.json(response);
   } catch (err) {
     console.error('❌ deleteUser error:', err);
     res.status(500).json({ success: false, message: 'Failed to delete user' });
+  }
+};
+
+// Restore soft-deleted user
+export const restoreUser = async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    
+    if (!hasIsDeletedColumn) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Soft delete not enabled. is_deleted column does not exist.' 
+      });
+    }
+
+    const { rows } = await client.query(
+      'UPDATE users SET is_deleted = FALSE, status = $1, updatedat = NOW() WHERE id = $2 RETURNING *',
+      ['active', userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const user = rows[0];
+
+    // Reactivate on blockchain if needed
+    if (user.wallet_address) {
+      try {
+        const isConnected = await verifyContractConnection();
+        if (isConnected) {
+          const userExists = await checkUserExistsOnChain(user.wallet_address);
+          if (userExists) {
+            await updateUserStatusOnChain(user.wallet_address, statusToEnum('active'));
+            console.log(`✅ User ${user.full_name} reactivated on blockchain`);
+          }
+        }
+      } catch (blockchainError) {
+        console.error('❌ Blockchain reactivation failed:', blockchainError.message);
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'User restored successfully',
+      user: rows[0]
+    });
+  } catch (err) {
+    console.error('❌ restoreUser error:', err);
+    res.status(500).json({ success: false, message: 'Failed to restore user' });
+  }
+};
+
+// Get deleted users (admin only)
+export const getDeletedUsers = async (req, res) => {
+  try {
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
+    
+    if (!hasIsDeletedColumn) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Soft delete not enabled. is_deleted column does not exist.' 
+      });
+    }
+
+    const { rows } = await client.query(
+      'SELECT * FROM users WHERE is_deleted = TRUE ORDER BY updatedat DESC'
+    );
+    
+    // Sanitize sensitive information
+    const sanitizedUsers = rows.map(user => ({
+      ...user,
+      email: '[DELETED]',
+      phone_number: '[DELETED]',
+      wallet_address: '[DELETED]'
+    }));
+    
+    res.json({ 
+      success: true, 
+      users: sanitizedUsers,
+      message: `Found ${rows.length} deleted users`
+    });
+  } catch (err) {
+    console.error('❌ getDeletedUsers error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch deleted users' });
   }
 };
 
@@ -497,11 +688,13 @@ export const healthCheck = async (req, res) => {
   try {
     const dbConnected = !client._ending;
     const blockchainConnected = await verifyContractConnection();
+    const hasIsDeletedColumn = await checkIsDeletedColumnExists();
     
     res.json({
       success: true,
       database: dbConnected ? 'connected' : 'disconnected',
       blockchain: blockchainConnected ? 'connected' : 'disconnected',
+      softDeleteEnabled: hasIsDeletedColumn,
       contractAddress: process.env.USER_MANAGEMENT_ADDRESS,
       adminAddress: wallet.address
     });

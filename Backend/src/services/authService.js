@@ -1,4 +1,3 @@
-
 // authService.js
 
 import crypto from "crypto";
@@ -9,7 +8,7 @@ import { sendOtpEmail } from "../utils/emailSender.js";
 const OTP_EXPIRATION_MINUTES = Number(process.env.OTP_EXPIRATION_MINUTES) || 2;
 
 // ===============================================================
-// 1️⃣ REGISTER - REQUEST OTP
+// 1️⃣ REGISTER - REQUEST OTP (UPDATED WITH SOFT-DELETE HANDLING)
 // ===============================================================
 export async function registerRequestOtpService({
   walletAddress,
@@ -34,50 +33,86 @@ export async function registerRequestOtpService({
 
   console.log(`🟡 Registration request: ${mail} (${wallet}) as ${role}`);
 
-  // ✅ Check if wallet/email already exist
+  // ✅ Check if wallet/email already exist (INCLUDING SOFT-DELETED USERS)
   const { rows: existingUsers } = await query(
-    `SELECT * FROM users WHERE LOWER(wallet_address) = $1 OR LOWER(email) = $2`,
+    `SELECT * FROM users WHERE (LOWER(wallet_address) = $1 OR LOWER(email) = $2) AND is_deleted = false`,
     [wallet, mail]
   );
 
   if (existingUsers.length > 0) {
     const existing = existingUsers[0];
 
-    // Already verified → block new registration
-    if (existing.isverified) {
+    // Check if this is the exact same user trying to register again
+    const isSameUser = existing.wallet_address.toLowerCase() === wallet && 
+                      existing.email.toLowerCase() === mail;
+
+    if (isSameUser) {
+      // Already verified → block new registration
+      if (existing.isverified) {
+        throw {
+          status: 409,
+          message: "This email or wallet address is already registered and verified. Please log in instead.",
+        };
+      }
+
+      // Not yet verified → resend OTP, do NOT insert new user
+      console.log("♻️ Existing unverified user – resending OTP");
+
+      const otp = generateOtp();
+      const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+      const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
+
+      await query(
+        "INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())",
+        [existing.id, otpHash, expiresAt]
+      );
+
+      await sendOtpEmail(existing.email, otp);
+      console.log(`📨 OTP resent to ${existing.email}`);
+
+      return {
+        message: "An existing unverified account was found. OTP has been resent to your email.",
+      };
+    } else {
+      // Different combination conflict (e.g., same email but different wallet)
       throw {
         status: 409,
-        message:
-          "This email or wallet address is already registered and verified. Please log in instead.",
+        message: "This email or wallet address is already registered with a different account.",
       };
     }
+  }
 
-    // Not yet verified → resend OTP, do NOT insert new user
-    console.log("♻️ Existing unverified user – resending OTP");
+  // ✅ Check for soft-deleted users with same credentials
+  const { rows: deletedUsers } = await query(
+    `SELECT * FROM users WHERE (LOWER(wallet_address) = $1 OR LOWER(email) = $2) AND is_deleted = true`,
+    [wallet, mail]
+  );
 
-    const otp = generateOtp();
-    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
-    const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
+  if (deletedUsers.length > 0) {
+    const deletedUser = deletedUsers[0];
+    
+    // Check if it's the exact same user trying to re-register
+    const isSameDeletedUser = deletedUser.wallet_address.toLowerCase() === wallet && 
+                             deletedUser.email.toLowerCase() === mail;
 
-    await query(
-      "INSERT INTO otps (user_id, otp_hash, expires_at, created_at) VALUES ($1,$2,$3,NOW())",
-      [existing.id, otpHash, expiresAt]
-    );
-
-    await sendOtpEmail(existing.email, otp);
-    console.log(`📨 OTP resent to ${existing.email}`);
-
-    return {
-      message:
-        "An existing unverified account was found. OTP has been resent to your email.",
-    };
+    if (isSameDeletedUser) {
+      throw {
+        status: 409,
+        message: "This account was previously deleted. Please contact support to restore your account.",
+      };
+    } else {
+      throw {
+        status: 409,
+        message: "This email or wallet address was previously used by another account.",
+      };
+    }
   }
 
   // ✅ No conflict – create new unverified user
   const { rows } = await query(
     `INSERT INTO users 
-      (wallet_address, email, role, full_name, phone_number, dob, gender, isverified, createdat, updatedat)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW(),NOW())
+      (wallet_address, email, role, full_name, phone_number, dob, gender, isverified, createdat, updatedat, is_deleted)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW(),NOW(),false)
      RETURNING id, email`,
     [wallet, mail, role, full_name || "", phone_number || "", dob || null, gender || ""]
   );
@@ -99,7 +134,7 @@ export async function registerRequestOtpService({
   const prefix = rolePrefixes[role.toLowerCase()] || "U";
 
   const { rows: countRows } = await query(
-    "SELECT COUNT(*) AS count FROM users WHERE role = $1",
+    "SELECT COUNT(*) AS count FROM users WHERE role = $1 AND is_deleted = false",
     [role]
   );
   const count = parseInt(countRows[0].count);
@@ -178,6 +213,8 @@ export async function registerRequestOtpService({
     }
   } catch (err) {
     console.error("❌ Role table update failed:", err.message);
+    // Rollback user creation if role-specific insert fails
+    await query("DELETE FROM users WHERE id = $1", [userId]);
     throw { status: 500, message: "Failed to save role-specific data" };
   }
 
@@ -195,8 +232,9 @@ export async function registerRequestOtpService({
   console.log(`📨 OTP sent to ${email}`);
   return { message: "OTP sent to your email for verification" };
 }
+
 // ===============================================================
-// 2️⃣ VERIFY REGISTRATION OTP - FIXED
+// 2️⃣ VERIFY REGISTRATION OTP - UPDATED
 // ===============================================================
 export async function verifyOtpService({ walletAddress, otp }) {
   if (!walletAddress || !otp)
@@ -204,7 +242,7 @@ export async function verifyOtpService({ walletAddress, otp }) {
 
   const wallet = walletAddress.toLowerCase();
   const { rows: users } = await query(
-    "SELECT * FROM users WHERE LOWER(wallet_address)=$1",
+    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND is_deleted = false",
     [wallet]
   );
 
@@ -246,7 +284,7 @@ export async function verifyOtpService({ walletAddress, otp }) {
 }
 
 // ===============================================================
-// 3️⃣ LOGIN - REQUEST OTP
+// 3️⃣ LOGIN - REQUEST OTP - UPDATED
 // ===============================================================
 export async function loginRequestOtpService({ walletAddress, email }) {
   if (!walletAddress || !email)
@@ -256,15 +294,14 @@ export async function loginRequestOtpService({ walletAddress, email }) {
   const mail = email.toLowerCase();
 
   const userRes = await query(
-    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true",
+    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true AND is_deleted = false",
     [wallet, mail]
   );
 
   if (userRes.rowCount === 0)
     throw {
       status: 400,
-      message:
-        "No verified user found with that wallet and email. Please register first.",
+      message: "No verified user found with that wallet and email. Please register first.",
     };
 
   const user = userRes.rows[0];
@@ -284,7 +321,7 @@ export async function loginRequestOtpService({ walletAddress, email }) {
 }
 
 // ===============================================================
-// 4️⃣ LOGIN - VERIFY OTP - FIXED
+// 4️⃣ LOGIN - VERIFY OTP - UPDATED
 // ===============================================================
 export async function loginVerifyOtpService({ walletAddress, email, otp }) {
   if (!walletAddress || !email || !otp)
@@ -294,7 +331,7 @@ export async function loginVerifyOtpService({ walletAddress, email, otp }) {
   const mail = email.toLowerCase();
 
   const { rows: users } = await query(
-    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true",
+    "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true AND is_deleted = false",
     [wallet, mail]
   );
 
@@ -332,5 +369,36 @@ export async function loginVerifyOtpService({ walletAddress, email, otp }) {
     walletAddress: user.wallet_address,
     fullName: user.full_name,
     userCode: user.user_code
+  };
+}
+
+// ===============================================================
+// 5️⃣ CHECK USER AVAILABILITY (NEW HELPER FUNCTION)
+// ===============================================================
+export async function checkUserAvailabilityService({ walletAddress, email }) {
+  if (!walletAddress || !email)
+    throw { status: 400, message: "Wallet and email are required" };
+
+  const wallet = walletAddress.toLowerCase();
+  const mail = email.toLowerCase();
+
+  // Check for active users
+  const { rows: activeUsers } = await query(
+    `SELECT * FROM users WHERE (LOWER(wallet_address) = $1 OR LOWER(email) = $2) AND is_deleted = false`,
+    [wallet, mail]
+  );
+
+  // Check for soft-deleted users
+  const { rows: deletedUsers } = await query(
+    `SELECT * FROM users WHERE (LOWER(wallet_address) = $1 OR LOWER(email) = $2) AND is_deleted = true`,
+    [wallet, mail]
+  );
+
+  return {
+    available: activeUsers.length === 0,
+    hasActiveUsers: activeUsers.length > 0,
+    hasDeletedUsers: deletedUsers.length > 0,
+    activeUsers,
+    deletedUsers
   };
 }
