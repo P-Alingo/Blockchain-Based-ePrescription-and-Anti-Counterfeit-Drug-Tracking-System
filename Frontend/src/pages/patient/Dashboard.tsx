@@ -256,27 +256,31 @@ const PatientDashboard = () => {
                   <th className="px-4 py-2 text-left">QR View</th>
                 </tr>
               </thead>
-              <tbody>
-                {recentPrescriptions.length > 0 ? (
-                  recentPrescriptions.map((p: any) => (
-                    <tr key={p.prescriptionNo} className="border-t">
-                      <td className="px-4 py-2">{p.prescriptionNo}</td>
-                      <td className="px-4 py-2">{p.doctorName}</td>
-                      <td className="px-4 py-2">{new Date(p.date).toLocaleDateString()}</td>
-                      <td className="px-4 py-2">{p.status}</td>
-                      <td className="px-4 py-2">
-                        <Link to={`/patient/qr-viewer?prescription=${p.prescriptionNo}`}>
-                          <Button size="sm" variant="outline">View QR</Button>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="text-center py-4 text-muted-foreground">No recent activity found.</td>
-                  </tr>
-                )}
-              </tbody>
+<tbody>
+  {recentPrescriptions.length > 0 ? (
+    recentPrescriptions.map((p: any) => (
+      <tr key={p.prescriptionNo}>
+        <td className="px-4 py-2">{p.prescriptionNo}</td>
+        <td className="px-4 py-2">{p.doctorName}</td>
+        <td className="px-4 py-2">{new Date(p.date).toLocaleDateString()}</td>
+        <td className="px-4 py-2">
+          <Badge variant={p.status === 'active' ? 'default' : 'secondary'}>
+            {p.status}
+          </Badge>
+        </td>
+        <td className="px-4 py-2">
+          <Link to={`/patient/qr-viewer?prescription=${p.prescriptionNo}`}>
+            <Button size="sm" variant="outline">View QR</Button>
+          </Link>
+        </td>
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td colSpan={5} className="text-center py-4 text-muted-foreground">No recent activity found.</td>
+    </tr>
+  )}
+</tbody>
             </table>
           </div>
         </div>

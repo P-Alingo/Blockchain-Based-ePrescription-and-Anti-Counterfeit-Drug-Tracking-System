@@ -9,9 +9,6 @@ router.use(authMiddleware);
 // Expired prescriptions endpoint
 router.get("/prescription/expired", listExpiredPrescriptions);
 
-// Doctor analytics endpoint
-router.get("/analytics", getDoctorAnalytics);
-
 router.get("/profile", getDoctorProfile);
 router.put("/profile", updateDoctorProfile);
 router.get("/dashboard", getDoctorDashboard);
@@ -24,5 +21,8 @@ router.put("/prescription/:id", updatePrescription);
 router.delete("/prescription/:id", deletePrescription);
 router.get("/search/patient", searchPatients);
 router.get("/search/drug", searchDrugs);
+
+// Analytics endpoint
+router.get("/analytics", authMiddleware, getDoctorAnalytics);
 
 export default router;

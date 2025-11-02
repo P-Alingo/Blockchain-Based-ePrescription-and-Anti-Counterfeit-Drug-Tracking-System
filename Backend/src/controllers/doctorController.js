@@ -237,27 +237,35 @@ export async function updateDoctorProfile(req, res, next) {
   }
 }
 
-// Doctor Dashboard (moved from authController)
+// Doctor Dashboard - FIXED VERSION
 export async function getDoctorDashboard(req, res) {
   try {
-    const doctorUserId = req.user?.id; // Logged-in user's ID
+    const doctorUserId = req.user?.id;
     if (!doctorUserId) {
       console.warn("❌ No doctorId found in auth middleware");
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Fetch Stats
+    // First, get the doctor's ID from the users table
+    const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [doctorUserId]);
+    if (doctorResult.rowCount === 0) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+    const doctorId = doctorResult.rows[0].id;
+
+    console.log('🔍 Doctor ID found:', doctorId);
+
+    // ✅ FIXED: Fetch Stats with proper doctor_id filtering
     const statsQuery = `
       SELECT
-        COUNT(*) FILTER (WHERE p.status IN ('Active','Dispensed')) AS total_prescriptions,
-        COUNT(*) FILTER (WHERE p.status = 'Active') AS active_prescriptions,
-        COUNT(*) FILTER (WHERE p.status = 'Dispensed' AND p.issue_date = CURRENT_DATE) AS dispensed_today,
-        COUNT(DISTINCT p.patient_id) AS patients_served
-      FROM prescription p
-      JOIN doctor d ON d.id = p.doctor_id
-      WHERE d.userid = $1
+        COUNT(*) AS total_prescriptions,
+        COUNT(*) FILTER (WHERE status IN ('Active', 'Pending')) AS active_prescriptions,
+        COUNT(*) FILTER (WHERE status = 'Dispensed' AND DATE(issue_date) = CURRENT_DATE) AS dispensed_today,
+        COUNT(DISTINCT patient_id) AS patients_served
+      FROM prescription 
+      WHERE doctor_id = $1
     `;
-    const statsResult = await doctorService.query(statsQuery, [doctorUserId]);
+    const statsResult = await query(statsQuery, [doctorId]);
     const stats = statsResult.rows[0] || {
       total_prescriptions: 0,
       active_prescriptions: 0,
@@ -265,11 +273,15 @@ export async function getDoctorDashboard(req, res) {
       patients_served: 0,
     };
 
-    // Fetch Recent Prescriptions (latest 10)
+    console.log('📊 Dashboard stats:', stats);
+
+    // ✅ FIXED: Fetch Recent Prescriptions (latest 10) with proper doctor_id filtering
     const prescriptionsQuery = `
-      SELECT p.id,
+      SELECT 
+        p.id,
+        p.prescription_code,
         u.full_name AS patient_name,
-        dr.name AS drug_name,
+        d.name AS drug_name,
         p.dosage_amount,
         p.dosage_unit,
         p.frequency,
@@ -280,16 +292,17 @@ export async function getDoctorDashboard(req, res) {
         p.qrcode_path,
         p.status
       FROM prescription p
-      JOIN doctor d ON d.id = p.doctor_id
       JOIN patient pt ON pt.id = p.patient_id
       JOIN users u ON u.id = pt.userid
-      JOIN drug dr ON dr.id = p.drug_id
-      WHERE d.userid = $1
+      JOIN drug d ON d.id = p.drug_id
+      WHERE p.doctor_id = $1
       ORDER BY p.issue_date DESC
       LIMIT 10
     `;
-    const prescriptionsResult = await doctorService.query(prescriptionsQuery, [doctorUserId]);
+    const prescriptionsResult = await query(prescriptionsQuery, [doctorId]);
     const recentPrescriptions = prescriptionsResult.rows || [];
+
+    console.log('📋 Recent prescriptions count:', recentPrescriptions.length);
 
     return res.json({
       stats,

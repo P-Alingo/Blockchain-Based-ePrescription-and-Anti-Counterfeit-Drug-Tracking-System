@@ -42,11 +42,6 @@ app.get("/api/health", (req, res) => {
 // ===============================
 app.use("/api/auth", authRoutes);
 app.use("/api/patient", patientRoutes);
-// Debug middleware for /api/doctor/analytics
-app.use("/api/doctor/analytics", (req, res, next) => {
-  console.log(`🔍 [DEBUG] /api/doctor/analytics called by user:`, req.user?.id || 'unknown');
-  next();
-});
 app.use("/api/doctor", doctorRoutes);
 // ===============================
 // Test Database Connection

@@ -6,8 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   FileText,
   QrCode,
-  Bell,
-  Activity,
   Download,
   Share2,
   Maximize2,
@@ -27,14 +25,16 @@ import { toast } from "@/components/ui/use-toast";
 import { QRCodeCanvas } from "qrcode.react";
 
 interface Prescription {
-  id: string;
-  doctor_name: string;
-  drug_name: string;
-  dosage: string;
-  issue_date: string;
-  valid_until: string;
-  qr_code?: string;
+  prescriptionNo: string;
+  doctorName: string;
+  drug: string;
+  date: string;
   status: string;
+  qrCode?: string;
+  dosage?: string;
+  duration?: string;
+  instructions?: string;
+  hospital?: string;
 }
 
 const QRCodeViewer = () => {
@@ -42,8 +42,7 @@ const QRCodeViewer = () => {
     { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
     { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: false },
     { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: true },
-    { icon: Activity, label: "Analytics", path: "/patient/analytics", active: false },
-    // Removed My Alerts and Activity Logs, added Analytics
+    { icon: AlertCircle, label: "Analytics", path: "/patient/analytics", active: false },
   ];
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -65,32 +64,49 @@ const QRCodeViewer = () => {
         return;
       }
 
-      const { token, fullName, name, username, email } = JSON.parse(storedUserData);
-      setUserName(fullName || name || username || email || "Patient");
-      setUserEmail(email || "");
-
       try {
-        const res = await axios.get<{ prescriptions: Prescription[] }>(
-          "http://localhost:4000/api/prescriptions/patient",
+        const { token, fullName, name, username, email } = JSON.parse(storedUserData);
+        setUserName(fullName || name || username || email || "Patient");
+        setUserEmail(email || "");
+
+        console.log("🔍 Fetching prescriptions from patient API...");
+        
+        const res = await axios.get<Prescription[]>(
+          "http://localhost:4000/api/patient/prescriptions",
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
           }
         );
 
-        if (res.data.prescriptions && res.data.prescriptions.length > 0) {
-          setPrescriptions(res.data.prescriptions);
-          setSelectedId(res.data.prescriptions[0].id);
+        console.log("✅ Prescriptions response:", res.data);
+
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setPrescriptions(res.data);
+          setSelectedId(res.data[0].prescriptionNo);
+          console.log(`📋 Loaded ${res.data.length} prescriptions`);
         } else {
           setPrescriptions([]);
+          console.log("ℹ️ No prescriptions found");
         }
       } catch (err: any) {
-        console.error("❌ Error fetching prescriptions:", err.message);
+        console.error("❌ Error fetching prescriptions:", err);
+        console.error("Error details:", err.response?.data);
+        
+        let errorMessage = "Failed to load prescriptions";
+        if (err.code === "ERR_NETWORK") {
+          errorMessage = "Cannot connect to the server. Please check if the backend is running.";
+        } else if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+
         toast({
           title: "Error Fetching Data",
-          description:
-            err.code === "ERR_NETWORK"
-              ? "Cannot connect to the server. Check your backend URL."
-              : "Failed to load prescriptions.",
+          description: errorMessage,
           variant: "destructive",
         });
       } finally {
@@ -101,18 +117,21 @@ const QRCodeViewer = () => {
     fetchPrescriptions();
   }, []);
 
-  const selectedPrescription = prescriptions.find((p) => p.id === selectedId);
+  const selectedPrescription = prescriptions.find((p) => p.prescriptionNo === selectedId);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "N/A";
-    const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
-    if (isNaN(date.getTime())) return "N/A";
-    return date.toLocaleDateString("en-GB", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      weekday: "short",
-    });
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return "N/A";
+      return date.toLocaleDateString("en-GB", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return "N/A";
+    }
   };
 
   const exportCSV = () => {
@@ -125,23 +144,76 @@ const QRCodeViewer = () => {
       return;
     }
 
-    const headers = "Prescription ID,Drug,Doctor,Dosage,Issued,Expires,Status\n";
+    const headers = "Prescription No,Drug,Doctor,Date,Status,Dosage,Duration,Instructions,Hospital\n";
     const rows = prescriptions
       .map(
         (p) =>
-          `${p.id},"${p.drug_name}","${p.doctor_name}","${p.dosage}","${formatDate(
-            p.issue_date
-          )}","${formatDate(p.valid_until)}","${p.status}"`
+          `"${p.prescriptionNo}","${p.drug}","${p.doctorName}","${formatDate(
+            p.date
+          )}","${p.status}","${p.dosage || 'N/A'}","${p.duration || 'N/A'}","${p.instructions || 'N/A'}","${p.hospital || 'N/A'}"`
       )
       .join("\n");
 
     const csvData = new Blob([headers + rows], { type: "text/csv;charset=utf-8" });
-    saveAs(csvData, "prescriptions.csv");
+    saveAs(csvData, `prescriptions_${new Date().toISOString().split('T')[0]}.csv`);
 
     toast({
       title: "Export Successful",
-      description: "Your prescriptions were exported successfully.",
+      description: `Exported ${prescriptions.length} prescriptions to CSV.`,
     });
+  };
+
+  const shareQRCode = async () => {
+    if (!selectedPrescription) return;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Prescription QR - ${selectedPrescription.drug}`,
+          text: `Prescription for ${selectedPrescription.drug} by Dr. ${selectedPrescription.doctorName}`,
+          url: window.location.href,
+        });
+      } else {
+        // Fallback: copy to clipboard
+        const qrText = JSON.stringify({
+          PrescriptionNo: selectedPrescription.prescriptionNo,
+          Drug: selectedPrescription.drug,
+          Doctor: selectedPrescription.doctorName,
+          Date: formatDate(selectedPrescription.date),
+          Status: selectedPrescription.status,
+        }, null, 2);
+        
+        await navigator.clipboard.writeText(qrText);
+        toast({
+          title: "Copied to Clipboard",
+          description: "Prescription details copied to clipboard.",
+        });
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
+  };
+
+  const downloadQRCode = () => {
+    if (!selectedPrescription) return;
+
+    const canvas = document.querySelector("canvas");
+    if (canvas) {
+      const pngUrl = canvas
+        .toDataURL("image/png")
+        .replace("image/png", "image/octet-stream");
+      const downloadLink = document.createElement("a");
+      downloadLink.href = pngUrl;
+      downloadLink.download = `prescription-${selectedPrescription.prescriptionNo}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      toast({
+        title: "QR Code Downloaded",
+        description: `QR code for ${selectedPrescription.prescriptionNo} saved.`,
+      });
+    }
   };
 
   return (
@@ -157,35 +229,61 @@ const QRCodeViewer = () => {
           <div>
             <h1 className="text-3xl font-bold text-green-600">QR Code Viewer</h1>
             <p className="text-muted-foreground">
-              View and manage your prescription QR codes directly from your doctor.
+              View and manage your prescription QR codes
             </p>
           </div>
-          <Button variant="outline" onClick={exportCSV}>
+          <Button variant="outline" onClick={exportCSV} disabled={prescriptions.length === 0}>
             <Download className="mr-2 w-4 h-4" /> Export CSV
           </Button>
         </div>
 
+     
+
         {/* Main Content */}
         {loading ? (
-          <p>Loading prescriptions...</p>
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading your prescriptions...</p>
+            </div>
+          </div>
         ) : prescriptions.length === 0 ? (
-          <p className="text-muted-foreground">No prescriptions found.</p>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center text-muted-foreground py-12">
+                <QrCode className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium mb-2">No Prescriptions Found</h3>
+                <p className="mb-4">You don't have any prescriptions yet.</p>
+                <Button onClick={() => window.location.reload()}>
+                  Refresh
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid lg:grid-cols-3 gap-8">
+            {/* QR Code Section */}
             <div className="lg:col-span-2">
               <Card className="shadow-md rounded-2xl">
                 <CardHeader>
                   <div className="flex justify-between items-center">
                     <CardTitle>Prescription QR Code</CardTitle>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Maximize2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Share2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={exportCSV}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={downloadQRCode}
+                        disabled={!selectedPrescription}
+                      >
                         <Download className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={shareQRCode}
+                        disabled={!selectedPrescription}
+                      >
+                        <Share2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -194,105 +292,172 @@ const QRCodeViewer = () => {
                 <CardContent>
                   {selectedPrescription ? (
                     <div className="text-center space-y-6">
+                      {/* QR Code Display */}
                       <div className="mx-auto w-80 h-80 bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-dashed border-primary/30 rounded-xl flex items-center justify-center">
                         <QRCodeCanvas
                           value={JSON.stringify({
-                            PrescriptionID: selectedPrescription.id,
-                            Drug: selectedPrescription.drug_name,
-                            Doctor: selectedPrescription.doctor_name,
-                            Dosage: selectedPrescription.dosage,
-                            Issued: formatDate(selectedPrescription.issue_date),
-                            Expires: formatDate(selectedPrescription.valid_until),
-                            Status: selectedPrescription.status,
+                            prescriptionNo: selectedPrescription.prescriptionNo,
+                            drug: selectedPrescription.drug,
+                            doctor: selectedPrescription.doctorName,
+                            date: formatDate(selectedPrescription.date),
+                            status: selectedPrescription.status,
+                            dosage: selectedPrescription.dosage,
+                            duration: selectedPrescription.duration,
+                            instructions: selectedPrescription.instructions,
+                            hospital: selectedPrescription.hospital,
                           })}
-                          size={230}
+                          size={280}
                           bgColor="#ffffff"
-                          fgColor="#064e3b" // deep green aesthetic
+                          fgColor="#064e3b"
                           level="H"
                           includeMargin
+                          style={{ 
+                            width: '100%', 
+                            height: '100%',
+                            maxWidth: '280px',
+                            maxHeight: '280px'
+                          }}
                         />
                       </div>
 
-                      <div className="p-6 rounded-lg bg-muted/30 text-left space-y-3">
-                        <h3 className="font-semibold text-lg mb-4">
+                      {/* Prescription Details */}
+                      <div className="p-6 rounded-lg bg-muted/30 text-left space-y-4">
+                        <h3 className="font-semibold text-lg mb-4 border-b pb-2">
                           Prescription Details
                         </h3>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p>
-                              <span className="font-medium">Drug:</span>{" "}
-                              {selectedPrescription.drug_name}
-                            </p>
-                            <p>
-                              <span className="font-medium">Doctor:</span>{" "}
-                              {selectedPrescription.doctor_name}
-                            </p>
-                            <p>
-                              <span className="font-medium">Dosage:</span>{" "}
-                              {selectedPrescription.dosage}
-                            </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="space-y-3">
+                            <div>
+                              <span className="font-medium text-muted-foreground">Prescription No:</span>
+                              <p className="font-mono text-sm">{selectedPrescription.prescriptionNo}</p>
+                            </div>
+                            <div>
+                              <span className="font-medium text-muted-foreground">Drug:</span>
+                              <p className="font-semibold">{selectedPrescription.drug}</p>
+                            </div>
+                            <div>
+                              <span className="font-medium text-muted-foreground">Doctor:</span>
+                              <p>{selectedPrescription.doctorName}</p>
+                            </div>
+                            {selectedPrescription.hospital && (
+                              <div>
+                                <span className="font-medium text-muted-foreground">Hospital:</span>
+                                <p>{selectedPrescription.hospital}</p>
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <p>
-                              <span className="font-medium">Issued:</span>{" "}
-                              {formatDate(selectedPrescription.issue_date)}
-                            </p>
-                            <p>
-                              <span className="font-medium">Expires:</span>{" "}
-                              {formatDate(selectedPrescription.valid_until)}
-                            </p>
-                            <p>
-                              <span className="font-medium">Status:</span>{" "}
-                              <Badge>{selectedPrescription.status}</Badge>
-                            </p>
+                          
+                          <div className="space-y-3">
+                            <div>
+                              <span className="font-medium text-muted-foreground">Issued:</span>
+                              <p>{formatDate(selectedPrescription.date)}</p>
+                            </div>
+                            <div>
+                              <span className="font-medium text-muted-foreground">Status:</span>
+                              <div className="mt-1">
+                                <Badge variant={
+                                  selectedPrescription.status.toLowerCase() === "active" ? "default" :
+                                  selectedPrescription.status.toLowerCase() === "dispensed" ? "secondary" : "destructive"
+                                }>
+                                  {selectedPrescription.status}
+                                </Badge>
+                              </div>
+                            </div>
+                            {selectedPrescription.dosage && (
+                              <div>
+                                <span className="font-medium text-muted-foreground">Dosage:</span>
+                                <p>{selectedPrescription.dosage}</p>
+                              </div>
+                            )}
+                            {selectedPrescription.duration && (
+                              <div>
+                                <span className="font-medium text-muted-foreground">Duration:</span>
+                                <p>{selectedPrescription.duration}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
+                        
+                        {selectedPrescription.instructions && (
+                          <div className="pt-3 border-t">
+                            <span className="font-medium text-muted-foreground">Instructions:</span>
+                            <p className="text-sm mt-1 bg-white p-3 rounded border">
+                              {selectedPrescription.instructions}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">
-                      Select a prescription to view its QR code.
-                    </p>
+                    <div className="text-center py-8 text-muted-foreground">
+                      <QrCode className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>Select a prescription to view its QR code</p>
+                    </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
+            {/* Sidebar */}
             <div className="space-y-6">
+              {/* Prescription Selector */}
               <Card className="shadow-md rounded-2xl">
                 <CardHeader>
-                  <CardTitle>Select Prescription</CardTitle>
+                  <CardTitle className="flex items-center space-x-2">
+                    <FileText className="w-5 h-5" />
+                    <span>Select Prescription</span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Select value={selectedId} onValueChange={setSelectedId}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose prescription" />
+                      <SelectValue placeholder="Choose a prescription" />
                     </SelectTrigger>
                     <SelectContent>
                       {prescriptions.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          <div className="text-left">
-                            <div className="font-medium">{p.drug_name}</div>
-                            <div className="text-xs text-muted-foreground">{p.id}</div>
+                        <SelectItem key={p.prescriptionNo} value={p.prescriptionNo}>
+                          <div className="text-left py-1">
+                            <div className="font-medium text-sm">{p.drug}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {p.prescriptionNo} • {formatDate(p.date)}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Dr. {p.doctorName}
+                            </div>
                           </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  
+                  <div className="mt-4 text-xs text-muted-foreground">
+                    <p>Showing {prescriptions.length} prescription{prescriptions.length !== 1 ? 's' : ''}</p>
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-md rounded-2xl">
+              {/* Security Notice */}
+              <Card className="shadow-md rounded-2xl border-yellow-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-500" />
+                  <CardTitle className="flex items-center space-x-2 text-yellow-700">
+                    <AlertCircle className="w-5 h-5" />
                     <span>Security Notice</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <p>✅ Your QR codes contain signed prescription details</p>
-                  <p>⚠️ Show them only to licensed pharmacists</p>
-                  <p>🚨 Report any suspicious or duplicate codes immediately</p>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                    <p>Your QR codes contain signed prescription details</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                    <p>Show them only to licensed pharmacists</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                    <p>Report any suspicious or duplicate codes immediately</p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
