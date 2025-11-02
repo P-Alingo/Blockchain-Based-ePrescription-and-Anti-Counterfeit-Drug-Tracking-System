@@ -1,11 +1,15 @@
-import { prisma } from "../config/database.js";
+import { query } from "../config/database.js";
+
 
 async function listEvents() {
-  return prisma.blockchainEventLog.findMany({ orderBy: { createdAt: "desc" } });
+  const { rows } = await query("SELECT * FROM blockchainEventLog ORDER BY createdAt DESC");
+  return rows;
 }
 
+
 async function getEventById(id) {
-  return prisma.blockchainEventLog.findUnique({ where: { id } });
+  const { rows } = await query("SELECT * FROM blockchainEventLog WHERE id = $1", [id]);
+  return rows[0] || null;
 }
 
 export { listEvents, getEventById };

@@ -12,7 +12,7 @@ import { ethers } from "ethers";
 
 
 // =======================================================
-// Helper: Register user on blockchain
+// Register user on blockchain
 // =======================================================
 async function registerOnChainUser(walletAddress, role) {
   try {
@@ -237,194 +237,71 @@ export async function loginVerifyOtp(req, res) {
 
 }
 
-/**
- * Search for patients in the users table
- */
-export const searchAuthController = async (req, res) => {
-  try {
-    const { query: searchTerm } = req.query;  // ✅ renamed from "query" to "searchTerm"
-
-    if (!searchTerm) {
-      return res.status(400).json({ message: "Query parameter is required" });
-    }
-
-    const sql = `
-      SELECT id, full_name, email, phone_number, gender, dob, user_code
-      FROM users
-      WHERE role = 'patient'
-        AND (
-          full_name ILIKE $1 OR
-          email ILIKE $1 OR
-          phone_number ILIKE $1 OR
-          user_code ILIKE $1
-        )
-    `;
-
-    const values = [`%${searchTerm}%`];
-    const result = await query(sql, values); // ✅ now correctly calls your DB helper
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No patient found" });
-    }
-
-    const formatted = result.rows.map((row) => ({
-      id: row.id,
-      fullName: row.full_name,
-      email: row.email,
-      phoneNumber: row.phone_number,
-      gender: row.gender,
-      dob: row.dob,
-      userCode: row.user_code,
-    }));
-
-    console.log("✅ Patients found:", formatted);
-    res.json(formatted);
-  } catch (error) {
-    console.error("❌ Error searching patients:", error);
-    res.status(500).json({ message: "Server error during patient search" });
-  }
-};
-
 // =======================================================
-// 6️⃣ Patient Dashboard
+// Dropdown endpoints for registration
 // =======================================================
-export const getPatientDashboard = async (req, res) => {
+
+// Hospital dropdown
+export async function getHospitalList(req, res) {
   try {
-    const userId = req.user?.id; // ✅ user ID from auth middleware
-    if (!userId) {
-      console.warn("❌ No userId found in authMiddleware payload");
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    console.log(`📨 Fetching dashboard for userId: ${userId}`);
-
-    // 1️⃣ Fetch user info
-    const { rows: users } = await query(
-      "SELECT id, full_name, email, wallet_address, role FROM users WHERE id=$1",
-      [userId]
+    const { rows } = await query(
+      'SELECT id, name, facility_address FROM hospital ORDER BY name'
     );
-
-    if (users.length === 0) {
-      console.warn(`❌ User not found for ID ${userId}`);
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const user = users[0];
-
-    // 2️⃣ Get the corresponding patient record
-    const { rows: patientRows } = await query(
-      "SELECT id FROM patient WHERE userid=$1",
-      [userId]
-    );
-
-    if (patientRows.length === 0) {
-      console.warn(`❌ Patient record not found for userId ${userId}`);
-      return res.status(404).json({ message: "Patient record not found" });
-    }
-
-    const patientId = patientRows[0].id;
-
-    // 3️⃣ Fetch prescriptions for this patient
-    const { rows: prescriptions } = await query(
-      "SELECT * FROM prescription WHERE patient_id=$1 ORDER BY issue_date DESC",
-      [patientId]
-    );
-
-    // 4️⃣ Filter active prescriptions (case-insensitive)
-    const activePrescriptions = prescriptions.filter(
-      p => p.status?.toLowerCase() === "active"
-    );
-
-    // 5️⃣ Placeholder for alerts (can expand later)
-    const alerts = [];
-
-    console.log(
-      `✅ Found ${prescriptions.length} prescriptions, ${activePrescriptions.length} active`
-    );
-
-    // 6️⃣ Return structured dashboard response
-    res.json({
-      id: user.id,
-      fullName: user.full_name,
-      email: user.email,
-      walletAddress: user.wallet_address,
-      role: user.role,
-      totalPrescriptions: prescriptions.length,
-      activePrescriptions,
-      alerts,
-      recentPrescriptions: prescriptions.slice(0, 5),
-    });
+    res.json(rows);
   } catch (err) {
-    console.error("❌ getPatientDashboard error:", err);
-    res.status(500).json({ message: "Failed to fetch dashboard" });
+    console.error('❌ Hospital list fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch hospital list' });
   }
-};
+}
 
-// ---------------------------
-// 7️⃣ Doctor Dashboard (fixed)
-// ---------------------------
-export const getDoctorDashboard = async (req, res) => {
+// Pharmacy company dropdown
+export async function getPharmacyCompanyList(req, res) {
   try {
-    const doctorUserId = req.user?.id; // Logged-in user's ID
-    if (!doctorUserId) {
-      console.warn("❌ No doctorId found in auth middleware");
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    // ---------------------------
-    // Fetch Stats
-    // ---------------------------
-    const statsQuery = `
-      SELECT
-        COUNT(*) FILTER (WHERE p.status IN ('Active','Dispensed')) AS total_prescriptions,
-        COUNT(*) FILTER (WHERE p.status = 'Active') AS active_prescriptions,
-        COUNT(*) FILTER (WHERE p.status = 'Dispensed' AND p.issue_date = CURRENT_DATE) AS dispensed_today,
-        COUNT(DISTINCT p.patient_id) AS patients_served
-      FROM prescription p
-      JOIN doctor d ON d.id = p.doctor_id
-      WHERE d.userid = $1
-    `;
-    const statsResult = await query(statsQuery, [doctorUserId]);
-    const stats = statsResult.rows[0] || {
-      total_prescriptions: 0,
-      active_prescriptions: 0,
-      dispensed_today: 0,
-      patients_served: 0,
-    };
-
-    // ---------------------------
-    // Fetch Recent Prescriptions (latest 10)
-    // ---------------------------
-    const prescriptionsQuery = `
-      SELECT p.id,
-             u.full_name AS patient_name,
-             dr.name AS drug_name,
-             p.dosage,
-             p.frequency,
-             p.duration,
-             p.instructions,
-             p.issue_date,
-             p.valid_until,
-             p.qrcode,
-             p.status
-      FROM prescription p
-      JOIN doctor d ON d.id = p.doctor_id
-      JOIN patient pt ON pt.id = p.patient_id
-      JOIN users u ON u.id = pt.userid
-      JOIN drug dr ON dr.id = p.drug_id
-      WHERE d.userid = $1
-      ORDER BY p.issue_date DESC
-      LIMIT 10
-    `;
-    const prescriptionsResult = await query(prescriptionsQuery, [doctorUserId]);
-    const recentPrescriptions = prescriptionsResult.rows || [];
-
-    return res.json({
-      stats,
-      recentPrescriptions,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching doctor dashboard:", error);
-    return res.status(500).json({ message: "Unable to fetch dashboard data" });
+    const { rows } = await query(
+      'SELECT id, name, facility_address FROM pharmacy_company ORDER BY name'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Pharmacy company list fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch pharmacy company list' });
   }
-};
+}
+
+// Distributor company dropdown
+export async function getDistributorCompanyList(req, res) {
+  try {
+    const { rows } = await query(
+      'SELECT id, name, facility_address FROM distributor_company ORDER BY name'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Distributor company list fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch distributor company list' });
+  }
+}
+
+// Manufacturer company dropdown
+export async function getManufacturerCompanyList(req, res) {
+  try {
+    const { rows } = await query(
+      'SELECT id, name, facility_address FROM manufacturer_company ORDER BY name'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Manufacturer company list fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch manufacturer company list' });
+  }
+}
+
+// Regulator company dropdown
+export async function getRegulatorCompanyList(req, res) {
+  try {
+    const { rows } = await query(
+      'SELECT id, name, facility_address FROM regulator_company ORDER BY name'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Regulator company list fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch regulator company list' });
+  }
+}

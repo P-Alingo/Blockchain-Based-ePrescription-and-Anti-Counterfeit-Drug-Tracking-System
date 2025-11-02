@@ -14,8 +14,7 @@ const CreatePrescription = () => {
     { icon: Shield, label: "Dashboard", path: "/doctor/dashboard", active: false },
     { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: true },
     { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
-    { icon: Shield, label: "Blockchain Verification", path: "/doctor/blockchain-verification", active: false },
-    { icon: Activity, label: "Activity Logs", path: "/doctor/activity-logs", active: false },
+    { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: false },
   ];
 
   const [formData, setFormData] = useState({
@@ -23,7 +22,8 @@ const CreatePrescription = () => {
     patientName: "",
     drugId: "",
     drugName: "",
-    dosage: "",
+    dosageAmount: "",
+    dosageUnit: "",
     frequency: "",
     duration: "",
     instructions: "",
@@ -73,7 +73,7 @@ const CreatePrescription = () => {
 
     const fetchPatients = async () => {
       const results = await fetchSearchResults(
-        "http://localhost:4000/api/prescriptions/search/patient",
+        "http://localhost:4000/api/doctor/search/patient",
         patientSearch
       );
       setFilteredPatients(results);
@@ -100,7 +100,7 @@ const CreatePrescription = () => {
 
     const fetchDrugs = async () => {
       const results = await fetchSearchResults(
-        "http://localhost:4000/api/prescriptions/search/drug",
+        "http://localhost:4000/api/doctor/search/drug",
         drugSearch
       );
       setFilteredDrugs(results);
@@ -120,7 +120,7 @@ const CreatePrescription = () => {
   // Submit prescription
   const handleSubmit = async () => {
     if (!formData.patientId || !formData.drugId) return toast.error("Patient and Drug are required.");
-    if (!formData.dosage || !formData.frequency || !formData.duration)
+    if (!formData.dosageAmount || !formData.dosageUnit || !formData.frequency || !formData.duration)
       return toast.error("Complete all prescription details.");
     if (new Date(formData.issueDate) > new Date(formData.validUntil))
       return toast.error("Valid Until cannot be before Issue Date.");
@@ -128,11 +128,12 @@ const CreatePrescription = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "http://localhost:4000/api/prescriptions",
+        "http://localhost:4000/api/doctor/prescription",
         {
           patientId: formData.patientId,
           drugId: formData.drugId,
-          dosage: formData.dosage.trim(),
+          dosageAmount: formData.dosageAmount.trim(),
+          dosageUnit: formData.dosageUnit.trim(),
           frequency: formData.frequency.trim(),
           duration: Number(formData.duration),
           instructions: formData.instructions.trim(),
@@ -149,7 +150,8 @@ const CreatePrescription = () => {
         patientName: "",
         drugId: "",
         drugName: "",
-        dosage: "",
+        dosageAmount: "",
+        dosageUnit: "",
         frequency: "",
         duration: "",
         instructions: "",
@@ -168,11 +170,12 @@ const CreatePrescription = () => {
   };
 
   const allRequiredFilled =
-    formData.patientId &&
-    formData.drugId &&
-    formData.dosage.trim() &&
-    formData.frequency.trim() &&
-    formData.duration;
+  formData.patientId &&
+  formData.drugId &&
+  formData.dosageAmount.trim() &&
+  formData.dosageUnit.trim() &&
+  formData.frequency.trim() &&
+  formData.duration;
 
   return (
     <DashboardLayout
@@ -247,14 +250,23 @@ const CreatePrescription = () => {
                   </div>
                 )}
 
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-4 gap-4">
                   <div>
-                    <Label htmlFor="dosage">Dosage</Label>
+                    <Label htmlFor="dosageAmount">Dosage Amount</Label>
                     <Input
-                      id="dosage"
-                      placeholder="e.g., 500mg"
-                      value={formData.dosage}
-                      onChange={(e) => handleChange("dosage", e.target.value)}
+                      id="dosageAmount"
+                      placeholder="e.g., 500"
+                      value={formData.dosageAmount}
+                      onChange={(e) => handleChange("dosageAmount", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="dosageUnit">Dosage Unit</Label>
+                    <Input
+                      id="dosageUnit"
+                      placeholder="e.g., mg"
+                      value={formData.dosageUnit}
+                      onChange={(e) => handleChange("dosageUnit", e.target.value)}
                     />
                   </div>
                   <div>
@@ -333,7 +345,10 @@ const CreatePrescription = () => {
                     Drug: <span className="text-muted-foreground">{formData.drugName || "Not selected"}</span>
                   </p>
                   <p className="text-sm font-medium">
-                    Dosage: <span className="text-muted-foreground">{formData.dosage || "-"}</span>
+                    Dosage Amount: <span className="text-muted-foreground">{formData.dosageAmount || "-"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
+                    Dosage Unit: <span className="text-muted-foreground">{formData.dosageUnit || "-"}</span>
                   </p>
                   <p className="text-sm font-medium">
                     Frequency: <span className="text-muted-foreground">{formData.frequency || "-"}</span>

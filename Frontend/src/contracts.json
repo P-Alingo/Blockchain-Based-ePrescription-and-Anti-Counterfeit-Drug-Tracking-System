@@ -1,8 +1,8 @@
 {
-  "USER_MANAGEMENT_ADDRESS": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+  "USER_MANAGEMENT_ADDRESS": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
   "ADMIN_WALLET": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "ABI_PATH_BACKEND": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\UserManagementABI.json",
   "ABI_PATH_FRONTEND": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\UserManagementABI.json",
-  "DEPLOYMENT_NETWORK": "localhost",
-  "DEPLOYMENT_TIMESTAMP": "2025-10-21T08:50:37.985Z"
+  "DEPLOYMENT_NETWORK": "hardhat",
+  "DEPLOYMENT_TIMESTAMP": "2025-10-25T05:29:25.947Z"
 }

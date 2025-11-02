@@ -8,7 +8,7 @@ import { sendOtpEmail } from "../utils/emailSender.js";
 const OTP_EXPIRATION_MINUTES = Number(process.env.OTP_EXPIRATION_MINUTES) || 2;
 
 // ===============================================================
-// 1️⃣ REGISTER - REQUEST OTP (UPDATED WITH SOFT-DELETE HANDLING)
+// 1️⃣ REGISTER - REQUEST OTP
 // ===============================================================
 export async function registerRequestOtpService({
   walletAddress,

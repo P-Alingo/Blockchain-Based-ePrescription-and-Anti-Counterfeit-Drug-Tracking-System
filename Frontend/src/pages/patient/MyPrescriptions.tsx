@@ -53,82 +53,33 @@ const MyPrescriptions = () => {
     { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
     { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: true },
     { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: false },
-    { icon: Bell, label: "My Alerts", path: "/patient/alerts", active: false },
-    { icon: Activity, label: "Activity Logs", path: "/patient/activity-logs", active: false },
+    { icon: Activity, label: "Analytics", path: "/patient/analytics", active: false },
+    // Removed My Alerts and Activity Logs, added Analytics
   ];
 
-  // ✅ Fetch patient prescriptions from backend
+  // Fetch patient prescriptions from backend (new API)
   useEffect(() => {
     const fetchPrescriptions = async () => {
       try {
         const storedUserData = localStorage.getItem("userData");
         if (!storedUserData) {
-          console.error("⚠️ No user data found in localStorage");
           setError("User not logged in.");
           return;
         }
-
         const { token } = JSON.parse(storedUserData);
-
-        const res = await axios.get<{ prescriptions: any[] }>(
-          "http://localhost:4000/api/prescriptions/patient",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+        const res = await axios.get(
+          "http://localhost:4000/api/patient/prescriptions",
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-
-        const data = Array.isArray(res.data?.prescriptions)
-          ? res.data.prescriptions
-          : [];
-
-        console.log("✅ API Response:", data);
-
-        const mapped: Prescription[] = data.map((p: any) => ({
-          id: p.id?.toString() || "",
-          doctor: p.doctor_name || p.doctor || "Unknown Doctor",
-          hospital: p.hospital || "N/A",
-          drug: p.drug_name || p.drug || "Unknown Drug",
-          dosage: p.dosage || "-",
-          duration: p.duration?.toString() || "-",
-          issued: p.issue_date
-            ? new Date(p.issue_date).toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "-",
-          expires: p.valid_until
-            ? new Date(p.valid_until).toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "-",
-          completed: p.completed || "",
-          expired: p.expired || "",
-          daysLeft:
-            p.status === "Active" && (p.valid_until || p.expires)
-              ? Math.ceil(
-                  (new Date(p.valid_until || p.expires).getTime() -
-                    new Date().getTime()) /
-                    (1000 * 60 * 60 * 24)
-                )
-              : undefined,
-          taken: p.taken || 0,
-          total: p.total || 1,
-          status: p.status || "Active",
-        }));
-
-        setPrescriptions(mapped);
-        setFilteredPrescriptions(mapped);
+        const data = Array.isArray(res.data) ? res.data : [];
+        setPrescriptions(data);
+        setFilteredPrescriptions(data);
       } catch (err) {
-        console.error("❌ Error fetching prescriptions:", err);
         setError("Failed to load prescriptions.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchPrescriptions();
   }, []);
 
@@ -227,40 +178,25 @@ const MyPrescriptions = () => {
     document.body.removeChild(link);
   };
 
-  const renderPrescriptionCard = (p: Prescription) => (
-    <div key={p.id} className="p-6 rounded-lg border bg-muted/30 mb-4">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-lg font-semibold">{p.drug}</h2>
-        <Badge
-          variant={
-            p.status === "Active"
-              ? "secondary"
-              : p.status === "Completed"
-              ? "default"
-              : "destructive"
-          }
-        >
-          {p.status}
-        </Badge>
-      </div>
-      <p><strong>Doctor:</strong> {p.doctor}</p>
-      <p><strong>Hospital:</strong> {p.hospital}</p>
-      <p><strong>Dosage:</strong> {p.dosage}</p>
-      <p><strong>Duration:</strong> {p.duration} days</p>
-      <p><strong>Issued:</strong> {p.issued}</p>
-      <p><strong>Expires:</strong> {p.expires || "-"}</p>
-      {p.status === "Active" && (
-        <div className="mt-2">
-          <div className="w-full h-2 bg-gray-200 rounded-full">
-            <div
-              className="h-2 bg-green-500 rounded-full"
-              style={{ width: `${getProgressPercentage(p.taken, p.total)}%` }}
-            ></div>
-          </div>
-          <p className="text-sm mt-1">{p.taken} of {p.total} taken</p>
-        </div>
-      )}
-    </div>
+  // Table row for prescription
+  const renderPrescriptionRow = (p: any) => (
+    <tr key={p.prescriptionNo} className="border-t">
+      <td className="px-4 py-2 font-mono">{p.prescriptionNo}</td>
+      <td className="px-4 py-2">{p.doctorName}</td>
+      <td className="px-4 py-2">{new Date(p.date).toLocaleDateString()}</td>
+      <td className="px-4 py-2">{p.drug}</td>
+      <td className="px-4 py-2">
+        <Badge variant={
+          p.status === "Active" ? "secondary" :
+          p.status === "Dispensed" ? "default" : "destructive"
+        }>{p.status}</Badge>
+      </td>
+      <td className="px-4 py-2">
+        <Button size="sm" variant="outline">
+          <a href={`/patient/qr-viewer?prescription=${p.prescriptionNo}`}>View QR</a>
+        </Button>
+      </td>
+    </tr>
   );
 
   // Get userName and userEmail from localStorage or set default values
@@ -348,44 +284,35 @@ return (
         </CardContent>
       </Card>
 
-      {/* Prescriptions Tabs */}
+      {/* Prescription Table */}
       <Card className="card-elevated">
-        <CardContent className="p-0">
-          <Tabs defaultValue="active" className="w-full">
-            <div className="p-6 pb-0">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="active">Active ({activePrescriptions.length})</TabsTrigger>
-                <TabsTrigger value="completed">Completed ({completedPrescriptions.length})</TabsTrigger>
-                <TabsTrigger value="expired">Expired ({expiredPrescriptions.length})</TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="active" className="p-6 pt-4">
-              {loading ? (
-                <p>Loading prescriptions...</p>
-              ) : activePrescriptions.length === 0 ? (
-                <p>No active prescriptions found.</p>
-              ) : (
-                activePrescriptions.map(renderPrescriptionCard)
-              )}
-            </TabsContent>
-
-            <TabsContent value="completed" className="p-6 pt-4">
-              {completedPrescriptions.length === 0 ? (
-                <p>No completed prescriptions found.</p>
-              ) : (
-                completedPrescriptions.map(renderPrescriptionCard)
-              )}
-            </TabsContent>
-
-            <TabsContent value="expired" className="p-6 pt-4">
-              {expiredPrescriptions.length === 0 ? (
-                <p>No expired prescriptions found.</p>
-              ) : (
-                expiredPrescriptions.map(renderPrescriptionCard)
-              )}
-            </TabsContent>
-          </Tabs>
+        <CardHeader>
+          <CardTitle>Prescription History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white border rounded-lg">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left">Prescription No</th>
+                  <th className="px-4 py-2 text-left">Doctor</th>
+                  <th className="px-4 py-2 text-left">Date Issued</th>
+                  <th className="px-4 py-2 text-left">Drug</th>
+                  <th className="px-4 py-2 text-left">Status</th>
+                  <th className="px-4 py-2 text-left">QR View</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPrescriptions.length > 0 ? (
+                  filteredPrescriptions.map(renderPrescriptionRow)
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center py-4 text-muted-foreground">No prescriptions found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>

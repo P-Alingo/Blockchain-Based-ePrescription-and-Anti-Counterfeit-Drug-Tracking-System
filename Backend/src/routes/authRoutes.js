@@ -5,9 +5,11 @@ import {
   verifyOtp,
   loginRequestOtp,
   loginVerifyOtp,
-  searchAuthController,
-  getPatientDashboard, 
-  getDoctorDashboard,
+  getHospitalList,
+  getPharmacyCompanyList,
+  getDistributorCompanyList,
+  getManufacturerCompanyList,
+  getRegulatorCompanyList
 } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js"; const router = express.Router();
 
@@ -23,19 +25,13 @@ router.post("/register/verify-otp", verifyOtp);
 router.post("/login/request-otp", loginRequestOtp);
 router.post("/login/verify-otp", loginVerifyOtp);
 
-// -------------------
-// User Search (Protected)
-// -------------------
-router.get("/search", authMiddleware, searchAuthController);
+// Dropdown endpoints for registration
+router.get("/dropdown/hospitals", getHospitalList);
+router.get("/dropdown/pharmacy-companies", getPharmacyCompanyList);
+router.get("/dropdown/distributor-companies", getDistributorCompanyList);
+router.get("/dropdown/manufacturer-companies", getManufacturerCompanyList);
+router.get("/dropdown/regulator-companies", getRegulatorCompanyList);
 
-// -------------------
-// Patient Dashboard (Protected)
-// -------------------
-router.get("/dashboard", authMiddleware, getPatientDashboard);
 
-// -------------------
-// Doctor Dashboard (Protected)
-// -------------------
-router.get("/doctor/dashboard", authMiddleware, getDoctorDashboard);
 
 export default router;

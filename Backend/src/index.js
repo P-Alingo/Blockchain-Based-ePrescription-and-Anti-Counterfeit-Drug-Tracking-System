@@ -4,8 +4,11 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { pool } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
-import prescriptionRoutes from "./routes/prescriptionRoutes.js";
+import patientRoutes from "./routes/patientRoutes.js";
+import doctorRoutes from "./routes/doctorRoutes.js";
 import userManagementRoutes from './routes/userManagementRoutes.js';
+import drugBatchRoutes from "./routes/drugBatchRoutes.js";
+import shipmentRoutes from "./routes/shipmentRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -35,10 +38,16 @@ app.get("/api/health", (req, res) => {
 });
 
 // ===============================
-// Auth Routes
+// Auth & Role Routes
 // ===============================
 app.use("/api/auth", authRoutes);
-
+app.use("/api/patient", patientRoutes);
+// Debug middleware for /api/doctor/analytics
+app.use("/api/doctor/analytics", (req, res, next) => {
+  console.log(`🔍 [DEBUG] /api/doctor/analytics called by user:`, req.user?.id || 'unknown');
+  next();
+});
+app.use("/api/doctor", doctorRoutes);
 // ===============================
 // Test Database Connection
 // ===============================
@@ -66,8 +75,9 @@ app._router.stack.forEach((middleware) => {
   }
 });
 
-app.use("/api/prescriptions", prescriptionRoutes);
 app.use('/api/users', userManagementRoutes);
+app.use("/api/drugbatch", drugBatchRoutes);
+app.use('/api/shipments', shipmentRoutes);
 // ===============================
 // Start Server
 // ===============================

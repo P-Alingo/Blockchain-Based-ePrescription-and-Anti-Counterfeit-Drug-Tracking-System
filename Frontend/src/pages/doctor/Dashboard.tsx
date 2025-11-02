@@ -1,3 +1,4 @@
+
 // src/pages/doctor/DoctorDashboard.tsx
 import { useEffect, useState } from "react";
 import axios from "axios";
@@ -6,8 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Clock, CheckCircle, AlertTriangle, Users, Activity, Shield, Plus, TrendingUp } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
+const AUTH_API_BASE = "http://localhost:4000/api/auth";
+const DOCTOR_API_BASE = "http://localhost:4000/api/doctor";
 // ---------------------------
 // Types
 // ---------------------------
@@ -19,6 +22,8 @@ interface Prescription {
   issue_date?: string;
   valid_until?: string;
   dosage?: string;
+  dosage_amount?: string;
+  dosage_unit?: string;
   frequency?: string;
   duration?: number;
   instructions?: string;
@@ -54,40 +59,51 @@ const DoctorDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // User info from localStorage
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const userName = userData.fullName || "Doctor";
-  const userEmail = userData.email || "";
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    const storedUserData = localStorage.getItem("userData");
+    if (!storedToken || !storedUserData) {
+      navigate("/login");
+      return;
+    }
+    try {
+      const parsedUserData = JSON.parse(storedUserData);
+      setUserData(parsedUserData);
+      setToken(storedToken);
+    } catch {
+      navigate("/login");
+    }
+  }, [navigate]);
+
+  const userName = userData?.fullName || "Doctor";
+  const userEmail = userData?.email || "";
 
   const sidebarItems = [
     { icon: Shield, label: "Dashboard", path: "/doctor/dashboard" },
     { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription" },
     { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions" },
-    { icon: Shield, label: "Blockchain Verification", path: "/doctor/blockchain-verification" },
-    { icon: Activity, label: "Activity Logs", path: "/doctor/activity-logs" },
+    { icon: Activity, label: "Analytics", path: "/doctor/analytics" },
   ];
 
   // ---------------------------
   // Fetch Dashboard Data
   // ---------------------------
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (authToken: string) => {
     try {
       setLoading(true);
       setError(null);
-
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("No auth token found");
-
-      const API_BASE = "http://localhost:4000/api/auth"; // Matches backend route
 
       interface DashboardResponse {
         stats: DashboardStats;
         recentPrescriptions: Prescription[];
       }
 
-      const res = await axios.get<DashboardResponse>(`${API_BASE}/doctor/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await axios.get<DashboardResponse>(`${DOCTOR_API_BASE}/dashboard`, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
 
       if (res.data) {
@@ -105,10 +121,14 @@ const DoctorDashboard = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 30000); // refresh every 30s
+    if (!token) return;
+    fetchDashboardData(token);
+    const interval = setInterval(() => {
+      fetchDashboardData(token);
+    }, 30000); // refresh every 30s
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const statsData = [
     { title: "Total Prescriptions", value: stats.total_prescriptions, change: "+12%", icon: FileText, color: "text-primary" },
@@ -182,7 +202,7 @@ const DoctorDashboard = () => {
                           <p className="text-sm text-muted-foreground">Patient: {rx.patient_name}</p>
                           <p className="text-sm font-medium">{rx.drug_name}</p>
                           <p className="text-xs text-muted-foreground">
-                            Dosage: {rx.dosage || "-"} | Frequency: {rx.frequency || "-"} | Duration: {rx.duration ?? "-"} days
+                            Dosage Amount: {rx.dosage_amount ?? "-"} {rx.dosage_unit ?? ""} | Frequency: {rx.frequency || "-"} | Duration: {rx.duration ?? "-"} days
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Issued: {formatDate(rx.issue_date)} | Valid Until: {formatDate(rx.valid_until)}
@@ -191,12 +211,29 @@ const DoctorDashboard = () => {
                           {rx.qrcode && <img src={rx.qrcode} alt={`QR for prescription ${rx.id}`} className="mt-2 w-20 h-20" />}
                         </div>
                         <div className="text-right">
-                          <Badge
-                            variant={rx.status === "Active" ? "default" : "secondary"}
-                            className={rx.status === "Active" ? "bg-warning text-warning-foreground" : ""}
-                          >
-                            {rx.status}
-                          </Badge>
+                          {(() => {
+                            const now = new Date();
+                            const validUntil = rx.valid_until ? new Date(rx.valid_until) : null;
+                            let badgeText: string = rx.status as string;
+                            // Show 'Expired' if past validUntil
+                            if (validUntil && now > validUntil) {
+                              badgeText = "Expired";
+                            } else if (badgeText === "Pending") {
+                              badgeText = "Active";
+                            }
+                            const badgeClass = badgeText === "Active"
+                              ? "bg-warning text-warning-foreground"
+                              : badgeText === "Dispensed"
+                              ? "bg-success text-success-foreground"
+                              : badgeText === "Expired"
+                              ? "bg-destructive text-destructive-foreground"
+                              : "bg-muted text-muted-foreground";
+                            return (
+                              <Badge variant={badgeText === "Active" ? "default" : "secondary"} className={badgeClass}>
+                                {badgeText}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                       </div>
                     ))}
@@ -223,14 +260,14 @@ const DoctorDashboard = () => {
                     <FileText className="mr-2 w-4 h-4" /> Create Prescription
                   </Button>
                 </Link>
-                <Link to="/doctor/blockchain-verification">
+                <Link to="/doctor/prescriptions">
                   <Button variant="outline" className="w-full flex items-center">
-                    <Shield className="mr-2 w-4 h-4" /> Verify on Blockchain
+                    <Clock className="mr-2 w-4 h-4" /> View My Prescriptions
                   </Button>
                 </Link>
-                <Link to="/doctor/activity-logs">
+                <Link to="/doctor/analytics">
                   <Button variant="outline" className="w-full flex items-center">
-                    <Activity className="mr-2 w-4 h-4" /> View Activity Logs
+                    <Activity className="mr-2 w-4 h-4" /> View Analytics
                   </Button>
                 </Link>
               </CardContent>

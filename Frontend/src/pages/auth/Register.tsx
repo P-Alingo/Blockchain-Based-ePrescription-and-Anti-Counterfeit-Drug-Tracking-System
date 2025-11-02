@@ -12,6 +12,15 @@ declare global {
 }
 
 const Register = () => {
+  // Dropdown lists for each role
+  type Company = { id: number; name: string; facility_address: string };
+  const [hospitalList, setHospitalList] = useState<Company[]>([]);
+  const [pharmacyCompanyList, setPharmacyCompanyList] = useState<Company[]>([]);
+  const [distributorCompanyList, setDistributorCompanyList] = useState<Company[]>([]);
+  const [manufacturerCompanyList, setManufacturerCompanyList] = useState<Company[]>([]);
+  const [regulatorCompanyList, setRegulatorCompanyList] = useState<Company[]>([]);
+
+  // Move this effect below the 'role' state declaration (after line 67)
   const navigate = useNavigate();
 
   const [walletAddress, setWalletAddress] = useState<string>("");
@@ -36,6 +45,33 @@ const Register = () => {
   const [pharmacy, setPharmacy] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
+
+  // (Removed duplicate and invalid useEffect here)
+
+  // Dropdown fetching effect (must be after role declaration)
+  useEffect(() => {
+    if (role === "doctor") {
+      axios.get<Company[]>("http://localhost:4000/api/auth/dropdown/hospitals")
+        .then(res => setHospitalList(res.data as Company[]))
+        .catch(() => setHospitalList([]));
+    } else if (role === "pharmacist") {
+      axios.get<Company[]>("http://localhost:4000/api/auth/dropdown/pharmacy-companies")
+        .then(res => setPharmacyCompanyList(res.data as Company[]))
+        .catch(() => setPharmacyCompanyList([]));
+    } else if (role === "distributor") {
+      axios.get<Company[]>("http://localhost:4000/api/auth/dropdown/distributor-companies")
+        .then(res => setDistributorCompanyList(res.data as Company[]))
+        .catch(() => setDistributorCompanyList([]));
+    } else if (role === "manufacturer") {
+      axios.get<Company[]>("http://localhost:4000/api/auth/dropdown/manufacturer-companies")
+        .then(res => setManufacturerCompanyList(res.data as Company[]))
+        .catch(() => setManufacturerCompanyList([]));
+    } else if (role === "regulator") {
+      axios.get<Company[]>("http://localhost:4000/api/auth/dropdown/regulator-companies")
+        .then(res => setRegulatorCompanyList(res.data as Company[]))
+        .catch(() => setRegulatorCompanyList([]));
+    }
+  }, [role]);
 
   const [otp, setOtp] = useState("");
 
@@ -165,6 +201,7 @@ const Register = () => {
         payload.licenseno = licenseno;
       } else if (role === "regulator") {
         payload.organizationname = organizationName;
+        payload.licenseno = licenseno;
       } else if (role === "patient") {
         // Patient doesn't require additional fields
       }
@@ -259,7 +296,7 @@ const Register = () => {
         ...(role === "pharmacist" && { licenseno, pharmacy }),
         ...(role === "distributor" && { companyname: companyName, licenseno }),
         ...(role === "manufacturer" && { companyname: companyName, licenseno }),
-        ...(role === "regulator" && { organizationname: organizationName }),
+        ...(role === "regulator" && { organizationname: organizationName, licenseno }),
       });
       setMessage("✅ OTP resent successfully!");
       startTimer();
@@ -506,14 +543,19 @@ const Register = () => {
                       required
                       className="w-full border rounded px-3 py-2"
                     />
-                    <input
-                      type="text"
-                      placeholder="Hospital"
-                      value={hospital}
-                      onChange={(e) => setHospital(e.target.value)}
-                      required
+                    <select
                       className="w-full border rounded px-3 py-2"
-                    />
+                      value={hospital}
+                      onChange={e => setHospital(e.target.value)}
+                      required
+                    >
+                      <option value="">Select hospital</option>
+                      {hospitalList.map(h => (
+                        <option key={h.id} value={h.id}>
+                          {h.name} ({h.facility_address})
+                        </option>
+                      ))}
+                    </select>
                   </>
                 )}
 
@@ -527,27 +569,37 @@ const Register = () => {
                       required
                       className="w-full border rounded px-3 py-2"
                     />
-                    <input
-                      type="text"
-                      placeholder="Pharmacy Name"
-                      value={pharmacy}
-                      onChange={(e) => setPharmacy(e.target.value)}
-                      required
+                    <select
                       className="w-full border rounded px-3 py-2"
-                    />
+                      value={pharmacy}
+                      onChange={e => setPharmacy(e.target.value)}
+                      required
+                    >
+                      <option value="">Select pharmacy company</option>
+                      {pharmacyCompanyList.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.facility_address})
+                        </option>
+                      ))}
+                    </select>
                   </>
                 )}
 
                 {role === "distributor" && (
                   <>
-                    <input
-                      type="text"
-                      placeholder="Company Name"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      required
+                    <select
                       className="w-full border rounded px-3 py-2"
-                    />
+                      value={companyName}
+                      onChange={e => setCompanyName(e.target.value)}
+                      required
+                    >
+                      <option value="">Select distributor company</option>
+                      {distributorCompanyList.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} ({d.facility_address})
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       placeholder="License Number"
@@ -561,14 +613,19 @@ const Register = () => {
 
                 {role === "manufacturer" && (
                   <>
-                    <input
-                      type="text"
-                      placeholder="Company Name"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      required
+                    <select
                       className="w-full border rounded px-3 py-2"
-                    />
+                      value={companyName}
+                      onChange={e => setCompanyName(e.target.value)}
+                      required
+                    >
+                      <option value="">Select manufacturer company</option>
+                      {manufacturerCompanyList.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.facility_address})
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       placeholder="License Number"
@@ -581,14 +638,29 @@ const Register = () => {
                 )}
 
                 {role === "regulator" && (
-                  <input
-                    type="text"
-                    placeholder="Organization Name"
-                    value={organizationName}
-                    onChange={(e) => setOrganizationName(e.target.value)}
-                    required
-                    className="w-full border rounded px-3 py-2"
-                  />
+                  <>
+                    <select
+                      className="w-full border rounded px-3 py-2"
+                      value={organizationName}
+                      onChange={e => setOrganizationName(e.target.value)}
+                      required
+                    >
+                      <option value="">Select regulator company</option>
+                      {regulatorCompanyList.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.facility_address})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Licence Number"
+                      value={licenseno}
+                      onChange={e => setLicenseno(e.target.value)}
+                      required
+                      className="w-full border rounded px-3 py-2"
+                    />
+                  </>
                 )}
 
                 <Button

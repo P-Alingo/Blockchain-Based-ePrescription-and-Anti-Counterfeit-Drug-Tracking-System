@@ -42,8 +42,8 @@ const QRCodeViewer = () => {
     { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
     { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: false },
     { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: true },
-    { icon: Bell, label: "My Alerts", path: "/patient/alerts", active: false },
-    { icon: Activity, label: "Activity Logs", path: "/patient/activity-logs", active: false },
+    { icon: Activity, label: "Analytics", path: "/patient/analytics", active: false },
+    // Removed My Alerts and Activity Logs, added Analytics
   ];
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
