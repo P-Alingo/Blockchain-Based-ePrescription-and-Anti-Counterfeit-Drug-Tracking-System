@@ -1,12 +1,45 @@
 import express from "express";
-import { getPharmacistProfile, updatePharmacistProfile } from "../controllers/pharmacistController.js";
+import {
+	getPharmacistProfile,
+	updatePharmacistProfile,
+	getPharmacistDashboard,
+	verifyPrescription,
+	dispenseDrug,
+	getPharmacistInventory,
+	addPharmacistInventory,
+	updatePharmacistInventory,
+	deletePharmacistInventory,
+	getPharmacistRequests,
+	createPharmacistRequest,
+	getPharmacistDistributors,
+	getPharmacistShipments,
+	getPharmacistBlockchain,
+	getPharmacistAnalytics
+} from "../controllers/pharmacistController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
 router.use(authMiddleware);
 
 router.get("/profile", getPharmacistProfile);
 router.put("/profile", updatePharmacistProfile);
+
+router.get("/dashboard", getPharmacistDashboard);
+router.post("/verify", verifyPrescription);
+router.post("/dispense", dispenseDrug);
+
+router.get("/inventory", getPharmacistInventory);
+router.post("/inventory", addPharmacistInventory);
+router.put("/inventory/:id", updatePharmacistInventory);
+router.delete("/inventory/:id", deletePharmacistInventory);
+
+router.get("/requests", getPharmacistRequests);
+router.post("/requests", createPharmacistRequest);
+
+router.get("/distributors", getPharmacistDistributors);
+router.get("/shipments", getPharmacistShipments);
+
+router.get("/blockchain", getPharmacistBlockchain);
+router.get("/analytics", getPharmacistAnalytics);
 
 export default router;

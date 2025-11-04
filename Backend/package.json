@@ -13,7 +13,7 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "@prisma/client": "^4.16.2",
+    
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "chart.js": "^4.5.1",
@@ -37,7 +37,7 @@
   "devDependencies": {
     "jest": "^29.5.0",
     "nodemon": "^2.0.22",
-    "prisma": "^4.16.2",
+    
     "supertest": "^6.3.3"
   }
 }

@@ -259,8 +259,8 @@ export async function getDoctorDashboard(req, res) {
     const statsQuery = `
       SELECT
         COUNT(*) AS total_prescriptions,
-        COUNT(*) FILTER (WHERE status IN ('Active', 'Pending')) AS active_prescriptions,
-        COUNT(*) FILTER (WHERE status = 'Dispensed' AND DATE(issue_date) = CURRENT_DATE) AS dispensed_today,
+        COUNT(*) FILTER (WHERE status IN ('issued', 'pending')) AS active_prescriptions,
+        COUNT(*) FILTER (WHERE status = 'dispensed' AND DATE(issue_date) = CURRENT_DATE) AS dispensed_today,
         COUNT(DISTINCT patient_id) AS patients_served
       FROM prescription 
       WHERE doctor_id = $1

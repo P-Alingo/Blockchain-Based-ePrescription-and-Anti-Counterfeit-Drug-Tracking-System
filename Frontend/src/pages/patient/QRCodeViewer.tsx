@@ -134,6 +134,9 @@ const QRCodeViewer = () => {
     }
   };
 
+  // Helper to display status
+  const displayStatus = (status: string) => status.toLowerCase() === "issued" ? "Active" : status.charAt(0).toUpperCase() + status.slice(1);
+
   const exportCSV = () => {
     if (prescriptions.length === 0) {
       toast({
@@ -300,7 +303,7 @@ const QRCodeViewer = () => {
                             drug: selectedPrescription.drug,
                             doctor: selectedPrescription.doctorName,
                             date: formatDate(selectedPrescription.date),
-                            status: selectedPrescription.status,
+                            status: displayStatus(selectedPrescription.status),
                             dosage: selectedPrescription.dosage,
                             duration: selectedPrescription.duration,
                             instructions: selectedPrescription.instructions,

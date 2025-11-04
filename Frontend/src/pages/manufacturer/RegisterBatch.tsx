@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import axios from "axios";
 import { toast } from "sonner";
 
-const API_BASE = "http://localhost:4000/api/drugbatch";
+const API_BASE = "/api/manufacturer/drugbatch";
 
 interface User {
   userId: number;
@@ -44,28 +45,29 @@ const RegisterBatch = () => {
   const [drugs, setDrugs] = useState<{ id: number; name: string }[]>([]);
   const [officers, setOfficers] = useState<{ id: number; fullname: string; organization?: string }[]>([]);
   const [distributors, setDistributors] = useState<Distributor[]>([]);
+  const [selectedDistributorCompanyId, setSelectedDistributorCompanyId] = useState<string>("");
+  const [selectedDistributorFacilityId, setSelectedDistributorFacilityId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
-    manufacturerid: "",
     drugid: "",
-    batchnumber: "",
     manufacturedate: "",
     expirydate: "",
     quantity: "",
     storagetemperature: "",
     manufacturingfacility: "",
-    qualitycontrolofficerid: "",
     distributorcompanyid: "",
-    datechecked: "",
+    distributor_facility_id: "",
   });
+  const [confirmation, setConfirmation] = useState<{ batchnumber: string; qrcode: string; blockchaintx: string } | null>(null);
 
   const sidebarItems = [
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
-    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: true },
-    { icon: List, label: "Batch List", path: "/manufacturer/batch-list", active: false },
-    { icon: Shield, label: "Blockchain Verification", path: "/manufacturer/blockchain-verification", active: false },
-    { icon: Activity, label: "Activity Logs", path: "/manufacturer/activity-logs", active: false },
+    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: true},
+    { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
+    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
+    { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
+    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
   ];
 
   const fetchDropdowns = async (token: string) => {
@@ -120,15 +122,25 @@ const RegisterBatch = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
+  setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleSelectChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    // If distributor selected, automatically set manufacturingfacility to its display_name
     if (field === "distributorcompanyid") {
-      const selectedDist = distributors.find(d => d.id === Number(value));
+      setSelectedDistributorCompanyId(value);
+      // Reset facility selection when company changes
+      setSelectedDistributorFacilityId("");
+      setFormData(prev => ({
+        ...prev,
+        distributor_facility_id: "",
+        manufacturingfacility: ""
+      }));
+    }
+    if (field === "distributor_facility_id") {
+      setSelectedDistributorFacilityId(value);
+      // Autofill manufacturingfacility with selected distributor's display_name
+      const selectedDist = distributors.find(d => d.id === Number(formData.distributorcompanyid));
       setFormData(prev => ({
         ...prev,
         manufacturingfacility: selectedDist ? selectedDist.display_name : ""
@@ -141,61 +153,40 @@ const RegisterBatch = () => {
       toast.error("Unauthorized. Please log in.");
       return;
     }
-    
-    // FIXED: Check if currentUser.userId exists
-    if (!currentUser.userId) {
-      toast.error("User ID not found. Please log in again.");
-      return;
-    }
-
     if (!formData.drugid) {
       toast.error("Please select a drug.");
-      return;
-    }
-    if (!formData.qualitycontrolofficerid) {
-      toast.error("Please select a quality officer.");
       return;
     }
     if (!formData.manufacturedate || !formData.expirydate) {
       toast.error("Enter valid manufacture and expiry dates.");
       return;
     }
-
     try {
       const payload = {
-        ...formData,
-        // FIXED: Remove manufacturerid from payload since backend gets it from token
-        manufacturerid: null, // Backend gets this from the user token
         drugid: formData.drugid,
         quantity: formData.quantity ? Number(formData.quantity) : null,
+        manufacturedate: formData.manufacturedate,
+        expirydate: formData.expirydate,
         storagetemperature: formData.storagetemperature || null,
         manufacturingfacility: formData.manufacturingfacility || null,
         distributorcompanyid: formData.distributorcompanyid ? Number(formData.distributorcompanyid) : null,
-        qualitycontrolofficerid: formData.qualitycontrolofficerid ? Number(formData.qualitycontrolofficerid) : null,
-        datechecked: formData.datechecked || null,
+        distributor_facility_id: formData.distributor_facility_id ? Number(formData.distributor_facility_id) : null,
       };
-
-      console.log("Submitting payload:", payload); // Debug log
-
-      const res = await axios.post<{ data: { batchnumber: string } }>(API_BASE, payload, {
+      const res = await axios.post(API_BASE + "/create", payload, {
         headers: { Authorization: `Bearer ${currentUser.token}` },
       });
-
-      toast.success(`Batch registered successfully! Batch Number: ${res.data.data.batchnumber}`);
-
-      // Reset form but keep user ID
+  const { batchnumber, qrcode, blockchaintx } = res.data as { batchnumber: string; qrcode: string; blockchaintx: string };
+  setConfirmation({ batchnumber, qrcode, blockchaintx });
+  toast.success(`Batch registered successfully! Batch Number: ${batchnumber}`);
       setFormData({
-        manufacturerid: currentUser.userId.toString(),
         drugid: "",
-        batchnumber: "",
         manufacturedate: "",
         expirydate: "",
         quantity: "",
         storagetemperature: "",
         manufacturingfacility: "",
-        qualitycontrolofficerid: "",
         distributorcompanyid: "",
-        datechecked: "",
+        distributor_facility_id: "",
       });
     } catch (err: any) {
       console.error("Error registering batch:", err.response?.data || err);
@@ -203,10 +194,7 @@ const RegisterBatch = () => {
     }
   };
 
-  const recentBatches = [
-    { id: "BN001", product: "Paracetamol 500mg", quantity: 12000, date: "2025-10-15", status: "verified" },
-    { id: "BN002", product: "Ceftriaxone 1g", quantity: 8000, date: "2025-10-10", status: "pending" },
-  ];
+  // Removed static recentBatches
 
   if (loading) {
     return (
@@ -246,15 +234,7 @@ const RegisterBatch = () => {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Basic Information</h3>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="batchnumber">Batch Number</Label>
-                      <Input
-                        id="batchnumber"
-                        value={formData.batchnumber || "Will be auto-generated"}
-                        readOnly
-                        className="bg-gray-100"
-                      />
-                    </div>
+                    {/* Batch number is auto-generated and shown in confirmation modal */}
                     <div>
                       <Label htmlFor="drugid">Product Name</Label>
                       <Select onValueChange={(value) => handleSelectChange("drugid", value)} value={formData.drugid || ""}>
@@ -299,33 +279,30 @@ const RegisterBatch = () => {
                     <div>
                       <Label htmlFor="distributorcompanyid">Distributor Company</Label>
                       <Select onValueChange={(value) => handleSelectChange("distributorcompanyid", value)} value={formData.distributorcompanyid || ""}>
-                        <SelectTrigger><SelectValue placeholder="Select distributor" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Select distributor company" /></SelectTrigger>
                         <SelectContent>
-                          {distributors.length > 0 ? distributors.map(dist => (
-                            <SelectItem key={dist.id} value={dist.id.toString()}>{dist.display_name}</SelectItem>
-                          )) : <SelectItem value="none" disabled>No distributors available</SelectItem>}
+                          {distributors.length > 0 ? Array.from(new Set(distributors.map(dist => dist.display_name))).map((name, idx) => {
+                            const dist = distributors.find(d => d.display_name === name);
+                            return dist ? <SelectItem key={dist.id} value={dist.id.toString()}>{dist.display_name}</SelectItem> : null;
+                          }) : <SelectItem value="none" disabled>No distributors available</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="distributor_facility_id">Distributor Facility</Label>
+                      <Select onValueChange={(value) => handleSelectChange("distributor_facility_id", value)} value={formData.distributor_facility_id || ""} disabled={!formData.distributorcompanyid}>
+                        <SelectTrigger><SelectValue placeholder="Select facility" /></SelectTrigger>
+                        <SelectContent>
+                          {distributors.length > 0 && formData.distributorcompanyid ?
+                            distributors.filter(dist => dist.id === Number(formData.distributorcompanyid)).map(dist => (
+                              <SelectItem key={dist.id} value={dist.id.toString()}>{dist.display_name} ({dist.facility_location})</SelectItem>
+                            )) : <SelectItem value="none" disabled>No facilities available</SelectItem>}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="qualitycontrolofficerid">Quality Officer</Label>
-                      <Select onValueChange={(value) => handleSelectChange("qualitycontrolofficerid", value)} value={formData.qualitycontrolofficerid || ""}>
-                        <SelectTrigger><SelectValue placeholder="Select officer" /></SelectTrigger>
-                        <SelectContent>
-                          {officers.length > 0 ? officers.map(officer => (
-                            <SelectItem key={officer.id} value={officer.id.toString()}>{officer.fullname}{officer.organization ? ` (${officer.organization})` : ""}</SelectItem>
-                          )) : <SelectItem value="none" disabled>No officers available</SelectItem>}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="datechecked">Date Checked</Label>
-                      <Input id="datechecked" type="date" value={formData.datechecked} onChange={handleChange} />
-                    </div>
-                  </div>
+                  {/* Quality officer and date checked removed for initial batch creation */}
                 </div>
 
                 <Separator />
@@ -339,27 +316,22 @@ const RegisterBatch = () => {
             </Card>
           </div>
 
-          <div className="space-y-6">
-            <Card>
+          {/* Confirmation Modal */}
+          {confirmation && (
+            <Card className="border-2 border-green-500">
               <CardHeader>
-                <CardTitle>Recent Batches</CardTitle>
-                <CardDescription>Recently registered batches</CardDescription>
+                <CardTitle>Batch Registered!</CardTitle>
+                <CardDescription>Blockchain and QR code generated.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {recentBatches.map(batch => (
-                  <div key={batch.id} className="p-3 rounded-lg bg-muted/30 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{batch.id}</p>
-                      <Badge variant={batch.status === "verified" ? "default" : "secondary"}>{batch.status}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{batch.product}</p>
-                    <p className="text-xs text-muted-foreground">{batch.quantity.toLocaleString()} units</p>
-                    <p className="text-xs text-muted-foreground">{batch.date}</p>
-                  </div>
-                ))}
+                <div className="font-semibold">Batch Number: <span className="text-green-700">{confirmation.batchnumber}</span></div>
+                <div className="font-semibold">Blockchain Tx: <span className="text-green-700">{confirmation.blockchaintx}</span></div>
+                <div className="font-semibold">QR Code:</div>
+                <img src={confirmation.qrcode} alt="Batch QR Code" className="w-32 h-32 border" />
+                <Button variant="outline" onClick={() => setConfirmation(null)}>Close</Button>
               </CardContent>
             </Card>
-          </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

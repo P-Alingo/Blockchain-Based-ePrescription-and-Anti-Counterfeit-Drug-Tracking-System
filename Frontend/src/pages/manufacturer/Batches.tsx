@@ -64,6 +64,7 @@ import {
   RefreshCw,
   Edit,
   Trash2,
+  Truck,
 } from "lucide-react";
 
 // TypeScript interfaces for better type safety
@@ -120,14 +121,16 @@ interface Distributor {
   facility: string;
 }
 
-const BatchList = () => {
-  const sidebarItems = [
+const Batches = () => {
+    const sidebarItems = [
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
-    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false },
-    { icon: List, label: "Batch List", path: "/manufacturer/batch-list", active: true },
-    { icon: Shield, label: "Blockchain Verification", path: "/manufacturer/blockchain-verification", active: false },
-    { icon: Activity, label: "Activity Logs", path: "/manufacturer/activity-logs", active: false },
+    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
+    { icon: List, label: "Batches", path: "/manufacturer/batches", active: true },
+    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
+    { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
+    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
   ];
+   
 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,41 +170,35 @@ const BatchList = () => {
     return new Date(dateString).toISOString().split('T')[0];
   };
 
-  // Fetch batches from backend with authentication
+  // Fetch batches from backend with authentication and filters
   const fetchBatches = async () => {
     try {
-      console.log("🔄 Starting batch refresh...");
       setLoading(true);
       setError(null);
       const token = localStorage.getItem("token");
-      
       if (!token) {
-        console.error("❌ No token found");
         toast.error("No authentication token found. Please log in again.");
         setError("Authentication required");
         return;
       }
-
-      const res = await axios.get<Batch[]>("http://localhost:4000/api/drugbatch", {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-        },
+      // Build query params for filters
+      const params: any = {};
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (searchTerm) params.drugid = drugs.find(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))?.id;
+      // Manufacture/expiry date filters can be added here if UI supports
+      const res = await axios.get<Batch[]>("/api/manufacturer/batches", {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
       });
-
-      console.log(`✅ Received ${res.data.length} batches`);
-      
-      setBatches([...res.data]);
+  setBatches(Array.isArray(res.data) ? res.data : []);
       setRefreshCount(prev => prev + 1);
-      
       toast.success(`Refreshed ${res.data.length} batches`);
     } catch (error: any) {
-      console.error("❌ Error fetching batches:", error);
       const errorMessage = error.response?.data?.message || "Failed to fetch batches";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
-      console.log("🔄 Batch refresh completed");
     }
   };
 
@@ -453,6 +450,20 @@ const BatchList = () => {
   const userName = userData.fullName || "Manufacturer";
   const userEmail = userData.email || "manufacturer@pharma.co.ke";
 
+  // Details modal logic (move outside JSX)
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [batchDetails, setBatchDetails] = useState<any>(null);
+  const fetchBatchDetails = async (id: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`/api/manufacturer/batch/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      setBatchDetails(res.data);
+      setDetailsModalOpen(true);
+    } catch (err) {
+      toast.error("Failed to fetch batch details");
+    }
+  };
+
   return (
     <DashboardLayout
       sidebarItems={sidebarItems}
@@ -624,91 +635,56 @@ const BatchList = () => {
             ) : (
               <div className="rounded-md border">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Batch Number</TableHead>
-                      <TableHead>Shipment Number</TableHead>
-                      <TableHead>Drug Name</TableHead>
-                      <TableHead>Manufacturer</TableHead>
-                      <TableHead>Manufacture Date</TableHead>
-                      <TableHead>Expiry Date</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Quality Officer</TableHead>
-                      <TableHead>Distributor</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {filteredBatches.map((batch) => (
-                      <TableRow key={batch.id} className="hover:bg-muted/50">
-                        <TableCell className="font-mono font-medium">
-                          {batch.batchnumber || "N/A"}
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {batch.shipment_number || "N/A"}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {batch.drugname || "Unknown"}
-                        </TableCell>
-                        <TableCell>
-                          {batch.manufacturername || "N/A"}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(batch.manufacturedate)}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(batch.expirydate)}
-                        </TableCell>
-                        <TableCell>
-                          {batch.quantity ? `${batch.quantity.toLocaleString()} units` : "N/A"}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(batch.status)}
-                        </TableCell>
-                        <TableCell>
-                          {batch.qualityofficer || "Not Assigned"}
-                        </TableCell>
-                        <TableCell>
-                          {batch.distributorcompany || "Not Assigned"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewQRCode(batch)}
-                              disabled={!batch.qrcode}
-                              title="View QR Code"
-                            >
-                              <QrCode className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditClick(batch)}
-                              title="Edit Batch"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteClick(batch)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete Batch"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+        <TableHeader>
+          <TableRow>
+            <TableHead>Batch Number</TableHead>
+            <TableHead>Drug Name</TableHead>
+            <TableHead>Quantity</TableHead>
+            <TableHead>Manufacture Date</TableHead>
+            <TableHead>Expiry Date</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Shipment No.</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredBatches.map((batch) => (
+            <TableRow key={batch.id}>
+              <TableCell>{batch.batchnumber}</TableCell>
+              <TableCell>{batch.drugname}</TableCell>
+              <TableCell>{batch.quantity}</TableCell>
+              <TableCell>{formatDate(batch.manufacturedate)}</TableCell>
+              <TableCell>{formatDate(batch.expirydate)}</TableCell>
+              <TableCell>{getStatusBadge(batch.status)}</TableCell>
+              <TableCell>{batch.shipment_number || "N/A"}</TableCell>
+              <TableCell>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleViewQRCode(batch)} disabled={!batch.qrcode} title="View QR Code">
+                    <QrCode className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => window.open(`https://blockchain-explorer.com/tx/${batch.blockchaintx}`, "_blank")} disabled={!batch.blockchaintx} title="View on Blockchain">
+                    <Shield className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => window.location.href = `/manufacturer/shipments?batch=${batch.batchnumber}`} title="Initiate Shipment">
+                    <Truck className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => fetchBatchDetails(batch.id)} title="Details">
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleEditClick(batch)} title="Edit">
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDeleteClick(batch)} title="Delete">
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )}
           </CardContent>
         </Card>
 
@@ -721,7 +697,6 @@ const BatchList = () => {
                 Scan or save this QR code for tracking and verification purposes.
               </DialogDescription>
             </DialogHeader>
-
             {selectedBatch && selectedBatch.qrcode ? (
               <div className="flex flex-col items-center gap-4 py-4">
                 <img
@@ -739,12 +714,12 @@ const BatchList = () => {
                     <p><strong>Quality Officer:</strong> {selectedBatch.qualityofficer}</p>
                   )}
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => {
-                    const link = document.createElement('a');
+                    const link = document.createElement("a");
                     link.href = selectedBatch.qrcode;
-                    link.download = `qr_code_${selectedBatch.batchnumber}.png`;
+                    link.download = `batch_${selectedBatch.batchnumber}_qrcode.png`;
                     link.click();
                   }}
                 >
@@ -757,6 +732,35 @@ const BatchList = () => {
                 <p className="text-muted-foreground">No QR code available for this batch.</p>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Details Modal */}
+        <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Batch Details</DialogTitle>
+            </DialogHeader>
+            {batchDetails ? (
+              <div className="space-y-2">
+                <div><strong>Batch Number:</strong> {batchDetails.batchnumber}</div>
+                <div><strong>Drug Name:</strong> {batchDetails.drugname}</div>
+                <div><strong>Quantity:</strong> {batchDetails.quantity}</div>
+                <div><strong>Manufacture Date:</strong> {formatDate(batchDetails.manufacturedate)}</div>
+                <div><strong>Expiry Date:</strong> {formatDate(batchDetails.expirydate)}</div>
+                <div><strong>Status:</strong> {batchDetails.status}</div>
+                <div><strong>Shipment No:</strong> {batchDetails.shipment_number || "N/A"}</div>
+                <div><strong>Facility:</strong> {batchDetails.facility_name || batchDetails.manufacturingfacility}</div>
+                <div><strong>Facility Address:</strong> {batchDetails.facility_address}</div>
+                <div><strong>Facility Phone:</strong> {batchDetails.facility_phone}</div>
+                <div><strong>Facility Location:</strong> {batchDetails.facility_location}</div>
+                <div><strong>Quality Officer:</strong> {batchDetails.quality_officer || "Not Assigned"}</div>
+                <div><strong>Blockchain Tx:</strong> {batchDetails.blockchaintx}</div>
+                <div><strong>QR Code:</strong><br />
+                  {batchDetails.qrcode && <img src={batchDetails.qrcode} alt="Batch QR" className="w-32 h-32 border" />}
+                </div>
+              </div>
+            ) : <div>Loading...</div>}
           </DialogContent>
         </Dialog>
 
@@ -989,4 +993,4 @@ const BatchList = () => {
   );
 };
 
-export default BatchList;
+export default Batches;

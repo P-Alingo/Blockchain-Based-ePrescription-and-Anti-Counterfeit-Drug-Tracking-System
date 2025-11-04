@@ -15,44 +15,35 @@ import NotFound from "./pages/NotFound";
 import DoctorDashboard from "./pages/doctor/Dashboard";
 import CreatePrescription from "./pages/doctor/CreatePrescription";
 import MyPrescriptions from "./pages/doctor/MyPrescriptions";
-import DoctorActivityLogs from "./pages/doctor/Analytics";
 import DoctorAnalytics from "./pages/doctor/Analytics";
 
 // Patient Dashboard Pages
 import PatientDashboard from "./pages/patient/Dashboard";
 import PatientPrescriptions from "./pages/patient/MyPrescriptions";
 import QRCodeViewer from "./pages/patient/QRCodeViewer";
-import PatientActivityLogs from "./pages/patient/Analytics";
 import PatientAnalytics from "./pages/patient/Analytics";
 
 // Pharmacist Dashboard Pages
 import PharmacistDashboard from "./pages/pharmacist/Dashboard";
-import ScanPrescription from "./pages/pharmacist/ScanPrescription";
-import VerifyPrescription from "./pages/pharmacist/VerifyPrescription";
 import DispenseDrug from "./pages/pharmacist/DispenseDrug";
 import Inventory from "./pages/pharmacist/Inventory";
-import PharmacistActivityLogs from "./pages/pharmacist/Analytics";
 import PharmacistAnalytics from "./pages/pharmacist/Analytics";
 import PharmacistBlockchain from "./pages/pharmacist/Blockchain";
 import PharmacistDistributors from "./pages/pharmacist/Distributors";
 import PharmacistRequests from "./pages/pharmacist/Requests";
 import PharmacistShipments from "./pages/pharmacist/Shipments";
+import PharmacistPrescriptions from "./pages/pharmacist/MyPrescriptions";
 
 // Manufacturer Dashboard Pages
 import ManufacturerDashboard from "./pages/manufacturer/Dashboard";
 import RegisterBatch from "./pages/manufacturer/RegisterBatch";
-import BatchList from "./pages/manufacturer/Batches";
-import ManufacturerBlockchainVerification from "./pages/manufacturer/Blockchain";
-import ManufacturerActivityLogs from "./pages/manufacturer/Analytics";
+import Batches from "./pages/manufacturer/Batches";
+import ManufacturerBlockchain from "./pages/manufacturer/Blockchain";
 import ManufacturerAnalytics from "./pages/manufacturer/Analytics";
 import ManufacturerShipments from "./pages/manufacturer/Shipments";
 
 // Distributor Dashboard Pages
 import DistributorDashboard from "./pages/distributor/Dashboard";
-import ActiveShipments from "./pages/distributor/Shipments";
-import UpdateShipment from "./pages/distributor/UpdateShipment";
-import ShipmentLogs from "./pages/distributor/IncomingShipments";
-import DistributorActivityLogs from "./pages/distributor/Analytics";
 import DistributorAnalytics from "./pages/distributor/Analytics";
 import DistributorBlockchain from "./pages/distributor/Blockchain";
 import DistributorInventory from "./pages/distributor/Inventory";
@@ -64,16 +55,15 @@ import RegulatorDashboard from "./pages/regulator/Dashboard";
 import Audits from "./pages/regulator/Audits";
 import Reports from "./pages/regulator/Reports";
 import ComplianceActions from "./pages/regulator/ComplianceActions";
-import RegulatorActivityLogs from "./pages/regulator/Analytics";
 import RegulatorAnalytics from "./pages/regulator/Analytics";
 import RegulatorBlockchain from "./pages/regulator/Blockchain";
 
 // Admin Dashboard Pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
-import SystemSettings from "./pages/admin/Blockchain";
+import AdminDatabase from "./pages/admin/Database"
+import AdminBlockchain from "./pages/admin/Blockchain";
 import AdminReports from "./pages/admin/Reports";
-import AdminActivityLogs from "./pages/admin/Analytics";
 import AdminAnalytics from "./pages/admin/Analytics";
 
 const queryClient = new QueryClient();
@@ -208,8 +198,7 @@ const App = () => {
 
             {/* Pharmacist Routes */}
             <Route path="/pharmacist/dashboard" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistDashboard /></ProtectedRoute>} />
-            <Route path="/pharmacist/scan" element={<ProtectedRoute allowedRoles={["pharmacist"]}><ScanPrescription /></ProtectedRoute>} />
-            <Route path="/pharmacist/verify" element={<ProtectedRoute allowedRoles={["pharmacist"]}><VerifyPrescription /></ProtectedRoute>} />
+            <Route path="/pharmacist/myprescriptions" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistPrescriptions /></ProtectedRoute>} />
             <Route path="/pharmacist/dispense" element={<ProtectedRoute allowedRoles={["pharmacist"]}><DispenseDrug /></ProtectedRoute>} />
             <Route path="/pharmacist/inventory" element={<ProtectedRoute allowedRoles={["pharmacist"]}><Inventory /></ProtectedRoute>} />
             <Route path="/pharmacist/analytics" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistAnalytics /></ProtectedRoute>} />
@@ -221,15 +210,13 @@ const App = () => {
             {/* Manufacturer Routes */}
             <Route path="/manufacturer/dashboard" element={<ProtectedRoute allowedRoles={["manufacturer"]}><ManufacturerDashboard /></ProtectedRoute>} />
             <Route path="/manufacturer/register-batch" element={<ProtectedRoute allowedRoles={["manufacturer"]}><RegisterBatch /></ProtectedRoute>} />
-            <Route path="/manufacturer/batches" element={<ProtectedRoute allowedRoles={["manufacturer"]}><BatchList /></ProtectedRoute>} />
-            <Route path="/manufacturer/blockchain-verification" element={<ProtectedRoute allowedRoles={["manufacturer"]}><ManufacturerBlockchainVerification /></ProtectedRoute>} />
+            <Route path="/manufacturer/batches" element={<ProtectedRoute allowedRoles={["manufacturer"]}><Batches /></ProtectedRoute>} />
+            <Route path="/manufacturer/blockchain" element={<ProtectedRoute allowedRoles={["manufacturer"]}><ManufacturerBlockchain /></ProtectedRoute>} />
             <Route path="/manufacturer/analytics" element={<ProtectedRoute allowedRoles={["manufacturer"]}><ManufacturerAnalytics /></ProtectedRoute>} />
             <Route path="/manufacturer/shipments" element={<ProtectedRoute allowedRoles={["manufacturer"]}><ManufacturerShipments /></ProtectedRoute>} />
 
             {/* Distributor Routes */}
             <Route path="/distributor/dashboard" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorDashboard /></ProtectedRoute>} />
-            <Route path="/distributor/update-shipment" element={<ProtectedRoute allowedRoles={["distributor"]}><UpdateShipment /></ProtectedRoute>} />
-            <Route path="/distributor/incoming-shipments" element={<ProtectedRoute allowedRoles={["distributor"]}><ShipmentLogs /></ProtectedRoute>} />
             <Route path="/distributor/analytics" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorAnalytics /></ProtectedRoute>} />
             <Route path="/distributor/blockchain" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorBlockchain /></ProtectedRoute>} />
             <Route path="/distributor/inventory" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorInventory /></ProtectedRoute>} />
@@ -247,7 +234,8 @@ const App = () => {
             {/* Admin Routes */}
             <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={["admin"]}><UserManagement /></ProtectedRoute>} />
-            <Route path="/admin/blockchain" element={<ProtectedRoute allowedRoles={["admin"]}><SystemSettings /></ProtectedRoute>} />
+            <Route path="/admin/database" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDatabase /></ProtectedRoute>} />
+            <Route path="/admin/blockchain" element={<ProtectedRoute allowedRoles={["admin"]}><AdminBlockchain /></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={["admin"]}><AdminReports /></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={["admin"]}><AdminAnalytics /></ProtectedRoute>} />
 

@@ -1,9 +1,9 @@
 import { query } from "../config/database.js";
-import { generateQrCodeDataUrl } from "../utils/qrCodeGenerator.js";
+import { generateQrCode } from "../utils/qrCodeGenerator.js";
 
 
 async function generateAndStoreQrCode(userId, data) {
-  const imageUrl = await generateQrCodeDataUrl(data);
+  const imageUrl = await generateQrCode(data);
   const { rows } = await query(
     "INSERT INTO qrcode (userid, data, imageurl, createdat) VALUES ($1, $2, $3, NOW()) RETURNING *",
     [userId, data, imageUrl]

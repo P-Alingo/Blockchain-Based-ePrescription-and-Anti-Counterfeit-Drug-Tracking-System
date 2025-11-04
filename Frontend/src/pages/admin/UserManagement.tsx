@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
-  Settings, Users, Cog, FileText, Activity,
+  Settings, Users, Cog, Database, FileText, Activity,
   Search, Plus, Edit, Trash2, Eye, Filter, X, Save, RotateCcw, Archive
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,9 +44,10 @@ const UserManagement = () => {
   const sidebarItems = [
     { icon: Settings, label: "Dashboard", path: "/admin/dashboard", active: false },
     { icon: Users, label: "User Management", path: "/admin/users", active: true },
-    { icon: Cog, label: "System Settings", path: "/admin/settings", active: false },
-    { icon: FileText, label: "Reports", path: "/admin/reports", active: false },
-    { icon: Activity, label: "Activity Logs", path: "/admin/activity-logs", active: false },
+    { icon: Cog, label: "Reports", path: "/admin/reports", active: false },
+    { icon: Database, label: "Database", path: "/admin/database", active: false },
+    { icon: FileText, label: "Blockchain", path: "/admin/blockchain", active: false },
+    { icon: Activity, label: "Analytics", path: "/admin/analytics", active: false },
   ];
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";

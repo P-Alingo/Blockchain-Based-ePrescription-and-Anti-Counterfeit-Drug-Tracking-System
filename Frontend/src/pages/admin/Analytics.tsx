@@ -1,156 +1,81 @@
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import {
-  Activity,
-  Users,
-  Settings,
-  FileText,
-  Shield,
-  Database,
-  AlertTriangle,
-  CheckCircle,
-  Cog,
-  Clock,
-  Download,
-  Filter,
-  Eye,
-} from 'lucide-react';
-import { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Settings, Users, Cog, Database, FileText, Activity, AlertTriangle, CheckCircle, Shield, Filter, Download, Clock, Eye } from 'lucide-react';
 
-const AdminActivityLogs = () => {
+const Analytics = () => {
   const sidebarItems = [
     { icon: Settings, label: 'Dashboard', path: '/admin/dashboard', active: false },
     { icon: Users, label: 'User Management', path: '/admin/users', active: false },
-    { icon: Cog, label: 'System Settings', path: '/admin/settings', active: false },
-    { icon: FileText, label: 'Reports', path: '/admin/reports', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/admin/activity-logs', active: true },
+    { icon: Cog, label: 'Reports', path: '/admin/reports', active: false },
+    { icon: Database, label: 'Database', path: '/admin/database', active: false },
+    { icon: FileText, label: 'Blockchain', path: '/admin/blockchain', active: false },
+    { icon: Activity, label: 'Analytics', path: '/admin/analytics', active: true },
   ];
 
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
-  const [severityFilter, setSeverityFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('today');
+  const [analyticsLogs, setAnalyticsLogs] = useState([]);
+  const [analyticsStats, setAnalyticsStats] = useState({
+    totalUsers: 0,
+    totalReports: 0,
+    systemChanges: 0,
+    securityEvents: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const activityLogs = [
-    {
-      id: 'LOG-ADM-001',
-      timestamp: '2024-02-20 15:45:32',
-      user: 'Admin User',
-      role: 'System Administrator',
-      action: 'system_setting_changed',
-      description: 'Updated system backup schedule from daily to hourly',
-      module: 'System Settings',
-      severity: 'info',
-      ipAddress: '192.168.1.10',
-      userAgent: 'Chrome 121.0.0.0',
-      success: true,
-      details: {
-        field: 'backup_schedule',
-        oldValue: 'daily',
-        newValue: 'hourly',
-      },
-    },
-    {
-      id: 'LOG-ADM-002',
-      timestamp: '2024-02-20 15:30:18',
-      user: 'John Doe',
-      role: 'Admin',
-      action: 'user_account_created',
-      description: 'Created new user account for Dr. Mary Smith',
-      module: 'User Management',
-      severity: 'info',
-      ipAddress: '192.168.1.15',
-      userAgent: 'Firefox 122.0.0.0',
-      success: true,
-      details: {
-        targetUser: 'Dr. Mary Smith',
-        role: 'Doctor',
-        permissions: 'Standard Doctor Access',
-      },
-    },
-    {
-      id: 'LOG-ADM-003',
-      timestamp: '2024-02-20 15:15:45',
-      user: 'Security System',
-      role: 'System',
-      action: 'security_breach_attempt',
-      description: 'Multiple failed login attempts detected from suspicious IP',
-      module: 'Security',
-      severity: 'critical',
-      ipAddress: '197.156.89.45',
-      userAgent: 'Unknown Client',
-      success: false,
-      details: {
-        attempts: 15,
-        targetAccount: 'admin@bluerxflow.ke',
-        blocked: true,
-      },
-    },
-    // Add more logs as needed...
-  ];
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/admin/analytics")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch analytics data");
+        return res.json();
+      })
+      .then((data) => {
+        setAnalyticsLogs(data.logs || []);
+        setAnalyticsStats(data.stats || {
+          totalUsers: 0,
+          totalReports: 0,
+          systemChanges: 0,
+          securityEvents: 0
+        });
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
-  const logStats = [
-    { title: 'Total Activities', value: '3,247', icon: Activity, color: 'text-primary' },
-    { title: 'Critical Events', value: '8', icon: AlertTriangle, color: 'text-destructive' },
-    { title: 'Successful Actions', value: '3,185', icon: CheckCircle, color: 'text-success' },
-    { title: 'System Events', value: '124', icon: Database, color: 'text-secondary' },
-  ];
-
-  const getSeverityBadge = (severity: string) => {
+  const getSeverityBadge = (severity) => {
     const variants = {
       critical: 'bg-destructive text-destructive-foreground animate-pulse',
       warning: 'bg-warning text-warning-foreground',
       success: 'bg-success text-success-foreground',
       info: 'bg-primary text-primary-foreground',
     };
-    return variants[severity as keyof typeof variants] || variants.info;
+    return variants[severity] || variants.info;
   };
 
-  const getActionIcon = (action: string) => {
+  const getActionIcon = (action) => {
     const icons = {
+      user_created: Users,
+      report_generated: FileText,
       system_setting_changed: Settings,
-      user_account_created: Users,
-      security_breach_attempt: Shield,
-      report_generated: Activity,
-      database_backup_completed: Database,
-      permission_changed: Shield,
+      security_event: Shield,
+      database_backup: Database
     };
-    return icons[action as keyof typeof icons] || Activity;
+    return icons[action] || Activity;
   };
 
-  const getModuleColor = (module: string) => {
-    const colors = {
-      'System Settings': 'text-primary',
-      'User Management': 'text-secondary',
-      Security: 'text-destructive',
-      Reports: 'text-warning',
-      Database: 'text-success',
-    };
-    return colors[module as keyof typeof colors] || 'text-muted-foreground';
-  };
-
-  const formatTime = (timestamp: string) => {
+  const formatTime = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleString();
   };
@@ -161,15 +86,15 @@ const AdminActivityLogs = () => {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">Admin Activity Logs</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">Analytics</h1>
             <p className="text-lg text-muted-foreground mt-2">
-              Comprehensive audit trail of all administrative activities
+              Comprehensive system analytics and performance overview
             </p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="gap-2">
               <Download className="w-4 h-4" />
-              Export Logs
+              Export Analytics
             </Button>
             <Button className="medical-button gap-2">
               <Filter className="w-4 h-4" />
@@ -178,23 +103,60 @@ const AdminActivityLogs = () => {
           </div>
         </div>
 
-        {/* Statistics */}
+        {/* Analytics Statistics - fetched from backend */}
         <div className="medical-grid">
-          {logStats.map((stat, index) => (
-            <Card key={index} className="dashboard-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                    <p className="text-3xl font-bold mt-2">{stat.value}</p>
-                  </div>
-                  <div className="p-3 bg-primary/10 rounded-full">
-                    <stat.icon className={`w-8 h-8 ${stat.color}`} />
-                  </div>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Users</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.totalUsers}</p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                <div className="p-3 bg-blue-100 rounded-full">
+                  <Users className="w-8 h-8 text-blue-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Reports</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.totalReports}</p>
+                </div>
+                <div className="p-3 bg-green-100 rounded-full">
+                  <FileText className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">System Changes</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.systemChanges}</p>
+                </div>
+                <div className="p-3 bg-orange-100 rounded-full">
+                  <Settings className="w-8 h-8 text-orange-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Security Events</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.securityEvents}</p>
+                </div>
+                <div className="p-3 bg-destructive/10 rounded-full">
+                  <Shield className="w-8 h-8 text-destructive" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters */}
@@ -203,7 +165,7 @@ const AdminActivityLogs = () => {
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 relative">
                 <Input
-                  placeholder="Search logs by user, action, or description..."
+                  placeholder="Search analytics by user, action, or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -216,65 +178,61 @@ const AdminActivityLogs = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Actions</SelectItem>
-                  <SelectItem value="system">System Changes</SelectItem>
-                  <SelectItem value="user">User Management</SelectItem>
-                  <SelectItem value="security">Security Events</SelectItem>
-                  <SelectItem value="reports">Report Actions</SelectItem>
+                  <SelectItem value="user_created">User Created</SelectItem>
+                  <SelectItem value="report_generated">Report Generated</SelectItem>
+                  <SelectItem value="system_setting_changed">System Setting Changed</SelectItem>
+                  <SelectItem value="security_event">Security Event</SelectItem>
+                  <SelectItem value="database_backup">Database Backup</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={severityFilter} onValueChange={setSeverityFilter}>
+              <Select value={timeFilter} onValueChange={setTimeFilter}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by severity" />
+                  <SelectValue placeholder="Time range" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Severity</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                  <SelectItem value="info">Info</SelectItem>
-                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
 
-        {/* Activity Logs Tabs */}
+        {/* Analytics Logs Tabs */}
         <Tabs defaultValue="all" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="all">All Logs</TabsTrigger>
-            <TabsTrigger value="critical">Critical</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
-            <TabsTrigger value="system">System</TabsTrigger>
-            <TabsTrigger value="user-actions">User Actions</TabsTrigger>
+            <TabsTrigger value="all">All Analytics</TabsTrigger>
+            <TabsTrigger value="user_created">User Created</TabsTrigger>
+            <TabsTrigger value="report_generated">Report Generated</TabsTrigger>
+            <TabsTrigger value="system_setting_changed">System Setting</TabsTrigger>
+            <TabsTrigger value="security_event">Security</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="space-y-4">
             <Card className="healthcare-card">
               <CardHeader>
-                <CardTitle>Recent Administrative Activity</CardTitle>
+                <CardTitle>Recent Analytics</CardTitle>
                 <CardDescription>
-                  Chronological view of all administrative system activities
+                  Chronological view of all administrative analytics events
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {activityLogs.map((log) => {
+                  {analyticsLogs.filter(log => {
+                    return (
+                      searchTerm === '' ||
+                      log.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      log.action?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      log.description?.toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                  }).map((log) => {
                     const ActionIcon = getActionIcon(log.action);
                     return (
-                      <div
-                        key={log.id}
-                        className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors"
-                      >
-                        <div
-                          className={`p-2 rounded-full ${
-                            log.success ? 'bg-success/10' : 'bg-destructive/10'
-                          }`}
-                        >
-                          <ActionIcon
-                            className={`w-5 h-5 ${
-                              log.success ? 'text-success' : 'text-destructive'
-                            }`}
-                          />
+                      <div key={log.id} className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors">
+                        <div className={`p-2 rounded-full ${log.success ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                          <ActionIcon className={`w-5 h-5 ${log.success ? 'text-success' : 'text-destructive'}`} />
                         </div>
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center justify-between">
@@ -296,28 +254,15 @@ const AdminActivityLogs = () => {
                               <span className="font-medium">Role:</span> {log.role}
                             </div>
                             <div>
-                              <span className="font-medium">Module:</span>{' '}
-                              <span className={getModuleColor(log.module)}>{log.module}</span>
+                              <span className="font-medium">Target:</span> {log.target}
                             </div>
                             <div>
                               <span className="font-medium">IP:</span> {log.ipAddress}
                             </div>
                           </div>
-                          {log.details && (
-                            <div className="text-sm bg-accent/30 p-3 rounded-lg">
-                              <span className="font-medium">Details:</span>
-                              <div className="mt-1 space-y-1">
-                                {Object.entries(log.details).map(([key, value]) => (
-                                  <div key={key}>
-                                    <span className="capitalize text-muted-foreground">
-                                      {key.replace(/([A-Z])/g, ' $1').trim()}:
-                                    </span>{' '}
-                                    {value}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-medium">User Agent:</span> {log.userAgent}
+                          </div>
                         </div>
                         <Button variant="outline" size="sm" className="gap-2">
                           <Eye className="w-4 h-4" />
@@ -331,11 +276,125 @@ const AdminActivityLogs = () => {
             </Card>
           </TabsContent>
 
-          {/* Other tabs content (critical, security, system, user-actions) can be similarly implemented */}
+          <TabsContent value="user_created" className="space-y-4">
+            <div className="space-y-4">
+              {analyticsLogs.filter(log => log.action === 'user_created').map((log) => {
+                const ActionIcon = getActionIcon(log.action);
+                return (
+                  <Card key={log.id} className="healthcare-card border-l-4 border-l-blue-600">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-blue-100 rounded-full">
+                          <ActionIcon className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-blue-600">{log.description}</h3>
+                            <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>User:</strong> {log.user}</div>
+                            <div><strong>Target:</strong> {log.target}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="report_generated" className="space-y-4">
+            <div className="space-y-4">
+              {analyticsLogs.filter(log => log.action === 'report_generated').map((log) => {
+                const ActionIcon = getActionIcon(log.action);
+                return (
+                  <Card key={log.id} className="healthcare-card border-l-4 border-l-green-600">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-green-100 rounded-full">
+                          <ActionIcon className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-green-600">{log.description}</h3>
+                            <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>User:</strong> {log.user}</div>
+                            <div><strong>Target:</strong> {log.target}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="system_setting_changed" className="space-y-4">
+            <div className="space-y-4">
+              {analyticsLogs.filter(log => log.action === 'system_setting_changed').map((log) => {
+                const ActionIcon = getActionIcon(log.action);
+                return (
+                  <Card key={log.id} className="healthcare-card border-l-4 border-l-orange-600">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-orange-100 rounded-full">
+                          <ActionIcon className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-orange-600">{log.description}</h3>
+                            <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>User:</strong> {log.user}</div>
+                            <div><strong>Target:</strong> {log.target}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="security_event" className="space-y-4">
+            <div className="space-y-4">
+              {analyticsLogs.filter(log => log.action === 'security_event').map((log) => {
+                const ActionIcon = getActionIcon(log.action);
+                return (
+                  <Card key={log.id} className="healthcare-card border-l-4 border-l-destructive">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-destructive/10 rounded-full">
+                          <ActionIcon className="w-6 h-6 text-destructive" />
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-destructive">{log.description}</h3>
+                            <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>User:</strong> {log.user}</div>
+                            <div><strong>Target:</strong> {log.target}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
   );
 };
 
-export default AdminActivityLogs;
+export default Analytics;

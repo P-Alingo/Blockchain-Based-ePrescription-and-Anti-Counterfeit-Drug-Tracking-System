@@ -51,9 +51,9 @@ export async function createPrescription({
   const issueDateObj = new Date(issueDate);
   const validUntilObj = new Date(validUntil);
   if (isNaN(issueDateObj) || isNaN(validUntilObj)) throw new Error("Invalid dates provided");
-  let status = "Pending";
-  if (today >= issueDateObj && today <= validUntilObj) status = "Active";
-  else if (today > validUntilObj) status = "Expired";
+    let status = "pending";
+    if (today >= issueDateObj && today <= validUntilObj) status = "issued";
+    else if (today > validUntilObj) status = "expired";
   // Generate unique prescription code
   const prescriptionCode = `PRESC-${Math.floor(100000 + Math.random() * 900000)}`;
   const insertText = `
@@ -78,8 +78,17 @@ export async function createPrescription({
   ];
   const insertResult = await query(insertText, insertValues);
   const prescriptionId = insertResult.rows[0].id;
-  const qrImage = await QRCode.toDataURL(`http://localhost:8080/prescription/${prescriptionId}`);
-  await query(`UPDATE prescription SET qrcode_path = $1 WHERE id = $2`, [qrImage, prescriptionId]);
+  // Generate QR code PNG buffer
+  const qrBuffer = await QRCode.toBuffer(`http://localhost:8080/prescription/${prescriptionId}`, {
+    errorCorrectionLevel: "H",
+    width: 400,
+    margin: 2,
+    color: { dark: "#166534", light: "#FFFFFF" }
+  });
+  // Save QR code file
+  const qrFilename = `prescription-${prescriptionId}.png`;
+  const { url: qrFileUrl } = await import("./fileService.js").then(m => m.saveQRCodeFile(qrBuffer, qrFilename));
+  await query(`UPDATE prescription SET qrcode_path = $1 WHERE id = $2`, [qrFileUrl, prescriptionId]);
   const result = await query(
     `SELECT 
        p.id, 
@@ -332,7 +341,7 @@ export async function getDoctorAnalytics(doctorId) {
 export async function getExpiredPrescriptions(doctorId) {
   if (!doctorId) throw new Error("doctorId is required");
   const result = await query(
-    `SELECT * FROM prescription WHERE doctor_id = $1 AND status = 'Expired' ORDER BY issue_date DESC;`,
+    `SELECT * FROM prescription WHERE doctor_id = $1 AND status = 'expired' ORDER BY issue_date DESC;`,
     [doctorId]
   );
   return result.rows ?? [];

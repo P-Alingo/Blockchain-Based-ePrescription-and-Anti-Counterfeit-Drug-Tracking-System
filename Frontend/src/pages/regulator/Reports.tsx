@@ -1,5 +1,5 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,89 +10,43 @@ import { Search, Download, Eye, TrendingUp, FileText, BarChart3, Calendar, Filte
 
 const RegulatorReports = () => {
     const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
-    { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
-    { icon: FileText, label: 'Reports', path: '/regulator/reports', active: true },
-    { icon: AlertTriangle, label: 'Alerts', path: '/regulator/alerts', active: false },
-    { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/regulator/activity-logs', active: false },
-  ];
+      { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
+      { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
+      { icon: FileText, label: 'Reports', path: '/regulator/reports', active: true },
+      { icon: AlertTriangle, label: 'Blockchain', path: '/regulator/blockchain', active: false },
+      { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
+      { icon: Activity, label: 'Analytics', path: '/regulator/analytics', active: false },
+    ];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-
-  const reports = [
-    {
-      id: "RPT-2024-001",
-      title: "Prescription Fraud Analysis Q1 2024",
-      type: "Fraud Investigation",
-      status: "published",
-      date: "2024-01-30",
-      author: "Regulatory Analytics Team",
-      downloads: 156,
-      pages: 45,
-      summary: "Comprehensive analysis of prescription fraud patterns across Kenya's healthcare system"
-    },
-    {
-      id: "RPT-2024-002",
-      title: "Controlled Substances Compliance Report",
-      type: "Compliance",
-      status: "draft",
-      date: "2024-02-15",
-      author: "Dr. Sarah Kimani",
-      downloads: 0,
-      pages: 32,
-      summary: "Assessment of controlled substances handling and documentation practices"
-    },
-    {
-      id: "RPT-2024-003",
-      title: "Digital Health Records Security Audit",
-      type: "Security",
-      status: "published",
-      date: "2024-02-01",
-      author: "Cybersecurity Division",
-      downloads: 89,
-      pages: 67,
-      summary: "Evaluation of digital health record systems security implementations"
-    },
-    {
-      id: "RPT-2024-004",
-      title: "Pharmaceutical Supply Chain Analysis",
-      type: "Supply Chain",
-      status: "in-review",
-      date: "2024-02-20",
-      author: "Supply Chain Team",
-      downloads: 0,
-      pages: 38,
-      summary: "Analysis of pharmaceutical distribution and supply chain integrity"
-    }
-  ];
-
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  // Placeholder metrics array
   const metrics = [
-    { title: "Total Reports", value: "47", change: "+12%", icon: FileText, color: "text-primary" },
-    { title: "Published This Month", value: "8", change: "+25%", icon: TrendingUp, color: "text-success" },
-    { title: "Total Downloads", value: "2,847", change: "+45%", icon: Download, color: "text-warning" },
-    { title: "Avg. Report Length", value: "42 pages", change: "+8%", icon: BarChart3, color: "text-secondary" }
+    { title: "Total Reports", value: reports.length, change: "+0", color: "text-primary", icon: FileText },
+    { title: "Published", value: reports.filter(r => r.status === 'published').length, change: "+0", color: "text-success", icon: BarChart3 },
+    { title: "Drafts", value: reports.filter(r => r.status === 'draft').length, change: "0", color: "text-warning", icon: TrendingUp },
+    { title: "In Review", value: reports.filter(r => r.status === 'in-review').length, change: "0", color: "text-muted-foreground", icon: Eye }
   ];
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      published: "bg-success text-success-foreground",
-      draft: "bg-muted text-muted-foreground",
-      "in-review": "bg-warning text-warning-foreground"
-    };
-    return variants[status as keyof typeof variants] || variants.draft;
-  };
-
-  const getTypeColor = (type: string) => {
-    const colors = {
-      "Fraud Investigation": "text-destructive",
-      "Compliance": "text-primary",
-      "Security": "text-warning",
-      "Supply Chain": "text-success"
-    };
-    return colors[type as keyof typeof colors] || "text-muted-foreground";
-  };
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/reports")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch reports");
+        return res.json();
+      })
+      .then((data) => {
+        setReports(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="regulator" userName="Dr. Jane Regulator" userEmail="jane@ppb.go.ke">
@@ -178,49 +132,51 @@ const RegulatorReports = () => {
         </TabsList>
 
         <TabsContent value="all" className="space-y-4">
-          <div className="grid gap-6">
-            {reports.map((report) => (
-              <Card key={report.id} className="healthcare-card hover-lift">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        <CardTitle className="text-xl">{report.title}</CardTitle>
-                        <Badge className={getStatusBadge(report.status)}>
-                          {report.status.replace('-', ' ')}
-                        </Badge>
-                      </div>
+          <>
+            {loading && (
+              <div className="py-8 text-center text-muted-foreground">Loading reports...</div>
+            )}
+            {error && !loading && (
+              <div className="py-8 text-center text-destructive">{error}</div>
+            )}
+            {!loading && !error && reports.length === 0 && (
+              <div className="py-8 text-center text-muted-foreground">No reports found.</div>
+            )}
+            {!loading && !error && reports.length > 0 && (
+              <div className="grid gap-6">
+                {reports.map((report) => (
+                  <Card key={report.id} className="healthcare-card hover-lift">
+                    <CardHeader>
+                      <CardTitle>{report.title}</CardTitle>
+                      <CardDescription>{report.summary}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>{report.type}</span>
                         <span>{report.id}</span>
-                        <span className={getTypeColor(report.type)}>{report.type}</span>
+                        <span>By {report.author}</span>
                         <span>{report.date}</span>
+                        <span>{report.status}</span>
+                        <span>{report.pages} pages</span>
+                        <span>{report.downloads} downloads</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            window.open(`/api/reports/download/${report.id}`, '_blank');
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                          Download
+                        </Button>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Eye className="w-4 h-4" />
-                        View
-                      </Button>
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Download className="w-4 h-4" />
-                        Download
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">{report.summary}</p>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-6">
-                      <span><strong>Author:</strong> {report.author}</span>
-                      <span><strong>Pages:</strong> {report.pages}</span>
-                      <span><strong>Downloads:</strong> {report.downloads}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         </TabsContent>
 
         <TabsContent value="published" className="space-y-4">

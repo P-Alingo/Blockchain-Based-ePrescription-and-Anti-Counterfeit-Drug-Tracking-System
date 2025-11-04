@@ -13,9 +13,9 @@ export async function fetchPatientAnalytics(userId) {
       d.name as drug_name,
       d.dosageunit as drug_dosage_unit,
       CASE 
-        WHEN p.valid_until < NOW() THEN 'expired'
-        WHEN p.dispensed_date IS NOT NULL THEN 'dispensed' 
-        ELSE 'active'
+  WHEN p.valid_until < NOW() THEN 'expired'
+  WHEN p.dispensed_date IS NOT NULL THEN 'dispensed' 
+  ELSE 'issued'
       END as calculated_status
     FROM prescription p 
     LEFT JOIN doctor doc ON p.doctor_id = doc.id 
@@ -26,10 +26,10 @@ export async function fetchPatientAnalytics(userId) {
   `, [patientId]);
 
   // Status breakdown - use calculated status based on dates
-  const statusBreakdown = { active: 0, dispensed: 0, expired: 0 };
+  const statusBreakdown = { issued: 0, dispensed: 0, expired: 0 };
   prescriptions.forEach(p => {
     const status = p.calculated_status;
-    if (status === 'active') statusBreakdown.active++;
+    if (status === 'issued') statusBreakdown.issued++;
     else if (status === 'dispensed') statusBreakdown.dispensed++;
     else if (status === 'expired') statusBreakdown.expired++;
   });

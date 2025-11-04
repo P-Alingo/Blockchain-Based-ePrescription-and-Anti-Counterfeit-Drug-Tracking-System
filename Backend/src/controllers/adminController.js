@@ -1,26 +1,52 @@
+
 import * as adminService from "../services/adminService.js";
 
-async function getAdminProfile(req, res, next) {
+// Dashboard KPIs
+export async function getDashboard(req, res, next) {
   try {
-    const userId = req.user.id;
-    const profile = await adminService.getAdminByUserId(userId);
-    if (!profile) return res.status(404).json({ message: "Admin profile not found" });
-    res.json(profile);
+    const dashboard = await adminService.getDashboardKPIs();
+    res.json(dashboard);
   } catch (error) {
     next(error);
   }
 }
 
-async function updateAdminProfile(req, res, next) {
+// Reports
+export async function getReports(req, res, next) {
   try {
-    const userId = req.user.id;
-    const updateData = req.body;
-    const updatedProfile = await adminService.updateAdminByUserId(userId, updateData);
-    if (!updatedProfile) return res.status(404).json({ message: "Admin profile not found" });
-    res.json(updatedProfile);
+    const reports = await adminService.getAllReports(req.query);
+    res.json(reports);
   } catch (error) {
     next(error);
   }
 }
 
-export { getAdminProfile, updateAdminProfile };
+// Analytics
+export async function getAnalytics(req, res, next) {
+  try {
+    const analytics = await adminService.getSystemAnalytics();
+    res.json(analytics);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Blockchain logs
+export async function getBlockchainLogs(req, res, next) {
+  try {
+    const logs = await adminService.getBlockchainLogs();
+    res.json(logs);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// System settings update
+export async function updateSettings(req, res, next) {
+  try {
+    const result = await adminService.updateSystemSettings(req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}

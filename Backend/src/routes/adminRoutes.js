@@ -1,12 +1,30 @@
+
 import express from "express";
-import { getAdminProfile, updateAdminProfile } from "../controllers/adminController.js";
+import {
+	getDashboard,
+	getReports,
+	getAnalytics,
+	getBlockchainLogs,
+	updateSettings
+} from "../controllers/adminController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
 router.use(authMiddleware);
 
-router.get("/profile", getAdminProfile);
-router.put("/profile", updateAdminProfile);
+// Dashboard
+router.get("/dashboard", getDashboard);
+
+// Reports
+router.get("/reports", getReports);
+
+// Analytics
+router.get("/analytics", getAnalytics);
+
+// Blockchain logs
+router.get("/blockchain", getBlockchainLogs);
+
+// System settings update
+router.put("/settings", updateSettings);
 
 export default router;

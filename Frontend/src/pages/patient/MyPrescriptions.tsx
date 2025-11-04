@@ -199,10 +199,10 @@ const MyPrescriptions = () => {
       <td className="px-4 py-3">{p.drug}</td>
       <td className="px-4 py-3">
         <Badge variant={
-          p.status.toLowerCase() === "active" ? "secondary" :
+          p.status.toLowerCase() === "issued" ? "secondary" :
           p.status.toLowerCase() === "dispensed" ? "default" : "destructive"
         }>
-          {p.status}
+          {p.status.toLowerCase() === "issued" ? "Active" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
         </Badge>
       </td>
       <td className="px-4 py-3">

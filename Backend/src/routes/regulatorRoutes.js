@@ -1,12 +1,40 @@
+
 import express from "express";
-import { getRegulatorProfile, updateRegulatorProfile } from "../controllers/regulatorController.js";
+import {
+	getDashboard,
+	getAudits,
+	createAudit,
+	getReports,
+	createReport,
+	getComplianceActions,
+	createComplianceAction,
+	getBlockchainData,
+	getAnalytics
+} from "../controllers/regulatorController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
 router.use(authMiddleware);
 
-router.get("/profile", getRegulatorProfile);
-router.put("/profile", updateRegulatorProfile);
+// Dashboard
+router.get("/dashboard", getDashboard);
+
+// Audits
+router.get("/audits", getAudits);
+router.post("/audits", createAudit);
+
+// Reports
+router.get("/reports", getReports);
+router.post("/reports", createReport);
+
+// Compliance actions
+router.get("/compliance", getComplianceActions);
+router.post("/compliance", createComplianceAction);
+
+// Blockchain verification
+router.get("/blockchain", getBlockchainData);
+
+// Analytics
+router.get("/analytics", getAnalytics);
 
 export default router;

@@ -41,14 +41,16 @@ import {
   TabsTrigger
 } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import Blockchain from '../pharmacist/Blockchain';
 
-const AdminSystemSettings = () => {
+const AdminBlockchain = () => {
   const sidebarItems = [
     { icon: Settings, label: 'Dashboard', path: '/admin/dashboard', active: false },
     { icon: Users, label: 'User Management', path: '/admin/users', active: false },
-    { icon: Cog, label: 'System Settings', path: '/admin/settings', active: true },
-    { icon: FileText, label: 'Reports', path: '/admin/reports', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/admin/activity-logs', active: false },
+    { icon: Cog, label: 'Reports', path: '/admin/reports', active: false },
+    { icon: Database, label: 'Database', path: '/admin/database', active: false },
+    { icon: FileText, label: 'Blockchain', path: '/admin/blockchain', active: true },
+    { icon: Activity, label: 'Analytics', path: '/admin/analytics', active: false },
   ];
 
   const [systemStatus, setSystemStatus] = useState("operational");
@@ -575,4 +577,4 @@ const AdminSystemSettings = () => {
   );
 };
 
-export default AdminSystemSettings;
+export default AdminBlockchain;

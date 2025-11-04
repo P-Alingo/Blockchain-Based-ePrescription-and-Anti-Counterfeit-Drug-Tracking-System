@@ -1,5 +1,6 @@
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Scan, Shield, Package, Activity, TrendingUp, AlertTriangle, CheckCircle, Clock, PillBottle } from 'lucide-react';
+import { Scan, Shield, Package, Activity, TrendingUp, AlertTriangle, CheckCircle, Clock, PillBottle, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -8,18 +9,53 @@ import { Button } from '@/components/ui/button';
 const PharmacistDashboard = () => {
   const sidebarItems = [
     { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: true },
-    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: false },
-    { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: false },
+    { icon: Activity, label: 'Blockchain', path: '/pharmacist/blockchain', active: false },
+    { icon: Activity, label: 'Analytics', path: '/pharmacist/analytics', active: false },
     { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
+    { icon: Package, label: 'Distributors', path: '/pharmacist/distributors', active: false },
     { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: false },
+    { icon: FileText, label: 'My Prescriptions', path: '/pharmacist/myprescriptions', active: false },
+    { icon: Activity, label: 'Requests', path: '/pharmacist/requests', active: false },
+    { icon: Package, label: 'Shipments', path: '/pharmacist/shipments', active: false },
   ];
 
-  const recentPrescriptions = [
-    { id: 'RX001', patient: 'Sarah Johnson', medication: 'Amoxicillin 500mg', status: 'verified', time: '2 hours ago' },
-    { id: 'RX002', patient: 'Michael Davis', medication: 'Lisinopril 10mg', status: 'pending', time: '30 minutes ago' },
-    { id: 'RX003', patient: 'Emma Wilson', medication: 'Metformin 850mg', status: 'dispensed', time: '1 hour ago' },
-  ];
+  const [stats, setStats] = useState({
+    todaysPrescriptions: 0,
+    verifiedPrescriptions: 0,
+    lowStockItems: 0,
+    pendingVerifications: 0,
+  });
+  const [recentPrescriptions, setRecentPrescriptions] = useState([]);
+  const [inventoryStatus, setInventoryStatus] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Fetch stats
+        const statsRes = await fetch('/api/pharmacist/dashboard-stats');
+        const statsData = await statsRes.json();
+        setStats(statsData);
+
+        // Fetch recent prescriptions
+        const recentRes = await fetch('/api/pharmacist/recent-prescriptions');
+        const recentData = await recentRes.json();
+        setRecentPrescriptions(recentData);
+
+        // Fetch inventory status
+        const invRes = await fetch('/api/pharmacist/inventory-status');
+        const invData = await invRes.json();
+        setInventoryStatus(invData);
+      } catch (err) {
+        setError('Failed to fetch dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboardData();
+  }, []);
 
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
@@ -39,10 +75,10 @@ const PharmacistDashboard = () => {
               <Scan className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">47</div>
+              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{stats.todaysPrescriptions}</div>
               <p className="text-xs text-blue-600 dark:text-blue-400">
                 <TrendingUp className="inline h-3 w-3 mr-1" />
-                +12% from yesterday
+                {/* Optionally show percentage change if available */}
               </p>
             </CardContent>
           </Card>
@@ -53,8 +89,8 @@ const PharmacistDashboard = () => {
               <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700 dark:text-green-300">43</div>
-              <p className="text-xs text-green-600 dark:text-green-400">91% verification rate</p>
+              <div className="text-2xl font-bold text-green-700 dark:text-green-300">{stats.verifiedPrescriptions}</div>
+              <p className="text-xs text-green-600 dark:text-green-400">{/* Optionally show verification rate */}</p>
             </CardContent>
           </Card>
 
@@ -64,7 +100,7 @@ const PharmacistDashboard = () => {
               <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">8</div>
+              <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">{stats.lowStockItems}</div>
               <p className="text-xs text-orange-600 dark:text-orange-400">Requires attention</p>
             </CardContent>
           </Card>
@@ -75,7 +111,7 @@ const PharmacistDashboard = () => {
               <Clock className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">4</div>
+              <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">{stats.pendingVerifications}</div>
               <p className="text-xs text-purple-600 dark:text-purple-400">Awaiting verification</p>
             </CardContent>
           </Card>
@@ -89,23 +125,31 @@ const PharmacistDashboard = () => {
               <CardDescription>Latest prescription activities</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentPrescriptions.map((prescription) => (
-                <div key={prescription.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{prescription.patient}</p>
-                    <p className="text-xs text-muted-foreground">{prescription.medication}</p>
-                    <p className="text-xs text-muted-foreground">{prescription.time}</p>
+              {loading ? (
+                <div className="p-4 text-center">Loading...</div>
+              ) : error ? (
+                <div className="p-4 text-center text-red-500">{error}</div>
+              ) : recentPrescriptions.length === 0 ? (
+                <div className="p-4 text-center">No recent prescriptions</div>
+              ) : (
+                recentPrescriptions.map((prescription) => (
+                  <div key={prescription.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{prescription.patient}</p>
+                      <p className="text-xs text-muted-foreground">{prescription.medication}</p>
+                      <p className="text-xs text-muted-foreground">{prescription.time}</p>
+                    </div>
+                    <Badge
+                      variant={
+                        prescription.status === 'verified' ? 'default' :
+                        prescription.status === 'dispensed' ? 'secondary' : 'outline'
+                      }
+                    >
+                      {prescription.status}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={
-                      prescription.status === 'verified' ? 'default' :
-                      prescription.status === 'dispensed' ? 'secondary' : 'outline'
-                    }
-                  >
-                    {prescription.status}
-                  </Badge>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -115,34 +159,23 @@ const PharmacistDashboard = () => {
               <CardDescription>Current stock levels</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Paracetamol 500mg</span>
-                  <span>85%</span>
-                </div>
-                <Progress value={85} className="h-2" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Amoxicillin 250mg</span>
-                  <span>62%</span>
-                </div>
-                <Progress value={62} className="h-2" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Ibuprofen 400mg</span>
-                  <span className="text-orange-600">15%</span>
-                </div>
-                <Progress value={15} className="h-2 bg-orange-100" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Ciprofloxacin 500mg</span>
-                  <span className="text-red-600">8%</span>
-                </div>
-                <Progress value={8} className="h-2 bg-red-100" />
-              </div>
+              {loading ? (
+                <div className="p-4 text-center">Loading...</div>
+              ) : error ? (
+                <div className="p-4 text-center text-red-500">{error}</div>
+              ) : inventoryStatus.length === 0 ? (
+                <div className="p-4 text-center">No inventory data</div>
+              ) : (
+                inventoryStatus.map((item) => (
+                  <div key={item.id} className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>{item.name}</span>
+                      <span className={item.percentage < 20 ? "text-red-600" : item.percentage < 40 ? "text-orange-600" : ""}>{item.percentage}%</span>
+                    </div>
+                    <Progress value={item.percentage} className={item.percentage < 20 ? "h-2 bg-red-100" : item.percentage < 40 ? "h-2 bg-orange-100" : "h-2"} />
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

@@ -1,72 +1,90 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Hash, Search, CheckCircle, AlertTriangle, Clock, Package2, Package, Plus, List, Activity } from "lucide-react";
+import { Shield, Hash, Search, CheckCircle, AlertTriangle, Clock, Package2, Package, Plus, List, Activity, Truck } from "lucide-react";
 
 const ManufacturerBlockchainVerification = () => {
-   const sidebarItems = [
-    { icon: Package, label: 'Dashboard', path: '/manufacturer/dashboard', active: false },
-    { icon: Plus, label: 'Register Batch', path: '/manufacturer/register-batch', active: false },
-    { icon: List, label: 'Batch List', path: '/manufacturer/batch-list', active: false },
-    { icon: Shield, label: 'Blockchain Verification', path: '/manufacturer/blockchain-verification', active: true },
-    { icon: Activity, label: 'Activity Logs', path: '/manufacturer/activity-logs', active: false },
+    const sidebarItems = [
+    { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
+    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false },
+    { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
+    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: true },
+    { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false },
+    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false },
   ];
   const [searchHash, setSearchHash] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [verificationResult, setVerificationResult] = useState(null);
+  const [selectedTx, setSelectedTx] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
-  const blockchainRecords = [
-    {
-      id: 1,
-      batchId: "AMX-2024-001",
-      productName: "Amoxicillin 500mg",
-      transactionHash: "0x1a2b3c4d5e6f...",
-      blockNumber: "18,234,567",
-      timestamp: "2024-01-15 10:30:45",
-      status: "Verified",
-      gasUsed: "21,000",
-      confirmations: 1254
-    },
-    {
-      id: 2,
-      batchId: "PCM-2024-002",
-      productName: "Paracetamol 500mg",
-      transactionHash: "0x2b3c4d5e6f7a...",
-      blockNumber: "18,234,568",
-      timestamp: "2024-01-15 11:15:20",
-      status: "Verified",
-      gasUsed: "21,000",
-      confirmations: 1198
-    },
-    {
-      id: 3,
-      batchId: "IBU-2024-003",
-      productName: "Ibuprofen 400mg",
-      transactionHash: "0x3c4d5e6f7a8b...",
-      blockNumber: "18,234,569",
-      timestamp: "2024-01-15 12:45:15",
-      status: "Pending",
-      gasUsed: "21,000",
-      confirmations: 856
-    }
-  ];
-
-  const handleVerifyHash = () => {
-    setVerificationResult({
-      isValid: true,
-      batchId: "AMX-2024-001",
-      productName: "Amoxicillin 500mg",
-      transactionHash: searchHash || "0x1a2b3c4d5e6f...",
-      blockNumber: "18,234,567",
-      timestamp: "2024-01-15 10:30:45",
-      manufacturer: "PharmaCorp Ltd",
-      verificationTime: new Date().toISOString()
-    });
+  // Define the expected data type
+  type BlockchainStats = {
+    totalRecords: number;
+    verified: number;
+    pending: number;
+    gasSpent: number;
+    avgGasPrice?: string;
+    totalGasUsed?: string;
   };
+
+  type BlockchainRecord = {
+    batchId: string;
+    productName: string;
+    transactionHash: string;
+    blockNumber: number | string;
+    timestamp: string;
+    manufacturer: string;
+    gasUsed?: string | number;
+    confirmations: number;
+    status: string;
+  };
+
+  type BlockchainData = {
+    stats: BlockchainStats;
+    records: BlockchainRecord[];
+  };
+
+  // Fetch blockchain records
+  const { data: blockchainData, refetch } = useQuery<BlockchainData>({
+    queryKey: ["manufacturer-blockchain", searchTerm],
+    queryFn: async () => {
+      const res = await axios.get(`/api/manufacturer/blockchain`, {
+        params: searchTerm ? { search: searchTerm } : {}
+      });
+      return res.data as BlockchainData;
+    }
+  });
+
+  // Fetch summary stats
+  const stats = blockchainData?.stats || {
+    totalRecords: 0,
+    verified: 0,
+    pending: 0,
+    gasSpent: 0
+  };
+  const blockchainRecords = blockchainData?.records || [];
+
+  // Hash verification
+  const handleVerifyHash = async () => {
+    if (!searchHash) return;
+    try {
+      const res = await axios.get(`/api/manufacturer/blockchain/${searchHash}`);
+      setVerificationResult(res.data);
+    } catch (err) {
+      setVerificationResult({ error: "Transaction not found" });
+    }
+  };
+
+  // Explorer link
+  const getExplorerUrl = (txHash) => `https://etherscan.io/tx/${txHash}`;
 
   const getStatusBadge = (status, confirmations) => {
     if (status === "Verified" && confirmations > 1000) {
@@ -98,7 +116,7 @@ const ManufacturerBlockchainVerification = () => {
                 <Hash className="h-6 w-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">1,234</p>
+                <p className="text-2xl font-bold">{stats.totalRecords.toLocaleString()}</p>
                 <p className="text-sm text-muted-foreground">Blockchain Records</p>
               </div>
             </div>
@@ -112,7 +130,7 @@ const ManufacturerBlockchainVerification = () => {
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">1,198</p>
+                <p className="text-2xl font-bold">{stats.verified.toLocaleString()}</p>
                 <p className="text-sm text-muted-foreground">Verified</p>
               </div>
             </div>
@@ -126,7 +144,7 @@ const ManufacturerBlockchainVerification = () => {
                 <Clock className="h-6 w-6 text-orange-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">36</p>
+                <p className="text-2xl font-bold">{stats.pending.toLocaleString()}</p>
                 <p className="text-sm text-muted-foreground">Pending</p>
               </div>
             </div>
@@ -140,7 +158,7 @@ const ManufacturerBlockchainVerification = () => {
                 <Package2 className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">₦2.3M</p>
+                <p className="text-2xl font-bold">{stats.gasSpent}</p>
                 <p className="text-sm text-muted-foreground">Gas Spent</p>
               </div>
             </div>
@@ -238,6 +256,8 @@ const ManufacturerBlockchainVerification = () => {
                   <Input
                     placeholder="Search records..."
                     className="w-64"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
@@ -257,13 +277,16 @@ const ManufacturerBlockchainVerification = () => {
                 </TableHeader>
                 <TableBody>
                   {blockchainRecords.map((record) => (
-                    <TableRow key={record.id}>
+                    <TableRow key={record.transactionHash}>
                       <TableCell className="font-medium">{record.batchId}</TableCell>
                       <TableCell>{record.productName}</TableCell>
-                      <TableCell className="font-mono text-sm">{record.transactionHash}</TableCell>
+                      <TableCell className="font-mono text-sm">
+                        <a href={getExplorerUrl(record.transactionHash)} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">{record.transactionHash}</a>
+                        <Button size="sm" variant="outline" className="ml-2" onClick={() => { setSelectedTx(record); setShowModal(true); }}>Details</Button>
+                      </TableCell>
                       <TableCell className="font-mono">{record.blockNumber}</TableCell>
                       <TableCell className="font-mono text-sm">{record.timestamp}</TableCell>
-                      <TableCell>{record.confirmations.toLocaleString()}</TableCell>
+                      <TableCell>{record.confirmations?.toLocaleString()}</TableCell>
                       <TableCell>{getStatusBadge(record.status, record.confirmations)}</TableCell>
                     </TableRow>
                   ))}
@@ -287,15 +310,15 @@ const ManufacturerBlockchainVerification = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-sm">Total Records</span>
-                        <span className="text-sm font-medium">1,234</span>
+                        <span className="text-sm font-medium">{stats.totalRecords.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Successfully Verified</span>
-                        <span className="text-sm font-medium">1,198 (97%)</span>
+                        <span className="text-sm font-medium">{stats.verified.toLocaleString()} ({stats.totalRecords ? Math.round((stats.verified / stats.totalRecords) * 100) : 0}%)</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Pending Verification</span>
-                        <span className="text-sm font-medium">36 (3%)</span>
+                        <span className="text-sm font-medium">{stats.pending.toLocaleString()} ({stats.totalRecords ? Math.round((stats.pending / stats.totalRecords) * 100) : 0}%)</span>
                       </div>
                     </div>
                   </div>
@@ -315,15 +338,15 @@ const ManufacturerBlockchainVerification = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-sm">Average Gas Price</span>
-                        <span className="text-sm font-medium">20 Gwei</span>
+                        <span className="text-sm font-medium">{stats.avgGasPrice || "-"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Total Gas Used</span>
-                        <span className="text-sm font-medium">25.9M</span>
+                        <span className="text-sm font-medium">{stats.totalGasUsed || "-"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Monthly Cost</span>
-                        <span className="text-sm font-medium">₦2.3M</span>
+                        <span className="text-sm font-medium">{stats.gasSpent || "-"}</span>
                       </div>
                     </div>
                   </div>
@@ -333,6 +356,26 @@ const ManufacturerBlockchainVerification = () => {
           </div>
         </TabsContent>
       </Tabs>
+    {/* Details Modal */}
+    {showModal && selectedTx && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+        <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg relative">
+          <button className="absolute top-2 right-2 text-gray-500" onClick={() => setShowModal(false)}>&times;</button>
+          <h2 className="text-xl font-bold mb-4">Transaction Details</h2>
+          <div className="space-y-2">
+            <div><span className="font-semibold">Batch ID:</span> {selectedTx.batchId}</div>
+            <div><span className="font-semibold">Product:</span> {selectedTx.productName}</div>
+            <div><span className="font-semibold">Transaction Hash:</span> <a href={getExplorerUrl(selectedTx.transactionHash)} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">{selectedTx.transactionHash}</a></div>
+            <div><span className="font-semibold">Block Number:</span> {selectedTx.blockNumber}</div>
+            <div><span className="font-semibold">Timestamp:</span> {selectedTx.timestamp}</div>
+            <div><span className="font-semibold">Manufacturer:</span> {selectedTx.manufacturer}</div>
+            <div><span className="font-semibold">Gas Used:</span> {selectedTx.gasUsed}</div>
+            <div><span className="font-semibold">Confirmations:</span> {selectedTx.confirmations}</div>
+            <div><span className="font-semibold">Status:</span> {getStatusBadge(selectedTx.status, selectedTx.confirmations)}</div>
+          </div>
+        </div>
+      </div>
+    )}
     </DashboardLayout>
   );
 };

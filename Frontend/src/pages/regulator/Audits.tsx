@@ -1,5 +1,5 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,63 +10,36 @@ import { Search, Filter, Download, Eye, AlertTriangle, CheckCircle, Clock, FileT
 
 const RegulatorAudits = () => {
     const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
-    { icon: Search, label: 'Audits', path: '/regulator/audits', active: true },
-    { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
-    { icon: AlertTriangle, label: 'Alerts', path: '/regulator/alerts', active: false },
-    { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/regulator/activity-logs', active: false },
-  ];
+      { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
+      { icon: Search, label: 'Audits', path: '/regulator/audits', active: true },
+      { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
+      { icon: AlertTriangle, label: 'Blockchain', path: '/regulator/blockchain', active: false },
+      { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
+      { icon: Activity, label: 'Analytics', path: '/regulator/analytics', active: false },
+    ];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [auditData, setAuditData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const auditData = [
-    {
-      id: "AUD-2024-001",
-      facility: "Nairobi General Hospital",
-      type: "Prescription Compliance",
-      status: "completed",
-      score: 95,
-      date: "2024-01-15",
-      auditor: "Dr. Sarah Kimani",
-      findings: 2,
-      priority: "low"
-    },
-    {
-      id: "AUD-2024-002", 
-      facility: "Mombasa Medical Center",
-      type: "Controlled Substances",
-      status: "in-progress",
-      score: null,
-      date: "2024-01-20",
-      auditor: "Dr. James Mwangi",
-      findings: 0,
-      priority: "high"
-    },
-    {
-      id: "AUD-2024-003",
-      facility: "Kisumu Health Clinic",
-      type: "Record Keeping",
-      status: "pending",
-      score: null,
-      date: "2024-01-25",
-      auditor: "Dr. Grace Ochieng",
-      findings: 0,
-      priority: "medium"
-    },
-    {
-      id: "AUD-2024-004",
-      facility: "Eldoret Central Pharmacy",
-      type: "Storage & Handling",
-      status: "completed",
-      score: 88,
-      date: "2024-01-10",
-      auditor: "Dr. Peter Kiptoo",
-      findings: 4,
-      priority: "medium"
-    }
-  ];
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/regulator/audits")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch audits");
+        return res.json();
+      })
+      .then((data) => {
+        setAuditData(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
   const getStatusBadge = (status: string) => {
     const variants = {

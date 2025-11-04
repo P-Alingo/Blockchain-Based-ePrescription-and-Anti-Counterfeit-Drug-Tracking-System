@@ -6,9 +6,22 @@ import { pool } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
 import patientRoutes from "./routes/patientRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
+import manufacturerRoutes from './routes/manufacturerRoutes.js';
+import distributorRoutes from './routes/distributorRoutes.js';
+import pharmacistRoutes from './routes/pharmacistRoutes.js';
+import regulatorRoutes from './routes/regulatorRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
 import userManagementRoutes from './routes/userManagementRoutes.js';
 import drugBatchRoutes from "./routes/drugBatchRoutes.js";
 import shipmentRoutes from "./routes/shipmentRoutes.js";
+import prescriptionRoutes from './routes/prescriptionRoutes.js';
+import qrCodeRoutes from './routes/qrCodeRoutes.js';
+import blockchainEventLogRoutes from './routes/blockchainEventLogRoutes.js';
+import drugSupplyChainRoutes from './routes/drugSupplyChainRoutes.js';
+import fileRoutes from './routes/fileRoutes.js';
+import regulatorOversightRoutes from './routes/regulatorOversightRoutes.js';
 dotenv.config();
 
 const app = express();
@@ -43,6 +56,19 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/patient", patientRoutes);
 app.use("/api/doctor", doctorRoutes);
+app.use("/api/manufacturer", manufacturerRoutes);
+app.use("/api/distributor", distributorRoutes);
+app.use("/api/pharmacist", pharmacistRoutes);
+app.use("/api/regulator", regulatorRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/prescription", prescriptionRoutes);
+app.use("/api/qrcode", qrCodeRoutes);
+app.use("/api/blockchain-event-log", blockchainEventLogRoutes);
+app.use("/api/drug-supply-chain", drugSupplyChainRoutes);
+app.use("/api/files", fileRoutes);
+app.use("/api/regulator-oversight", regulatorOversightRoutes);
 // ===============================
 // Test Database Connection
 // ===============================

@@ -1,5 +1,5 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,75 +10,36 @@ import { Search, Shield, AlertTriangle, CheckCircle, Clock, FileText, Eye, Gavel
 
 const RegulatorComplianceActions = () => {
     const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
-    { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
-    { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
-    { icon: AlertTriangle, label: 'Alerts', path: '/regulator/alerts', active: false },
-    { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: true },
-    { icon: Activity, label: 'Activity Logs', path: '/regulator/activity-logs', active: false },
-  ];
+      { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
+      { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
+      { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
+      { icon: AlertTriangle, label: 'Blockchain', path: '/regulator/blockchain', active: false },
+      { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: true },
+      { icon: Activity, label: 'Analytics', path: '/regulator/analytics', active: false },
+    ];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [complianceActions, setComplianceActions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const complianceActions = [
-    {
-      id: "CA-2024-001",
-      title: "License Suspension - Unauthorized Prescription Practices",
-      facility: "Westside Medical Clinic",
-      type: "License Action",
-      severity: "critical",
-      status: "active",
-      date: "2024-02-15",
-      dueDate: "2024-03-15",
-      officer: "Dr. Sarah Kimani",
-      description: "Immediate suspension due to pattern of unauthorized controlled substance prescriptions",
-      actions: ["License suspended", "Investigation ongoing", "Compliance review required"],
-      fine: "KES 500,000"
-    },
-    {
-      id: "CA-2024-002", 
-      title: "Corrective Action Plan - Record Keeping Violations",
-      facility: "Nairobi Community Pharmacy",
-      type: "Corrective Action",
-      severity: "medium",
-      status: "in-progress",
-      date: "2024-02-10",
-      dueDate: "2024-03-10",
-      officer: "Dr. James Mwangi",
-      description: "Implementation of improved record keeping systems and staff training",
-      actions: ["Training program initiated", "System upgrade in progress", "Monthly reviews scheduled"],
-      fine: "KES 50,000"
-    },
-    {
-      id: "CA-2024-003",
-      title: "Warning Notice - Storage Compliance Issues",
-      facility: "Mombasa Central Hospital",
-      type: "Warning",
-      severity: "low",
-      status: "resolved",
-      date: "2024-02-05",
-      dueDate: "2024-02-20",
-      officer: "Dr. Grace Ochieng",
-      description: "Improper storage of controlled substances - corrective measures implemented",
-      actions: ["Storage facility upgraded", "Staff retrained", "Compliance verified"],
-      fine: null
-    },
-    {
-      id: "CA-2024-004",
-      title: "Mandatory Audit - Digital Security Compliance",
-      facility: "Kisumu Medical Center",
-      type: "Audit Required",
-      severity: "high",
-      status: "pending",
-      date: "2024-02-20",
-      dueDate: "2024-03-30",
-      officer: "Dr. Peter Kiptoo",
-      description: "Comprehensive security audit following suspected data breach",
-      actions: ["Security assessment scheduled", "System access restricted", "External audit firm engaged"],
-      fine: "KES 200,000"
-    }
-  ];
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/regulator/compliance")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch compliance actions");
+        return res.json();
+      })
+      .then((data) => {
+        setComplianceActions(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
   const complianceStats = [
     { title: "Active Actions", value: "15", icon: Shield, color: "text-destructive", bg: "bg-destructive/10" },

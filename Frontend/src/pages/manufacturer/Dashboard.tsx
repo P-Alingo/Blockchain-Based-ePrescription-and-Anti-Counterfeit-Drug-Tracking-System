@@ -1,31 +1,49 @@
+
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Package, Plus, List, Shield, Activity, TrendingUp, Factory, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Package, Plus, List, Shield, Activity, TrendingUp, Factory, CheckCircle2, AlertCircle, Truck } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
+const API_URL = '/api/manufacturer/dashboard';
+
 const ManufacturerDashboard = () => {
   const sidebarItems = [
-    { icon: Package, label: 'Dashboard', path: '/manufacturer/dashboard', active: true },
-    { icon: Plus, label: 'Register Batch', path: '/manufacturer/register-batch', active: false },
-    { icon: List, label: 'Batch List', path: '/manufacturer/batch-list', active: false },
-    { icon: Shield, label: 'Blockchain Verification', path: '/manufacturer/blockchain-verification', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/manufacturer/activity-logs', active: false },
+    { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: true },
+    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
+    { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
+    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
+    { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
+    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
   ];
 
-  const recentBatches = [
-    { id: 'BTH2024001', product: 'Paracetamol 500mg', quantity: 10000, status: 'active', date: '2024-01-15' },
-    { id: 'BTH2024002', product: 'Amoxicillin 250mg', quantity: 5000, status: 'pending', date: '2024-01-14' },
-    { id: 'BTH2024003', product: 'Ibuprofen 400mg', quantity: 8000, status: 'verified', date: '2024-01-13' },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [dashboard, setDashboard] = useState<any>(null);
 
-  const productionMetrics = [
-    { name: 'Paracetamol', target: 10000, produced: 8500 },
-    { name: 'Amoxicillin', target: 5000, produced: 4200 },
-    { name: 'Ibuprofen', target: 8000, produced: 7600 },
-    { name: 'Ciprofloxacin', target: 3000, produced: 2100 },
-  ];
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setLoading(true);
+    axios.get(API_URL, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => {
+        setDashboard(res.data);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err?.response?.data?.message || 'Failed to fetch dashboard');
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Loading..." userEmail=""><div className="p-8 text-center">Loading dashboard...</div></DashboardLayout>;
+  if (error) return <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Error" userEmail=""><div className="p-8 text-center text-red-600">{error}</div></DashboardLayout>;
+  if (!dashboard) return null;
+
+  const { summary, recentBatches, recentShipments, blockchainSnapshot } = dashboard;
 
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
@@ -37,108 +55,135 @@ const ManufacturerDashboard = () => {
           <p className="text-muted-foreground">Monitor production, manage batches, and ensure drug authenticity</p>
         </div>
 
-        {/* Production Stats */}
+        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 border-orange-200 dark:border-orange-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Batches</CardTitle>
-              <Factory className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+          <Card>
+            <CardHeader>
+              <CardTitle>Total Batches</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">127</div>
-              <p className="text-xs text-orange-600 dark:text-orange-400">
-                <TrendingUp className="inline h-3 w-3 mr-1" />
-                +8% this month
-              </p>
+              <div className="text-2xl font-bold text-orange-700">{summary?.totalBatches ?? 0}</div>
             </CardContent>
           </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Verified Products</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Shipments</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700 dark:text-green-300">98.5%</div>
-              <p className="text-xs text-green-600 dark:text-green-400">Quality assurance rate</p>
+              <div className="text-2xl font-bold text-blue-700">{summary?.activeShipments ?? 0}</div>
             </CardContent>
           </Card>
-
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Monthly Production</CardTitle>
-              <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <Card>
+            <CardHeader>
+              <CardTitle>Delivered Shipments</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">2.1M</div>
-              <p className="text-xs text-blue-600 dark:text-blue-400">Units produced</p>
+              <div className="text-2xl font-bold text-green-700">{summary?.deliveredShipments ?? 0}</div>
             </CardContent>
           </Card>
-
-          <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 border-red-200 dark:border-red-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Quality Issues</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending Quality Checks</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-700 dark:text-red-300">3</div>
-              <p className="text-xs text-red-600 dark:text-red-400">Requires investigation</p>
+              <div className="text-2xl font-bold text-red-700">{summary?.pendingQualityChecks ?? 0}</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Production Metrics and Recent Batches */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Production Progress</CardTitle>
-              <CardDescription>Current month targets vs actual production</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {productionMetrics.map((metric) => (
-                <div key={metric.name} className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>{metric.name}</span>
-                    <span>{metric.produced.toLocaleString()} / {metric.target.toLocaleString()}</span>
-                  </div>
-                  <Progress value={(metric.produced / metric.target) * 100} className="h-2" />
-                  <div className="text-xs text-muted-foreground">
-                    {Math.round((metric.produced / metric.target) * 100)}% complete
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+        {/* Recent Batches Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Batches</CardTitle>
+            <CardDescription>Last 5 batch records</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40">
+                  <th className="p-2">Batch No</th>
+                  <th className="p-2">Drug</th>
+                  <th className="p-2">Quantity</th>
+                  <th className="p-2">Expiry</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2">Blockchain Tx</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentBatches?.length > 0 ? recentBatches.map((b: any, idx: number) => (
+                  <tr key={idx} className="border-b">
+                    <td className="p-2">{b.batchnumber}</td>
+                    <td className="p-2">{b.drug}</td>
+                    <td className="p-2">{b.quantity}</td>
+                    <td className="p-2">{b.expirydate?.slice(0,10)}</td>
+                    <td className="p-2">{b.status}</td>
+                    <td className="p-2">{b.blockchaintx ? <span className="text-green-700">✔</span> : <span className="text-gray-400">-</span>}</td>
+                  </tr>
+                )) : <tr><td colSpan={6} className="p-2 text-center text-muted-foreground">No recent batches</td></tr>}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Batches</CardTitle>
-              <CardDescription>Latest batch registrations</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {recentBatches.map((batch) => (
-                <div key={batch.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{batch.id}</p>
-                    <p className="text-xs text-muted-foreground">{batch.product}</p>
-                    <p className="text-xs text-muted-foreground">{batch.quantity.toLocaleString()} units</p>
-                  </div>
-                  <div className="text-right space-y-1">
-                    <Badge
-                      variant={
-                        batch.status === 'verified' ? 'default' :
-                        batch.status === 'active' ? 'secondary' : 'outline'
-                      }
-                    >
-                      {batch.status}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground">{batch.date}</p>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Recent Shipments Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Shipments</CardTitle>
+            <CardDescription>Last 5 shipment records</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40">
+                  <th className="p-2">Shipment No</th>
+                  <th className="p-2">Batch No</th>
+                  <th className="p-2">Distributor</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2">Departure Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentShipments?.length > 0 ? recentShipments.map((s: any, idx: number) => (
+                  <tr key={idx} className="border-b">
+                    <td className="p-2">{s.shipmentnumber}</td>
+                    <td className="p-2">{s.batchnumber}</td>
+                    <td className="p-2">{s.distributor}</td>
+                    <td className="p-2">{s.status}</td>
+                    <td className="p-2">{s.departure_date?.slice(0,10)}</td>
+                  </tr>
+                )) : <tr><td colSpan={5} className="p-2 text-center text-muted-foreground">No recent shipments</td></tr>}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        {/* Blockchain Snapshot Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Blockchain Snapshot</CardTitle>
+            <CardDescription>Recent verified transactions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40">
+                  <th className="p-2">Batch No</th>
+                  <th className="p-2">Blockchain Tx</th>
+                  <th className="p-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blockchainSnapshot?.length > 0 ? blockchainSnapshot.map((b: any, idx: number) => (
+                  <tr key={idx} className="border-b">
+                    <td className="p-2">{b.batchnumber}</td>
+                    <td className="p-2">{b.blockchaintx}</td>
+                    <td className="p-2">{b.status}</td>
+                  </tr>
+                )) : <tr><td colSpan={3} className="p-2 text-center text-muted-foreground">No blockchain records</td></tr>}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
 
         {/* Quick Actions */}
         <Card>

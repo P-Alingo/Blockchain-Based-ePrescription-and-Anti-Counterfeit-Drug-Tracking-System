@@ -6,18 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pill, User, Calendar, CheckCircle, Package, Activity, Shield, Scan, PillBottle } from "lucide-react";
+import { Pill, User, Calendar, CheckCircle, Package, Activity, Shield, Scan, PillBottle, FileText } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 
 const DispenseDrug = () => {
-  const sidebarItems = [
-  { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
-    { icon: Scan, label: 'Scan Prescription', path: '/pharmacist/scan', active: false },
-    { icon: Shield, label: 'Verify Prescription', path: '/pharmacist/verify', active: false },
+   const sidebarItems = [
+    { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
+    { icon: Activity, label: 'Blockchain', path: '/pharmacist/blockchain', active: false },
+    { icon: Activity, label: 'Analytics', path: '/pharmacist/analytics', active: false },
     { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: true },
+    { icon: Package, label: 'Distributors', path: '/pharmacist/distributors', active: false },
     { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/pharmacist/activity-logs', active: false },
+    { icon: FileText, label: 'My Prescriptions', path: '/pharmacist/myprescriptions', active: false },
+    { icon: Activity, label: 'Requests', path: '/pharmacist/requests', active: false },
+    { icon: Package, label: 'Shipments', path: '/pharmacist/shipments', active: false },
   ];
+
   const [prescriptionId, setPrescriptionId] = useState("");
   const [dispensingNotes, setDispensingNotes] = useState("");
   const [selectedPrescription, setSelectedPrescription] = useState(null);

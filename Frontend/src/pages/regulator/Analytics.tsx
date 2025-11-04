@@ -1,5 +1,5 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,107 +8,51 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Activity, User, Shield, Eye, Download, Filter, Clock, AlertTriangle, CheckCircle, CheckSquare, FileText } from "lucide-react";
 
-const RegulatorActivityLogs = () => {
+const RegulatorAnalytics = () => {
     const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
-    { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
-    { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
-    { icon: AlertTriangle, label: 'Alerts', path: '/regulator/alerts', active: false },
-    { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
-    { icon: Activity, label: 'Activity Logs', path: '/regulator/activity-logs', active: true },
-  ];
+      { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
+      { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
+      { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
+      { icon: AlertTriangle, label: 'Blockchain', path: '/regulator/blockchain', active: false },
+      { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
+      { icon: Activity, label: 'Analytics', path: '/regulator/analytics', active: true },
+    ];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState("today");
+  const [analyticsLogs, setAnalyticsLogs] = useState([]);
+  const [analyticsStats, setAnalyticsStats] = useState({
+    totalActivities: 0,
+    criticalActions: 0,
+    successfulActions: 0,
+    failedAttempts: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const activityLogs = [
-    {
-      id: "LOG-2024-001",
-      timestamp: "2024-02-20 14:30:25",
-      user: "Dr. Sarah Kimani",
-      role: "Senior Regulator",
-      action: "audit_initiated",
-      description: "Initiated compliance audit for Nairobi General Hospital",
-      target: "Nairobi General Hospital",
-      severity: "info",
-      ipAddress: "41.222.45.123",
-      userAgent: "Chrome 121.0.0.0",
-      success: true
-    },
-    {
-      id: "LOG-2024-002",
-      timestamp: "2024-02-20 14:15:10",
-      user: "Dr. James Mwangi",
-      role: "Compliance Officer",
-      action: "alert_resolved",
-      description: "Resolved suspicious prescription pattern alert ALT-2024-001",
-      target: "Alert System",
-      severity: "success", 
-      ipAddress: "41.222.45.124",
-      userAgent: "Firefox 122.0.0.0",
-      success: true
-    },
-    {
-      id: "LOG-2024-003",
-      timestamp: "2024-02-20 13:45:32",
-      user: "System Administrator",
-      role: "System Admin",
-      action: "access_denied",
-      description: "Failed login attempt with invalid credentials",
-      target: "Authentication System",
-      severity: "warning",
-      ipAddress: "197.156.89.45",
-      userAgent: "Unknown Client",
-      success: false
-    },
-    {
-      id: "LOG-2024-004",
-      timestamp: "2024-02-20 13:30:18",
-      user: "Dr. Grace Ochieng",
-      role: "Regulator",
-      action: "report_generated",
-      description: "Generated quarterly compliance report for Western Region",
-      target: "Report System",
-      severity: "info",
-      ipAddress: "41.222.45.125",
-      userAgent: "Chrome 120.0.0.0",
-      success: true
-    },
-    {
-      id: "LOG-2024-005",
-      timestamp: "2024-02-20 12:15:45",
-      user: "Dr. Peter Kiptoo",
-      role: "Senior Regulator",
-      action: "license_suspended",
-      description: "Suspended medical license for Dr. John Doe - License #MD-2019-4567",
-      target: "License Management",
-      severity: "critical",
-      ipAddress: "41.222.45.126",
-      userAgent: "Chrome 121.0.0.0",
-      success: true
-    },
-    {
-      id: "LOG-2024-006",
-      timestamp: "2024-02-20 11:30:22",
-      user: "Automated System",
-      role: "System",
-      action: "backup_completed",
-      description: "Daily backup of regulatory database completed successfully",
-      target: "Database System",
-      severity: "info",
-      ipAddress: "127.0.0.1",
-      userAgent: "System Process",
-      success: true
-    }
-  ];
-
-  const activityStats = [
-    { title: "Total Activities", value: "1,847", icon: Activity, color: "text-primary" },
-    { title: "Critical Actions", value: "12", icon: AlertTriangle, color: "text-destructive" },
-    { title: "Successful Actions", value: "1,823", icon: CheckCircle, color: "text-success" },
-    { title: "Failed Attempts", value: "24", icon: Shield, color: "text-warning" }
-  ];
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/regulator/analytics")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch analytics data");
+        return res.json();
+      })
+      .then((data) => {
+        setAnalyticsLogs(data.logs || []);
+        setAnalyticsStats(data.stats || {
+          totalActivities: 0,
+          criticalActions: 0,
+          successfulActions: 0,
+          failedAttempts: 0
+        });
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
   const getSeverityBadge = (severity: string) => {
     const variants = {
@@ -141,15 +85,15 @@ const RegulatorActivityLogs = () => {
    <DashboardLayout sidebarItems={sidebarItems} userRole="regulator" userName="Dr. Jane Regulator" userEmail="jane@ppb.go.ke">
       <div className="space-y-8">
         <div>
-           <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">Activity Logs</h1>
+           <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">Analytics</h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Comprehensive audit trail of all regulatory activities
+            Comprehensive analytics and regulatory performance overview
           </p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="gap-2">
             <Download className="w-4 h-4" />
-            Export Logs
+            Export Analytics
           </Button>
           <Button className="medical-button gap-2">
             <Filter className="w-4 h-4" />
@@ -158,23 +102,60 @@ const RegulatorActivityLogs = () => {
         </div>
       </div>
 
-      {/* Statistics */}
+      {/* Analytics Statistics - fetched from backend */}
       <div className="medical-grid">
-        {activityStats.map((stat, index) => (
-          <Card key={index} className="dashboard-card">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                  <p className="text-3xl font-bold mt-2">{stat.value}</p>
-                </div>
-                <div className="p-3 bg-primary/10 rounded-full">
-                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
-                </div>
+        <Card className="dashboard-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Activities</p>
+                <p className="text-3xl font-bold mt-2">{analyticsStats.totalActivities}</p>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <div className="p-3 bg-primary/10 rounded-full">
+                <Activity className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="dashboard-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Critical Actions</p>
+                <p className="text-3xl font-bold mt-2">{analyticsStats.criticalActions}</p>
+              </div>
+              <div className="p-3 bg-destructive/10 rounded-full">
+                <AlertTriangle className="w-8 h-8 text-destructive" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="dashboard-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Successful Actions</p>
+                <p className="text-3xl font-bold mt-2">{analyticsStats.successfulActions}</p>
+              </div>
+              <div className="p-3 bg-success/10 rounded-full">
+                <CheckCircle className="w-8 h-8 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="dashboard-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Failed Attempts</p>
+                <p className="text-3xl font-bold mt-2">{analyticsStats.failedAttempts}</p>
+              </div>
+              <div className="p-3 bg-warning/10 rounded-full">
+                <Shield className="w-8 h-8 text-warning" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -217,10 +198,10 @@ const RegulatorActivityLogs = () => {
         </CardContent>
       </Card>
 
-      {/* Activity Logs */}
+      {/* Analytics Logs */}
       <Tabs defaultValue="all" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="all">All Logs</TabsTrigger>
+          <TabsTrigger value="all">All Analytics</TabsTrigger>
           <TabsTrigger value="critical">Critical</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
@@ -230,14 +211,14 @@ const RegulatorActivityLogs = () => {
         <TabsContent value="all" className="space-y-4">
           <Card className="healthcare-card">
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>Recent Analytics</CardTitle>
               <CardDescription>
-                Chronological view of all regulatory system activities
+                Chronological view of all regulatory analytics events
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {activityLogs.map((log) => {
+                {analyticsLogs.map((log) => {
                   const ActionIcon = getActionIcon(log.action);
                   return (
                     <div key={log.id} className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors">
@@ -292,7 +273,7 @@ const RegulatorActivityLogs = () => {
 
         <TabsContent value="critical" className="space-y-4">
           <div className="space-y-4">
-            {activityLogs.filter(log => log.severity === 'critical').map((log) => {
+            {analyticsLogs.filter(log => log.severity === 'critical').map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
                 <Card key={log.id} className="healthcare-card border-l-4 border-l-destructive">
@@ -321,7 +302,7 @@ const RegulatorActivityLogs = () => {
 
         <TabsContent value="security" className="space-y-4">
           <div className="space-y-4">
-            {activityLogs.filter(log => log.action.includes('access') || log.action.includes('login') || !log.success).map((log) => {
+            {analyticsLogs.filter(log => log.action.includes('access') || log.action.includes('login') || !log.success).map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
                 <Card key={log.id} className="healthcare-card border-l-4 border-l-warning">
@@ -349,7 +330,7 @@ const RegulatorActivityLogs = () => {
 
         <TabsContent value="system" className="space-y-4">
           <div className="space-y-4">
-            {activityLogs.filter(log => log.user === 'Automated System' || log.user === 'System Administrator').map((log) => {
+            {analyticsLogs.filter(log => log.user === 'Automated System' || log.user === 'System Administrator').map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
                 <Card key={log.id} className="healthcare-card">
@@ -377,7 +358,7 @@ const RegulatorActivityLogs = () => {
 
         <TabsContent value="user" className="space-y-4">
           <div className="space-y-4">
-            {activityLogs.filter(log => log.user !== 'Automated System' && log.user !== 'System Administrator').map((log) => {
+            {analyticsLogs.filter(log => log.user !== 'Automated System' && log.user !== 'System Administrator').map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
                 <Card key={log.id} className="healthcare-card">
@@ -408,4 +389,4 @@ const RegulatorActivityLogs = () => {
   );
 };
 
-export default RegulatorActivityLogs;
+export default RegulatorAnalytics;

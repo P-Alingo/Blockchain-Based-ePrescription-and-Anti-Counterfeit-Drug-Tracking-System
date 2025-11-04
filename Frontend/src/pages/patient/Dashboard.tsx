@@ -142,7 +142,8 @@ const PatientDashboard = () => {
 
   const stats = dashboard?.stats || {};
   const recentPrescriptions = dashboard?.recentPrescriptions || [];
-  const statusBreakdown = dashboard?.statusBreakdown || {};
+  // Map statusBreakdown keys for display
+  const statusBreakdown = dashboard?.statusBreakdown ? Object.fromEntries(Object.entries(dashboard.statusBreakdown).map(([k, v]) => [k === "issued" ? "Active" : k.charAt(0).toUpperCase() + k.slice(1), v])) : {};
   const drugFrequency = dashboard?.drugFrequency || {};
   const doctorFrequency = dashboard?.doctorFrequency || {};
   const topDoctor = dashboard?.topDoctor || "N/A";
@@ -264,8 +265,8 @@ const PatientDashboard = () => {
         <td className="px-4 py-2">{p.doctorName}</td>
         <td className="px-4 py-2">{new Date(p.date).toLocaleDateString()}</td>
         <td className="px-4 py-2">
-          <Badge variant={p.status === 'active' ? 'default' : 'secondary'}>
-            {p.status}
+          <Badge variant={p.status === 'issued' ? 'default' : 'secondary'}>
+            {p.status === 'issued' ? 'Active' : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
           </Badge>
         </td>
         <td className="px-4 py-2">
