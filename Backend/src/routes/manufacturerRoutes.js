@@ -1,12 +1,17 @@
 import express from "express";
-import { getManufacturerProfile, updateManufacturerProfile, getManufacturerDashboard, createDrugBatch, getManufacturerBatches, getManufacturerBatchDetails, updateManufacturerBatch, deleteManufacturerBatch, getManufacturerBlockchain, getManufacturerBlockchainTx, getManufacturerAnalytics, getManufacturerShipments, getManufacturerShipmentDetails, createManufacturerShipment, updateManufacturerShipmentStatus, deleteManufacturerShipment, getManufacturerDropdowns } from "../controllers/manufacturerController.js";
+import { getManufacturerProfile, updateManufacturerProfile, getManufacturerDashboard, createDrugBatch, getManufacturerBatches, getManufacturerBatchDetails, updateManufacturerBatch, deleteManufacturerBatch, getManufacturerBlockchain, getManufacturerBlockchainTx, getManufacturerAnalytics, getManufacturerShipments, getManufacturerShipmentDetails, createManufacturerShipment, updateManufacturerShipmentStatus, deleteManufacturerShipment, getManufacturerDropdowns,  getBatchesReadyForShipping, getShipmentFormDropdowns } from "../controllers/manufacturerController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+router.use(authMiddleware);
 router.get("/drugbatch/form/dropdowns", getManufacturerDropdowns);
+
+// Dropdowns for shipment creation form
+router.get("/shipment/form/dropdowns", getShipmentFormDropdowns);
 
 router.get("/shipments", getManufacturerShipments);
 router.get("/shipments/:id", getManufacturerShipmentDetails);
+router.get("/batches/ready-for-shipping", getBatchesReadyForShipping);
 router.post("/shipments", createManufacturerShipment);
 router.put("/shipments/:id", updateManufacturerShipmentStatus);
 router.delete("/shipments/:id", deleteManufacturerShipment);
@@ -16,7 +21,7 @@ router.get("/blockchain", getManufacturerBlockchain);
 router.get("/blockchain/:tx", getManufacturerBlockchainTx);
 
 
-router.use(authMiddleware);
+
 
 router.get("/profile", getManufacturerProfile);
 router.put("/profile", updateManufacturerProfile);

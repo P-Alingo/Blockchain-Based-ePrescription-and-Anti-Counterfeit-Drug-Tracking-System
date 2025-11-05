@@ -78,7 +78,8 @@ interface Batch {
   expirydate: string;
   quantity: number;
   status: string;
-  qrcode: string;
+  qrcode?: string;
+  qrcode_path?: string;
   manufacturername: string;
   qualitycontrolofficerid?: number;
   qualityofficer: string;
@@ -170,6 +171,10 @@ const Batches = () => {
     return new Date(dateString).toISOString().split('T')[0];
   };
 
+
+  // API base URL
+  const API_BASE = "http://localhost:4000";
+
   // Fetch batches from backend with authentication and filters
   const fetchBatches = async () => {
     try {
@@ -186,13 +191,23 @@ const Batches = () => {
       if (filterStatus !== "all") params.status = filterStatus;
       if (searchTerm) params.drugid = drugs.find(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))?.id;
       // Manufacture/expiry date filters can be added here if UI supports
-      const res = await axios.get<Batch[]>("/api/manufacturer/batches", {
-        headers: { Authorization: `Bearer ${token}` },
+      const url = `${API_BASE}/api/manufacturer/batches`;
+      const res = await axios.get<Batch[]>(url, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         params,
       });
-  setBatches(Array.isArray(res.data) ? res.data : []);
+      // Check for router interception (HTML response)
+      if (typeof res.data === 'string') {
+        if (typeof res.data === 'string' && (res.data as string).includes('<!doctype html>')) {
+          toast.error("API returned HTML instead of JSON. Check your API_BASE URL.");
+          setError("API router interception detected");
+          setBatches([]);
+          return;
+        }
+      }
+      setBatches(Array.isArray(res.data) ? res.data : []);
       setRefreshCount(prev => prev + 1);
-      toast.success(`Refreshed ${res.data.length} batches`);
+      toast.success(`Refreshed ${Array.isArray(res.data) ? res.data.length : 0} batches`);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Failed to fetch batches";
       setError(errorMessage);
@@ -208,19 +223,45 @@ const Batches = () => {
       const token = localStorage.getItem("token");
       if (!token) return;
 
+      const url = `${API_BASE}/api/drugbatch/form/dropdowns`;
       const res = await axios.get<{ 
         drugs: Drug[]; 
         qualityOfficers: QualityOfficer[];
         distributors: Distributor[];
-      }>("http://localhost:4000/api/drugbatch/form/dropdowns", {
-        headers: { Authorization: `Bearer ${token}` },
+      }>(url, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
+
+      // Check for router interception (HTML response)
+      if (typeof res.data === 'string') {
+        if (typeof res.data === "string" && (res.data as string).includes('<!doctype html>')) {
+          toast.error("API returned HTML instead of JSON. Check your API_BASE URL.");
+          setDrugs([]);
+          setQualityOfficers([]);
+          setDistributors([]);
+          return;
+        }
+      }
 
       setDrugs(res.data.drugs || []);
       setQualityOfficers(res.data.qualityOfficers || []);
       setDistributors(res.data.distributors || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching dropdown data:", error);
+      toast.error("Failed to fetch dropdown data");
+      // Fallback demo data
+      setDrugs([
+        { id: 1, name: 'Paracetamol' },
+        { id: 2, name: 'Amoxicillin' },
+        { id: 3, name: 'Ibuprofen' },
+        { id: 4, name: 'Metformin' }
+      ]);
+      setQualityOfficers([{ id: 1, fullname: 'Jane Wanjiku' }]);
+      setDistributors([
+        { id: 1, display_name: 'Kenya Medical Distributors - Kisumu', name: 'Kenya Medical Distributors', facility: 'Kisumu' },
+        { id: 2, display_name: 'Nairobi Medical Distributors - Nairobi', name: 'Nairobi Medical Distributors', facility: 'Nairobi' },
+        { id: 3, display_name: 'Coast Region Distributors - Mombasa', name: 'Coast Region Distributors', facility: 'Mombasa' }
+      ]);
     }
   };
 
@@ -456,7 +497,8 @@ const Batches = () => {
   const fetchBatchDetails = async (id: number) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`/api/manufacturer/batch/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      const url = `${API_BASE}/api/manufacturer/batches/${id}`;
+      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
       setBatchDetails(res.data);
       setDetailsModalOpen(true);
     } catch (err) {
@@ -659,7 +701,7 @@ const Batches = () => {
               <TableCell>{batch.shipment_number || "N/A"}</TableCell>
               <TableCell>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleViewQRCode(batch)} disabled={!batch.qrcode} title="View QR Code">
+                  <Button variant="outline" size="sm" onClick={() => handleViewQRCode(batch)} disabled={!(batch.qrcode_path || batch.qrcode)} title="View QR Code">
                     <QrCode className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => window.open(`https://blockchain-explorer.com/tx/${batch.blockchaintx}`, "_blank")} disabled={!batch.blockchaintx} title="View on Blockchain">
@@ -697,19 +739,19 @@ const Batches = () => {
                 Scan or save this QR code for tracking and verification purposes.
               </DialogDescription>
             </DialogHeader>
-            {selectedBatch && selectedBatch.qrcode ? (
+            {selectedBatch && (selectedBatch.qrcode_path || selectedBatch.qrcode) ? (
               <div className="flex flex-col items-center gap-4 py-4">
                 <img
-                  src={selectedBatch.qrcode}
-                  alt={`QR Code for ${selectedBatch.batchnumber}`}
+                  src={selectedBatch.qrcode_path ? `http://localhost:4000${selectedBatch.qrcode_path}` : selectedBatch.qrcode}
+                  alt={`QR Code for ${selectedBatch.batchnumber || 'N/A'}`}
                   className="w-48 h-48 border rounded-lg shadow-md"
                 />
                 <div className="text-sm text-gray-600 space-y-1">
-                  <p><strong>Batch Number:</strong> {selectedBatch.batchnumber}</p>
-                  <p><strong>Shipment Number:</strong> {selectedBatch.shipment_number}</p>
-                  <p><strong>Drug Name:</strong> {selectedBatch.drugname}</p>
-                  <p><strong>Manufacturer:</strong> {selectedBatch.manufacturername}</p>
-                  <p><strong>Status:</strong> {selectedBatch.status}</p>
+                  <p><strong>Batch Number:</strong> {selectedBatch.batchnumber || 'N/A'}</p>
+                  <p><strong>Shipment Number:</strong> {selectedBatch.shipment_number || 'N/A'}</p>
+                  <p><strong>Drug Name:</strong> {selectedBatch.drugname || 'N/A'}</p>
+                  <p><strong>Manufacturer Company:</strong> {selectedBatch.manufacturername ? selectedBatch.manufacturername : 'N/A'}</p>
+                  <p><strong>Status:</strong> {selectedBatch.status || 'N/A'}</p>
                   {selectedBatch.qualityofficer && (
                     <p><strong>Quality Officer:</strong> {selectedBatch.qualityofficer}</p>
                   )}
@@ -718,8 +760,8 @@ const Batches = () => {
                   variant="outline"
                   onClick={() => {
                     const link = document.createElement("a");
-                    link.href = selectedBatch.qrcode;
-                    link.download = `batch_${selectedBatch.batchnumber}_qrcode.png`;
+                    link.href = selectedBatch.qrcode_path ? `http://localhost:4000${selectedBatch.qrcode_path}` : selectedBatch.qrcode;
+                    link.download = `batch_${selectedBatch.batchnumber || 'N/A'}_qrcode.png`;
                     link.click();
                   }}
                 >
@@ -750,15 +792,13 @@ const Batches = () => {
                 <div><strong>Expiry Date:</strong> {formatDate(batchDetails.expirydate)}</div>
                 <div><strong>Status:</strong> {batchDetails.status}</div>
                 <div><strong>Shipment No:</strong> {batchDetails.shipment_number || "N/A"}</div>
-                <div><strong>Facility:</strong> {batchDetails.facility_name || batchDetails.manufacturingfacility}</div>
-                <div><strong>Facility Address:</strong> {batchDetails.facility_address}</div>
-                <div><strong>Facility Phone:</strong> {batchDetails.facility_phone}</div>
-                <div><strong>Facility Location:</strong> {batchDetails.facility_location}</div>
+                <div><strong>Manufacturer Company:</strong> {batchDetails.manufacturer_company_name || 'N/A'}</div>
+                <div><strong>Distributor Facility:</strong> {batchDetails.distributor_facility_name || batchDetails.facility_name || batchDetails.manufacturingfacility || 'N/A'}</div>
+                <div><strong>Distributor Facility Address:</strong> {batchDetails.distributor_facility_address || batchDetails.facility_address || ''}</div>
+                <div><strong>Distributor Facility Phone:</strong> {batchDetails.distributor_facility_phone || batchDetails.facility_phone || ''}</div>
+                <div><strong>Distributor Facility Location:</strong> {batchDetails.distributor_facility_location || batchDetails.facility_location || ''}</div>
                 <div><strong>Quality Officer:</strong> {batchDetails.quality_officer || "Not Assigned"}</div>
                 <div><strong>Blockchain Tx:</strong> {batchDetails.blockchaintx}</div>
-                <div><strong>QR Code:</strong><br />
-                  {batchDetails.qrcode && <img src={batchDetails.qrcode} alt="Batch QR" className="w-32 h-32 border" />}
-                </div>
               </div>
             ) : <div>Loading...</div>}
           </DialogContent>
@@ -778,9 +818,9 @@ const Batches = () => {
               {/* Drug Selection */}
               <div className="space-y-2">
                 <Label htmlFor="drugid">Drug</Label>
-                <Select 
-                  value={editForm.drugid?.toString() || ""} 
-                  onValueChange={(value) => setEditForm({...editForm, drugid: parseInt(value)})}
+                <Select
+                  value={editForm.drugid ? editForm.drugid.toString() : ""}
+                  onValueChange={(value) => setEditForm({ ...editForm, drugid: parseInt(value) })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select drug" />
@@ -855,11 +895,11 @@ const Batches = () => {
               {/* Quality Control Officer */}
               <div className="space-y-2">
                 <Label htmlFor="qualitycontrolofficerid">Quality Control Officer</Label>
-                <Select 
-                  value={editForm.qualitycontrolofficerid?.toString() || "not-assigned"} 
+                <Select
+                  value={editForm.qualitycontrolofficerid ? editForm.qualitycontrolofficerid.toString() : "not-assigned"}
                   onValueChange={(value) => setEditForm({
-                    ...editForm, 
-                    qualitycontrolofficerid: value === "not-assigned" ? -1 : parseInt(value)
+                    ...editForm,
+                    qualitycontrolofficerid: value === "not-assigned" ? undefined : parseInt(value)
                   })}
                 >
                   <SelectTrigger>
@@ -879,11 +919,11 @@ const Batches = () => {
               {/* Distributor Company */}
               <div className="space-y-2">
                 <Label htmlFor="distributorcompanyid">Distributor Company</Label>
-                <Select 
-                  value={editForm.distributorcompanyid?.toString() || "not-assigned"} 
+                <Select
+                  value={editForm.distributorcompanyid ? editForm.distributorcompanyid.toString() : "not-assigned"}
                   onValueChange={(value) => setEditForm({
-                    ...editForm, 
-                    distributorcompanyid: value === "not-assigned" ? -1 : parseInt(value)
+                    ...editForm,
+                    distributorcompanyid: value === "not-assigned" ? undefined : parseInt(value)
                   })}
                 >
                   <SelectTrigger>

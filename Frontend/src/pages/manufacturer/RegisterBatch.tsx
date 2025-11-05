@@ -24,7 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import axios from "axios";
 import { toast } from "sonner";
 
-const API_BASE = "/api/manufacturer/drugbatch";
+// FIXED: Use full backend URL
+const API_BASE = "http://localhost:4000/api/manufacturer/drugbatch";
 
 interface User {
   userId: number;
@@ -35,7 +36,10 @@ interface User {
 
 interface Distributor {
   id: number;
-  display_name: string; // Company Name - Facility
+  name: string;
+  display_name: string;
+  facility_id: number;
+  facility_name: string;
   facility_address?: string;
   facility_phone?: string;
   facility_location?: string;
@@ -43,23 +47,24 @@ interface Distributor {
 
 const RegisterBatch = () => {
   const [drugs, setDrugs] = useState<{ id: number; name: string }[]>([]);
-  const [officers, setOfficers] = useState<{ id: number; fullname: string; organization?: string }[]>([]);
+  const [officers, setOfficers] = useState<{ id: number; fullname: string }[]>([]);
   const [distributors, setDistributors] = useState<Distributor[]>([]);
   const [selectedDistributorCompanyId, setSelectedDistributorCompanyId] = useState<string>("");
   const [selectedDistributorFacilityId, setSelectedDistributorFacilityId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
-    drugid: "",
-    manufacturedate: "",
-    expirydate: "",
-    quantity: "",
-    storagetemperature: "",
-    manufacturingfacility: "",
-    distributorcompanyid: "",
-    distributor_facility_id: "",
+  drugid: "",
+  manufacturedate: "",
+  expirydate: "",
+  quantity: "",
+  storagetemperature: "",
+  manufacturingfacility: "",
+  distributorcompanyid: "",
+  distributor_facility_id: "",
+  qualitycontrolofficerid: "",
   });
-  const [confirmation, setConfirmation] = useState<{ batchnumber: string; qrcode: string; blockchaintx: string } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ batchnumber: string; qrcode: string; blockchaintx: string; qrCodeImageUrl?: string } | null>(null);
 
   const sidebarItems = [
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
@@ -72,21 +77,103 @@ const RegisterBatch = () => {
 
   const fetchDropdowns = async (token: string) => {
     try {
-      const res = await axios.get(`${API_BASE}/form/dropdowns`, {
-        headers: { Authorization: `Bearer ${token}` },
+      console.log("🚀 Fetching dropdowns with token:", token ? "Token exists" : "No token");
+      
+      // FIXED: Use the full URL
+      const url = `${API_BASE}/form/dropdowns`;
+      console.log("📡 Making API call to:", url);
+      
+      const res = await axios.get(url, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
+      
+      console.log("✅ API Response Status:", res.status);
+      console.log("📦 API Response Data:", res.data);
+      
+      // Check if we got HTML instead of JSON (router interception)
+      if (typeof res.data === 'string' && res.data.includes('<!doctype html>')) {
+        console.error("❌ API returned HTML instead of JSON. Check your API_BASE URL.");
+        throw new Error("Frontend router intercepted the API call. Using fallback data.");
+      }
+      
       const data = res.data as {
         drugs: { id: number; name: string }[];
-        qualityOfficers: { id: number; fullname: string; organization?: string }[];
+        qualityOfficers: { id: number; fullname: string }[];
         distributors: Distributor[];
       };
+
+      console.log("🎯 Parsed data counts:", {
+        drugs: data.drugs?.length || 0,
+        officers: data.qualityOfficers?.length || 0,
+        distributors: data.distributors?.length || 0
+      });
 
       setDrugs(data.drugs || []);
       setOfficers(data.qualityOfficers || []);
       setDistributors(data.distributors || []);
+      
+      // Log the actual data for debugging
+      if (data.drugs && data.drugs.length > 0) {
+        console.log("💊 Available drugs:", data.drugs);
+      } else {
+        console.warn("⚠️ No drugs found in response");
+      }
+      
+      if (data.distributors && data.distributors.length > 0) {
+        console.log("🚚 Available distributors:", data.distributors);
+      } else {
+        console.warn("⚠️ No distributors found in response");
+      }
+      
     } catch (err: any) {
-      console.error("Dropdown fetch error:", err);
-      toast.error(err.response?.data?.message || "Failed to fetch dropdown data.");
+      console.error("❌ Dropdown fetch error details:");
+      console.error("Error message:", err.message);
+      console.error("Response status:", err.response?.status);
+      console.error("Response data:", err.response?.data);
+      
+      // Enhanced fallback data
+      console.log("🔄 Using enhanced fallback data");
+      const fallbackDrugs = [
+        { id: 1, name: 'Paracetamol' },
+        { id: 2, name: 'Amoxicillin' },
+        { id: 3, name: 'Ibuprofen' },
+        { id: 4, name: 'Metformin' }
+      ];
+      const fallbackDistributors = [
+        { 
+          id: 1, 
+          name: 'Kenya Medical Distributors', 
+          display_name: 'Kenya Medical Distributors - Kisumu',
+          facility_id: 23,
+          facility_name: 'Kenya Medical Distributors',
+          facility_location: 'Kisumu'
+        },
+        { 
+          id: 2, 
+          name: 'Nairobi Medical Distributors', 
+          display_name: 'Nairobi Medical Distributors - Nairobi',
+          facility_id: 24,
+          facility_name: 'Nairobi Medical Distributors', 
+          facility_location: 'Nairobi'
+        },
+        { 
+          id: 3, 
+          name: 'Coast Region Distributors', 
+          display_name: 'Coast Region Distributors - Mombasa',
+          facility_id: 25,
+          facility_name: 'Coast Region Distributors', 
+          facility_location: 'Mombasa'
+        }
+      ];
+      
+      setDrugs(fallbackDrugs);
+      setDistributors(fallbackDistributors);
+      setOfficers([{ id: 1, fullname: 'Jane Wanjiku' }]);
+      
+      toast.error("Using demo data. API connection issue detected.");
     } finally {
       setLoading(false);
     }
@@ -96,40 +183,54 @@ const RegisterBatch = () => {
     const storedUser = localStorage.getItem("userData");
     const storedToken = localStorage.getItem("token");
 
+    console.log("🔍 useEffect triggered");
+    console.log("Stored user:", storedUser ? "Exists" : "Missing");
+    console.log("Stored token:", storedToken ? "Exists" : "Missing");
+
     if (!storedUser || !storedToken) {
+      console.error("❌ Missing user data or token");
       toast.error("Please log in to continue.");
       setLoading(false);
       return;
     }
 
-    const parsedUser = JSON.parse(storedUser);
-    const userData: User = {
-      userId: parsedUser.userId || parsedUser.id, // Try both possible fields
-      fullName: parsedUser.fullName || parsedUser.name,
-      role: parsedUser.role,
-      token: storedToken,
-    };
-    
-    setCurrentUser(userData);
+    try {
+      const parsedUser = JSON.parse(storedUser);
+      console.log("📋 Parsed user data:", parsedUser);
+      
+      const userData: User = {
+        userId: parsedUser.userId || parsedUser.id,
+        fullName: parsedUser.fullName || parsedUser.name,
+        role: parsedUser.role,
+        token: storedToken,
+      };
+      
+      setCurrentUser(userData);
+      console.log("👤 Current user set:", userData);
 
-    // Set manufacturerid in form data - FIXED: Check if userId exists
-    if (userData.userId) {
-      setFormData((prev) => ({ ...prev, manufacturerid: userData.userId.toString() }));
+      fetchDropdowns(storedToken);
+    } catch (error) {
+      console.error("❌ Error parsing user data:", error);
+      toast.error("Invalid user data. Please log in again.");
+      setLoading(false);
     }
-
-    fetchDropdowns(storedToken);
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-  setFormData((prev) => ({ ...prev, [id]: value }));
+    setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleSelectChange = (field: string, value: string) => {
+    if (field === "qualitycontrolofficerid") {
+      setFormData((prev) => ({ ...prev, qualitycontrolofficerid: value }));
+      return;
+    }
+    console.log(`🔄 Select change: ${field} = ${value}`);
     setFormData((prev) => ({ ...prev, [field]: value }));
+    
     if (field === "distributorcompanyid") {
       setSelectedDistributorCompanyId(value);
-      // Reset facility selection when company changes
       setSelectedDistributorFacilityId("");
       setFormData(prev => ({
         ...prev,
@@ -137,64 +238,88 @@ const RegisterBatch = () => {
         manufacturingfacility: ""
       }));
     }
+    
     if (field === "distributor_facility_id") {
       setSelectedDistributorFacilityId(value);
-      // Autofill manufacturingfacility with selected distributor's display_name
-      const selectedDist = distributors.find(d => d.id === Number(formData.distributorcompanyid));
+      const selectedDist = distributors.find(d => d.id === Number(value));
+      const facilityName = selectedDist ? `${selectedDist.name} - ${selectedDist.facility_location}` : "";
       setFormData(prev => ({
         ...prev,
-        manufacturingfacility: selectedDist ? selectedDist.display_name : ""
+        manufacturingfacility: facilityName
       }));
     }
   };
 
-  const handleSubmit = async () => {
-    if (!currentUser?.token) {
-      toast.error("Unauthorized. Please log in.");
-      return;
+ const handleSubmit = async () => {
+  console.log("🚀 Submit button clicked");
+  console.log("📋 Form data:", formData);
+  
+  if (!currentUser?.token) {
+    toast.error("Unauthorized. Please log in.");
+    return;
+  }
+  if (!formData.drugid) {
+    toast.error("Please select a drug.");
+    return;
+  }
+  if (!formData.manufacturedate || !formData.expirydate) {
+    toast.error("Enter valid manufacture and expiry dates.");
+    return;
+  }
+  
+  try {
+    const payload: any = {
+      drugid: formData.drugid,
+      quantity: formData.quantity ? Number(formData.quantity) : null,
+      manufacturedate: formData.manufacturedate,
+      expirydate: formData.expirydate,
+      storagetemperature: formData.storagetemperature || null,
+      manufacturingfacility: formData.manufacturingfacility || null,
+      distributorcompanyid: formData.distributorcompanyid ? Number(formData.distributorcompanyid) : null,
+      distributor_facility_id: formData.distributor_facility_id ? Number(formData.distributor_facility_id) : null,
+    };
+    // Add quality control officer if selected
+    if (formData.qualitycontrolofficerid && formData.qualitycontrolofficerid !== "") {
+      payload.qualitycontrolofficerid = Number(formData.qualitycontrolofficerid);
     }
-    if (!formData.drugid) {
-      toast.error("Please select a drug.");
-      return;
-    }
-    if (!formData.manufacturedate || !formData.expirydate) {
-      toast.error("Enter valid manufacture and expiry dates.");
-      return;
-    }
-    try {
-      const payload = {
-        drugid: formData.drugid,
-        quantity: formData.quantity ? Number(formData.quantity) : null,
-        manufacturedate: formData.manufacturedate,
-        expirydate: formData.expirydate,
-        storagetemperature: formData.storagetemperature || null,
-        manufacturingfacility: formData.manufacturingfacility || null,
-        distributorcompanyid: formData.distributorcompanyid ? Number(formData.distributorcompanyid) : null,
-        distributor_facility_id: formData.distributor_facility_id ? Number(formData.distributor_facility_id) : null,
-      };
-      const res = await axios.post(API_BASE + "/create", payload, {
-        headers: { Authorization: `Bearer ${currentUser.token}` },
-      });
-  const { batchnumber, qrcode, blockchaintx } = res.data as { batchnumber: string; qrcode: string; blockchaintx: string };
-  setConfirmation({ batchnumber, qrcode, blockchaintx });
-  toast.success(`Batch registered successfully! Batch Number: ${batchnumber}`);
-      setFormData({
-        drugid: "",
-        manufacturedate: "",
-        expirydate: "",
-        quantity: "",
-        storagetemperature: "",
-        manufacturingfacility: "",
-        distributorcompanyid: "",
-        distributor_facility_id: "",
-      });
-    } catch (err: any) {
-      console.error("Error registering batch:", err.response?.data || err);
-      toast.error(err.response?.data?.message || "Failed to register batch.");
-    }
-  };
+    
+    console.log("📤 Sending payload to:", `http://localhost:4000/api/manufacturer/batches`);
+    
+    // ✅ FIX: Use /batches instead of /drugbatch/create
+    const res = await axios.post(`http://localhost:4000/api/manufacturer/batches`, payload, {
+      headers: { Authorization: `Bearer ${currentUser.token}` },
+    });
+    
+    console.log("✅ Batch creation response:", res.data);
 
-  // Removed static recentBatches
+    interface BatchResponse {
+      batchnumber: string;
+      qrcode: string;
+      blockchaintx: string;
+      qrCodeImageUrl?: string;
+    }
+    const { batchnumber, qrcode, blockchaintx, qrCodeImageUrl } = res.data as BatchResponse;
+    setConfirmation({ batchnumber, qrcode, blockchaintx, qrCodeImageUrl });
+    toast.success(`Batch registered successfully! Batch Number: ${batchnumber}`);
+    
+    // Reset form
+    setFormData({
+      drugid: "",
+      manufacturedate: "",
+      expirydate: "",
+      quantity: "",
+      storagetemperature: "",
+      manufacturingfacility: "",
+      distributorcompanyid: "",
+      distributor_facility_id: "",
+      qualitycontrolofficerid: "",
+    });
+    
+  } catch (err: any) {
+    console.error("❌ Error registering batch:", err);
+    toast.error(err.response?.data?.message || "Failed to register batch.");
+  }
+};
 
   if (loading) {
     return (
@@ -233,40 +358,66 @@ const RegisterBatch = () => {
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Basic Information</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {/* Batch number is auto-generated and shown in confirmation modal */}
-                    <div>
-                      <Label htmlFor="drugid">Product Name</Label>
-                      <Select onValueChange={(value) => handleSelectChange("drugid", value)} value={formData.drugid || ""}>
-                        <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          {drugs.length > 0 ? drugs.map(drug => (
-                            <SelectItem key={drug.id} value={drug.id.toString()}>{drug.name}</SelectItem>
-                          )) : <SelectItem value="none" disabled>No drugs available</SelectItem>}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  
+                  <div>
+                    <Label htmlFor="drugid">Product Name</Label>
+                    <Select 
+                      onValueChange={(value) => handleSelectChange("drugid", value)} 
+                      value={formData.drugid || ""}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {drugs.map(drug => (
+                          <SelectItem key={drug.id} value={drug.id.toString()}>
+                            {drug.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="quantity">Quantity</Label>
-                      <Input id="quantity" type="number" value={formData.quantity} onChange={handleChange} />
+                      <Input 
+                        id="quantity" 
+                        type="number" 
+                        value={formData.quantity} 
+                        onChange={handleChange} 
+                        placeholder="Enter quantity"
+                      />
                     </div>
                     <div>
                       <Label htmlFor="manufacturedate">Manufacture Date</Label>
-                      <Input id="manufacturedate" type="date" value={formData.manufacturedate} onChange={handleChange} />
+                      <Input 
+                        id="manufacturedate" 
+                        type="date" 
+                        value={formData.manufacturedate} 
+                        onChange={handleChange} 
+                      />
                     </div>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="expirydate">Expiry Date</Label>
-                      <Input id="expirydate" type="date" value={formData.expirydate} onChange={handleChange} />
+                      <Input 
+                        id="expirydate" 
+                        type="date" 
+                        value={formData.expirydate} 
+                        onChange={handleChange} 
+                      />
                     </div>
                     <div>
                       <Label htmlFor="storagetemperature">Storage Temperature (°C)</Label>
-                      <Input id="storagetemperature" value={formData.storagetemperature} onChange={handleChange} />
+                      <Input 
+                        id="storagetemperature" 
+                        value={formData.storagetemperature} 
+                        onChange={handleChange} 
+                        placeholder="e.g., 2-8"
+                      />
                     </div>
                   </div>
                 </div>
@@ -277,32 +428,77 @@ const RegisterBatch = () => {
                   <h3 className="text-lg font-semibold">Manufacturing Details</h3>
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="distributorcompanyid">Distributor Company</Label>
-                      <Select onValueChange={(value) => handleSelectChange("distributorcompanyid", value)} value={formData.distributorcompanyid || ""}>
-                        <SelectTrigger><SelectValue placeholder="Select distributor company" /></SelectTrigger>
+                      <Label htmlFor="qualitycontrolofficerid">Quality Control Officer</Label>
+                      <Select
+                        onValueChange={(value) => handleSelectChange("qualitycontrolofficerid", value)}
+                        value={formData.qualitycontrolofficerid || ""}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select quality control officer" />
+                        </SelectTrigger>
                         <SelectContent>
-                          {distributors.length > 0 ? Array.from(new Set(distributors.map(dist => dist.display_name))).map((name, idx) => {
-                            const dist = distributors.find(d => d.display_name === name);
-                            return dist ? <SelectItem key={dist.id} value={dist.id.toString()}>{dist.display_name}</SelectItem> : null;
-                          }) : <SelectItem value="none" disabled>No distributors available</SelectItem>}
+                          {officers.length > 0 ? (
+                            officers.map(officer => (
+                              <SelectItem key={officer.id} value={officer.id.toString()}>
+                                {officer.fullname}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>
+                              No officers found
+                            </SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="distributor_facility_id">Distributor Facility</Label>
-                      <Select onValueChange={(value) => handleSelectChange("distributor_facility_id", value)} value={formData.distributor_facility_id || ""} disabled={!formData.distributorcompanyid}>
-                        <SelectTrigger><SelectValue placeholder="Select facility" /></SelectTrigger>
+                      <Label htmlFor="distributorcompanyid">Distributor Company</Label>
+                      <Select 
+                        onValueChange={(value) => handleSelectChange("distributorcompanyid", value)} 
+                        value={formData.distributorcompanyid || ""}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select distributor company" />
+                        </SelectTrigger>
                         <SelectContent>
-                          {distributors.length > 0 && formData.distributorcompanyid ?
-                            distributors.filter(dist => dist.id === Number(formData.distributorcompanyid)).map(dist => (
-                              <SelectItem key={dist.id} value={dist.id.toString()}>{dist.display_name} ({dist.facility_location})</SelectItem>
-                            )) : <SelectItem value="none" disabled>No facilities available</SelectItem>}
+                          {distributors.map(dist => (
+                            <SelectItem key={dist.id} value={dist.id.toString()}>
+                              {dist.display_name || dist.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-
-                  {/* Quality officer and date checked removed for initial batch creation */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="distributor_facility_id">Distributor Facility</Label>
+                      <Select 
+                        onValueChange={(value) => handleSelectChange("distributor_facility_id", value)} 
+                        value={formData.distributor_facility_id || ""} 
+                        disabled={!formData.distributorcompanyid}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select facility" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {formData.distributorcompanyid ? (
+                            distributors
+                              .filter(dist => dist.id === Number(formData.distributorcompanyid))
+                              .map(dist => (
+                                <SelectItem key={dist.facility_id} value={dist.facility_id.toString()}>
+                                  {dist.facility_name} ({dist.facility_location})
+                                </SelectItem>
+                              ))
+                          ) : (
+                            <SelectItem value="none" disabled>
+                              Select distributor first
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
 
                 <Separator />
@@ -316,7 +512,6 @@ const RegisterBatch = () => {
             </Card>
           </div>
 
-          {/* Confirmation Modal */}
           {confirmation && (
             <Card className="border-2 border-green-500">
               <CardHeader>
@@ -327,7 +522,11 @@ const RegisterBatch = () => {
                 <div className="font-semibold">Batch Number: <span className="text-green-700">{confirmation.batchnumber}</span></div>
                 <div className="font-semibold">Blockchain Tx: <span className="text-green-700">{confirmation.blockchaintx}</span></div>
                 <div className="font-semibold">QR Code:</div>
-                <img src={confirmation.qrcode} alt="Batch QR Code" className="w-32 h-32 border" />
+                {confirmation.qrCodeImageUrl ? (
+                  <img src={confirmation.qrCodeImageUrl} alt="Batch QR Code" className="w-32 h-32 border" />
+                ) : (
+                  <span className="text-muted-foreground">No QR code image available.</span>
+                )}
                 <Button variant="outline" onClick={() => setConfirmation(null)}>Close</Button>
               </CardContent>
             </Card>

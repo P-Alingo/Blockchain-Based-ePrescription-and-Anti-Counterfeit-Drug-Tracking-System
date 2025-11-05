@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-const API_URL = '/api/manufacturer/dashboard';
+const API_URL = 'http://localhost:4000/api/manufacturer/dashboard';
 
 const ManufacturerDashboard = () => {
   const sidebarItems = [
@@ -28,15 +28,20 @@ const ManufacturerDashboard = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     setLoading(true);
-    axios.get(API_URL, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => {
-        setDashboard(res.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err?.response?.data?.message || 'Failed to fetch dashboard');
-        setLoading(false);
-      });
+    const fetchDashboard = () => {
+      axios.get(API_URL, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => {
+          setDashboard(res.data);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err?.response?.data?.message || 'Failed to fetch dashboard');
+          setLoading(false);
+        });
+    };
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 10000); // refresh every 10s
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Loading..." userEmail=""><div className="p-8 text-center">Loading dashboard...</div></DashboardLayout>;
@@ -81,14 +86,7 @@ const ManufacturerDashboard = () => {
               <div className="text-2xl font-bold text-green-700">{summary?.deliveredShipments ?? 0}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Pending Quality Checks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-700">{summary?.pendingQualityChecks ?? 0}</div>
-            </CardContent>
-          </Card>
+          {/* Pending Quality Checks card removed as requested */}
         </div>
 
         {/* Recent Batches Table */}

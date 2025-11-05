@@ -1,224 +1,440 @@
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, Search, Filter, Download, Package2, Beaker, Shield, Settings, Package, Plus, List, Truck } from "lucide-react";
-import { Pie, Bar, Line } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
+import { Line, Pie, Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  BarElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BarElement, Tooltip, Legend, Filler);
 
-ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+import { useNavigate, useLocation } from "react-router-dom";
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Activity, BarChart2, PieChart, Package2, Truck, CheckCircle, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-const ManufacturerActivityLogs = () => {
-   const sidebarItems = [
-    { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
-    { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false },
-    { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
-    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
-    { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: true},
-    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
+export type ManufacturerAnalyticsData = {
+  summary?: {
+    totalBatches?: number;
+    totalShipments?: number;
+    qualityPassRate?: number;
+  };
+  batchesByMonth?: Array<{ month: string; count: number }>;
+  shipmentStatus?: Array<{ status: string; count: number }>;
+  topDrugs?: Array<{ name: string; count: number }>;
+  geoReach?: Array<{ facility_location: string; count: number }>;
+  blockchainPerf?: Array<{ verified: boolean; count: number }>;
+  expiringSoon?: Array<{ batchnumber: string; expirydate: string; drug_name?: string }>;
+  lastActivity?: {
+    batchNo: string;
+    drug: string;
+    date: string;
+  };
+};
+
+export default function ManufacturerAnalytics() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [data, setData] = useState<ManufacturerAnalyticsData | null>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    const storedUserData = localStorage.getItem("userData");
+    if (!storedToken || !storedUserData) {
+      navigate("/login");
+      return;
+    }
+    try {
+      const parsedUserData = JSON.parse(storedUserData);
+      setUserData(parsedUserData);
+      setToken(storedToken);
+      if (location.pathname !== "/manufacturer/analytics") {
+        navigate("/manufacturer/analytics", { replace: true });
+      }
+    } catch {
+      navigate("/login");
+    }
+  }, [navigate, location.pathname]);
+
+  const userName = userData?.fullName || "Manufacturer";
+  const userEmail = userData?.email || "";
+  const userRole = userData?.role || "manufacturer";
+
+  useEffect(() => {
+    if (!token) return;
+    const fetchAnalytics = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const apiUrl = "http://localhost:4000/api/manufacturer/analytics";
+        const res = await axios.get<ManufacturerAnalyticsData>(
+          apiUrl,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setData(res.data);
+        // Example activity logs
+        if (res.data.lastActivity) {
+          setActivityLogs([
+            {
+              action: "Batch Updated",
+              batchNo: res.data.lastActivity.batchNo,
+              timestamp: new Date().toLocaleString(),
+              details: `Updated batch for ${res.data.lastActivity.drug}`,
+            },
+            {
+              action: "Batch Status Update", 
+              batchNo: res.data.lastActivity.batchNo,
+              timestamp: new Date(res.data.lastActivity.date).toLocaleString(),
+              details: `Batch status changed recently`,
+            }
+          ]);
+        } else {
+          setActivityLogs([
+            {
+              action: "Analytics Viewed",
+              batchNo: "N/A",
+              timestamp: new Date().toLocaleString(),
+              details: `Viewed manufacturer analytics dashboard`,
+            }
+          ]);
+        }
+      } catch (err: any) {
+        setError(err?.response?.data?.message || "Failed to load analytics. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAnalytics();
+  }, [token]);
+
+  // Sidebar items for manufacturer
+  const sidebarItems = [
+    { icon: Package2, label: "Dashboard", path: "/manufacturer/dashboard", active: location.pathname === "/manufacturer/dashboard" },
+    { icon: Activity, label: "Register Batch", path: "/manufacturer/register-batch", active: location.pathname === "/manufacturer/register-batch" },
+    { icon: Calendar, label: "Batches", path: "/manufacturer/batches", active: location.pathname === "/manufacturer/batches" },
+    { icon: CheckCircle, label: "Blockchain", path: "/manufacturer/blockchain", active: location.pathname === "/manufacturer/blockchain" },
+    { icon: BarChart2, label: "Analytics", path: "/manufacturer/analytics", active: location.pathname === "/manufacturer/analytics" },
+    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: location.pathname === "/manufacturer/shipments" },
   ];
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all");
 
-  // Define the analytics data type
-  type AnalyticsData = {
-    batchesByMonth: { month: string; count: number }[];
-    shipmentStatus: { status: string; count: number }[];
-    expiringSoon: { batchnumber: string; expirydate: string }[];
-    topDrugs: { name: string; count: number }[];
-    geoReach: { facility_location: string; count: number }[];
-    blockchainPerf: { verified: boolean; count: number }[];
-  };
+  if (loading) {
+    return (
+      <DashboardLayout
+        sidebarItems={sidebarItems}
+        userRole={userRole}
+        userName={userName}
+        userEmail={userEmail}
+      >
+        <div className="flex justify-center items-center h-64">
+          <div className="text-lg">Loading analytics...</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
-  const { data: analytics, isLoading } = useQuery<AnalyticsData>({
-    queryKey: ["manufacturer-analytics"],
-    queryFn: async (): Promise<AnalyticsData> => {
-      const res = await axios.get<AnalyticsData>("/api/manufacturer/analytics");
-      return res.data;
-    }
-  });
- 
+  if (error) {
+    return (
+      <DashboardLayout
+        sidebarItems={sidebarItems}
+        userRole={userRole}
+        userName={userName}
+        userEmail={userEmail}
+      >
+        <div className="flex justify-center items-center h-64">
+          <div className="text-red-500 text-lg text-center">
+            {error}
+            <br />
+            <Button 
+              onClick={() => window.location.reload()} 
+              className="mt-4"
+              variant="outline"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
-  // Chart Data
-  const batchesByMonth = analytics?.batchesByMonth || [];
-  const shipmentStatus = analytics?.shipmentStatus || [];
-  const expiringSoon = analytics?.expiringSoon || [];
-  const topDrugs = analytics?.topDrugs || [];
-  const geoReach = analytics?.geoReach || [];
-  const blockchainPerf = analytics?.blockchainPerf || [];
+  if (!data) {
+    return (
+      <DashboardLayout
+        sidebarItems={sidebarItems}
+        userRole={userRole}
+        userName={userName}
+        userEmail={userEmail}
+      >
+        <div className="flex justify-center items-center h-64">
+          <div className="text-lg text-center">
+            No analytics data available.
+            <br />
+            <Button 
+              onClick={() => window.location.reload()} 
+              className="mt-4"
+              variant="outline"
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
-  // ChartJS data
+  // Chart data with fallbacks
+  const {
+    summary = {},
+    batchesByMonth = [],
+    shipmentStatus = [],
+    topDrugs = [],
+    geoReach = [],
+    blockchainPerf = [],
+    expiringSoon = [],
+  } = data;
+
   const lineData = {
-    labels: batchesByMonth.map(b => b.month?.slice(0, 7)),
-    datasets: [{
-      label: 'Batches Created',
-      data: batchesByMonth.map(b => b.count),
-      borderColor: 'rgb(255, 99, 132)',
-      backgroundColor: 'rgba(255, 99, 132, 0.2)',
-      fill: true,
-    }]
+    labels: batchesByMonth.map((m: any) => m.month).reverse() || ['No Data'],
+    datasets: [
+      {
+        label: "Batches Produced",
+        data: batchesByMonth.map((m: any) => m.count).reverse() || [0],
+        borderColor: "#ea580c",
+        backgroundColor: "rgba(234,88,12,0.1)",
+        fill: true,
+      },
+    ],
   };
+
   const pieData = {
-    labels: shipmentStatus.map(s => s.status),
-    datasets: [{
-      data: shipmentStatus.map(s => s.count),
-      backgroundColor: ['#36A2EB', '#FFCE56', '#4BC0C0', '#FF6384'],
-    }]
+    labels: shipmentStatus.map((s: any) => s.status) || ['No Data'],
+    datasets: [
+      {
+        data: shipmentStatus.map((s: any) => s.count) || [1],
+        backgroundColor: ["#ea580c", "#2563eb", "#f59e42", "#e11d48"],
+      },
+    ],
   };
-  const expiringBarData = {
-    labels: expiringSoon.map(e => e.batchnumber),
-    datasets: [{
-      label: 'Expiring Soon',
-      data: expiringSoon.map(e => new Date(e.expirydate)),
-      backgroundColor: '#FF6384',
-    }]
+
+  const barData = {
+    labels: topDrugs.map((d: any) => d.name) || ['No Data'],
+    datasets: [
+      {
+        label: "Top Drugs Produced",
+        data: topDrugs.map((d: any) => d.count) || [0],
+        backgroundColor: "#2563eb",
+      },
+    ],
   };
-  const topDrugsBarData = {
-    labels: topDrugs.map(d => d.name),
-    datasets: [{
-      label: 'Top Drugs Produced',
-      data: topDrugs.map(d => d.count),
-      backgroundColor: '#36A2EB',
-    }]
-  };
+
   const geoBarData = {
-    labels: geoReach.map(g => g.facility_location),
-    datasets: [{
-      label: 'Deliveries',
-      data: geoReach.map(g => g.count),
-      backgroundColor: '#4BC0C0',
-    }]
+    labels: geoReach.map((g: any) => g.facility_location) || ['No Data'],
+    datasets: [
+      {
+        label: "Shipments by Location",
+        data: geoReach.map((g: any) => g.count) || [0],
+        backgroundColor: "#4BC0C0",
+      },
+    ],
   };
+
   const blockchainPieData = {
-    labels: blockchainPerf.map(b => b.verified ? 'Success' : 'Pending'),
-    datasets: [{
-      data: blockchainPerf.map(b => b.count),
-      backgroundColor: ['#36A2EB', '#FF6384'],
-    }]
+    labels: blockchainPerf.map((b: any) => b.verified ? 'Verified' : 'Pending'),
+    datasets: [
+      {
+        data: blockchainPerf.map((b: any) => b.count) || [0],
+        backgroundColor: ["#10B981", "#F59E0B"],
+      },
+    ],
   };
-
-  const getActionIcon = (category) => {
-    switch (category) {
-      case "Manufacturing":
-        return <Package2 className="h-4 w-4 text-blue-600" />;
-      case "Quality Control":
-        return <Beaker className="h-4 w-4 text-purple-600" />;
-      case "Blockchain":
-        return <Shield className="h-4 w-4 text-green-600" />;
-      case "Equipment":
-        return <Settings className="h-4 w-4 text-orange-600" />;
-      default:
-        return <Activity className="h-4 w-4 text-gray-600" />;
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "Completed":
-      case "Success":
-        return <Badge variant="secondary" className="bg-green-100 text-green-800">{status}</Badge>;
-      case "Failed":
-        return <Badge variant="destructive">{status}</Badge>;
-      case "Pending":
-        return <Badge className="bg-orange-100 text-orange-800">{status}</Badge>;
-      case "In Progress":
-        return <Badge className="bg-blue-100 text-blue-800">{status}</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  // Removed filteredLogs and activityLogs, now only using analytics data from API
 
   return (
-    <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
+    <DashboardLayout
+      sidebarItems={sidebarItems}
+      userRole={userRole}
+      userName={userName}
+      userEmail={userEmail}
+    >
       <div className="space-y-8">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">Manufacturer Analytics</h1>
-        <p className="text-muted-foreground">Visual insight into manufacturing performance, shipment trends, and blockchain health.</p>
-      </div>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+          <h1 className="text-3xl font-bold text-orange-600">
+            Manufacturer Analytics
+          </h1>
+          <Badge className="bg-orange-100 text-orange-800 px-3 py-2 rounded-full text-sm font-semibold">
+            Updated {new Date().toLocaleDateString()}
+          </Badge>
+        </div>
 
-      {isLoading ? <div>Loading analytics...</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Batches Created Over Time</CardTitle>
-              <CardDescription>Monthly batch creation trend</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Line data={lineData} />
+        {/* Stat Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="card-elevated">
+            <CardContent className="p-6 flex flex-col items-center">
+              <div className="text-2xl font-bold text-orange-700">{summary.totalBatches ?? 0}</div>
+              <div className="text-gray-600">Total Batches</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Shipment Status Breakdown</CardTitle>
-              <CardDescription>Current shipment status</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Pie data={pieData} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Expiring Soon</CardTitle>
-              <CardDescription>Batches expiring in next 90 days</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Bar data={expiringBarData} />
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Batch</TableHead>
-                    <TableHead>Expiry Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expiringSoon.map(e => (
-                    <TableRow key={e.batchnumber}>
-                      <TableCell>{e.batchnumber}</TableCell>
-                      <TableCell>{e.expirydate}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Drugs Produced</CardTitle>
-              <CardDescription>Most produced drugs</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Bar data={topDrugsBarData} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Geographic Reach</CardTitle>
-              <CardDescription>Distribution by location</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Bar data={geoBarData} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Blockchain Performance</CardTitle>
-              <CardDescription>Success vs Pending transactions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Pie data={blockchainPieData} />
+          <Card className="card-elevated">
+            <CardContent className="p-6 flex flex-col items-center">
+              <div className="text-2xl font-bold text-blue-700">{summary.totalShipments ?? 0}</div>
+              <div className="text-gray-600">Total Shipments</div>
             </CardContent>
           </Card>
         </div>
-      )}
+
+        {/* Charts Row 1 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-orange-700" /> 
+                Monthly Batch Trends
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Line 
+                data={lineData} 
+                options={{ 
+                  responsive: true, 
+                  plugins: { legend: { display: false } },
+                  maintainAspectRatio: false
+                }} 
+                height={300}
+              />
+            </CardContent>
+          </Card>
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-blue-700" /> 
+                Shipment Status Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Pie 
+                data={pieData} 
+                options={{ 
+                  responsive: true,
+                  maintainAspectRatio: false
+                }} 
+                height={300}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts Row 2 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-blue-700" /> 
+                Top Drugs Produced
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Bar 
+                data={barData} 
+                options={{ 
+                  responsive: true, 
+                  plugins: { legend: { display: false } },
+                  maintainAspectRatio: false
+                }} 
+                height={300}
+              />
+            </CardContent>
+          </Card>
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-orange-700" /> 
+                Geographic Reach
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Bar 
+                data={geoBarData} 
+                options={{ 
+                  responsive: true, 
+                  plugins: { legend: { display: false } },
+                  maintainAspectRatio: false
+                }} 
+                height={300}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Blockchain Performance */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-700" /> 
+                Blockchain Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Pie 
+                data={blockchainPieData} 
+                options={{ 
+                  responsive: true,
+                  maintainAspectRatio: false
+                }} 
+                height={300}
+              />
+            </CardContent>
+          </Card>
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-orange-700" /> 
+                Batches Expiring Soon
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {expiringSoon.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/40">
+                      <th className="p-2">Batch No</th>
+                      <th className="p-2">Drug</th>
+                      <th className="p-2">Expiry</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expiringSoon.map((b: any, idx: number) => (
+                      <tr key={idx} className="border-b">
+                        <td className="p-2">{b.batchnumber}</td>
+                        <td className="p-2">{b.drug_name || 'Unknown Drug'}</td>
+                        <td className="p-2">{b.expirydate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  No batches expiring soon
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </DashboardLayout>
   );
-};
-
-export default ManufacturerActivityLogs;
+}

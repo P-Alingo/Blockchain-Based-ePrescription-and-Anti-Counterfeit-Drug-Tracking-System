@@ -124,6 +124,8 @@ export async function createPrescription(req, res) {
       issueDate,
       validUntil,
     });
+
+    // Generate QR code data
     const qrData = JSON.stringify({
       prescription_id: prescription.id,
       patient_id: patientTableId,
@@ -138,16 +140,28 @@ export async function createPrescription(req, res) {
       valid_until: validUntil,
       status: "Active",
     });
-    const qrCodeImage = await QRCode.toDataURL(qrData, {
-      errorCorrectionLevel: "H",
-      color: { dark: "#166534", light: "#FFFFFF" },
+
+    // Generate QR code image buffer (PNG)
+    const QRCodeLib = (await import('qrcode')).default;
+    const qrBuffer = await QRCodeLib.toBuffer(qrData, {
+      errorCorrectionLevel: 'H',
+      type: 'png',
       width: 400,
       margin: 2,
+      color: { dark: '#166534', light: '#FFFFFF' }
     });
-    await query("UPDATE prescription SET qrcode_path = $1 WHERE id = $2", [qrCodeImage, prescription.id]);
+
+    // Save QR code image file
+    const fileService = await import('../services/fileService.js');
+    const qrFilename = `prescription_${prescription.id}_qr.png`;
+    const qrFileInfo = await fileService.saveQRCodeFile(qrBuffer, qrFilename);
+
+    // Update prescription with QR code image URL
+    await query("UPDATE prescription SET qrcode_path = $1 WHERE id = $2", [qrFileInfo.url, prescription.id]);
+
     return res.status(201).json({
       message: "Prescription created successfully",
-      prescription: { ...prescription, qrcode_path: qrCodeImage },
+      prescription: { ...prescription, qrcode_path: qrFileInfo.url },
     });
   } catch (error) {
     console.error("❌ Error creating prescription:", error);

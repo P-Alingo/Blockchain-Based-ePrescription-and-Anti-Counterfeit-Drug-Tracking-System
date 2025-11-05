@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { Package, Plus, List, Shield, Activity, Truck, Eye, Edit, Link2, ArrowRight, CheckCircle } from 'lucide-react';
@@ -10,6 +10,16 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+
+// Add type declaration for window.toast
+declare global {
+  interface Window {
+    toast?: {
+      error: (msg: string) => void;
+      [key: string]: any;
+    };
+  }
+}
 
 const sidebarItems = [
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
@@ -41,7 +51,7 @@ const Shipments = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<ShipmentDetails | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [createData, setCreateData] = useState({ batch_id: '', distributor_company_id: '', destination_facility_id: '', quantity_shipped: '', vehicle_number: '', route: '', temperature: '', shipment_type: 'Manufacturer→Distributor' });
+  const [createData, setCreateData] = useState({ batch_id: '', distributor_company_id: '', destination_facility_id: '', pharmacy_company_id: '', pharmacy_facility_id: '', quantity_shipped: '', vehicle_number: '', route: '', temperature: '', shipment_type: 'Manufacturer→Distributor→Pharmacist' });
   const [statusUpdate, setStatusUpdate] = useState('');
 
   // Fetch shipments
@@ -64,27 +74,89 @@ const Shipments = () => {
     enabled: !!selectedShipment
   });
 
-  // Fetch batches for create modal
-  const { data: batchesRaw } = useQuery({
-    queryKey: ['manufacturer-batches'],
-    queryFn: async () => (await axios.get('/api/manufacturer/batches')).data
-  });
-  const batches = Array.isArray(batchesRaw) ? batchesRaw : [];
+    // Dropdown state
+    const [dropdowns, setDropdowns] = useState({ batches: [], distributors: [], facilities: [], pharmacy_companies: [], pharmacy_facilities: [] });
+    const [loadingDropdowns, setLoadingDropdowns] = useState(true);
 
-  // Fetch distributor companies for create modal
-  const { data: distributors = [] } = useQuery<any[]>({
-    queryKey: ['distributor-companies'],
-    queryFn: async (): Promise<any[]> => (await axios.get<any[]>('/api/distributor/companies')).data
-  });
+    useEffect(() => {
+      async function fetchDropdowns() {
+        try {
+          setLoadingDropdowns(true);
+          const token = localStorage.getItem('token');
+        type DropdownsResponse = {
+          batches: any[];
+          distributors: any[];
+          facilities: any[];
+          pharmacy_companies: any[];
+          pharmacy_facilities: any[];
+        };
+          const res = await axios.get<DropdownsResponse>('http://localhost:4000/api/manufacturer/shipment/form/dropdowns', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+            setDropdowns({
+              batches: res.data.batches || [],
+              distributors: res.data.distributors || [],
+              facilities: res.data.facilities || [],
+              pharmacy_companies: res.data.pharmacy_companies || [],
+              pharmacy_facilities: res.data.pharmacy_facilities || []
+            });
+        } catch (err) {
+          // Fallback demo data
+          setDropdowns({
+            batches: [
+              { id: 1, batchnumber: 'BATCH-001', drugname: 'Paracetamol' },
+              { id: 2, batchnumber: 'BATCH-002', drugname: 'Ibuprofen' }
+            ],
+            distributors: [
+              { id: 1, name: 'Kenya Medical Distributors', display_name: 'Kenya Medical Distributors - Kisumu' },
+              { id: 2, name: 'Nairobi Medical Distributors', display_name: 'Nairobi Medical Distributors - Nairobi' }
+            ],
+            facilities: [
+              { id: 23, distributor_id: 1, facility_name: 'Kenya Medical Distributors', facility_location: 'Kisumu' },
+              { id: 24, distributor_id: 2, facility_name: 'Nairobi Medical Distributors', facility_location: 'Nairobi' }
+            ],
+            pharmacy_companies: [
+              { id: 1, name: 'Goodlife Pharmacy' },
+              { id: 2, name: 'Haltons Pharmacy' }
+            ],
+            pharmacy_facilities: [
+              { id: 101, pharmacy_company_id: 1, name: 'Goodlife Westlands', location: 'Westlands' },
+              { id: 102, pharmacy_company_id: 2, name: 'Haltons CBD', location: 'CBD' }
+            ]
+          });
+          // Optionally show a toast if you use a toast library
+          if (window.toast) window.toast.error('Using demo data. API connection issue detected.');
+        } finally {
+          setLoadingDropdowns(false);
+        }
+      }
+      fetchDropdowns();
+    }, []);
 
-  // Fetch facilities for selected distributor
-  const distributorList = Array.isArray(distributors) ? distributors : [];
-  const facilities = distributorList.find(d => d.id === Number(createData.distributor_company_id))?.facilities || [];
+    // Filter facilities based on selected distributor
+      const filteredFacilities = dropdowns.facilities.filter(f => f.distributor_id === Number(createData.distributor_company_id));
+      const filteredPharmacyFacilities = (() => {
+        const selectedCompany = dropdowns.pharmacy_companies.find(pc => pc.id === Number(createData.pharmacy_company_id));
+        if (!selectedCompany) return [];
+        return dropdowns.pharmacy_facilities.filter(f => f.id === selectedCompany.facility_id);
+      })();
 
   // Create shipment mutation
   const createMutation = useMutation({
-    mutationFn: async (data: typeof createData) => (await axios.post('/api/manufacturer/shipment/create', data)).data,
-    onSuccess: () => { setShowCreate(false); refetch(); }
+    mutationFn: async (data: typeof createData) => {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('http://localhost:4000/api/manufacturer/shipments', data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    onSuccess: () => { setShowCreate(false); refetch(); },
+    onError: (error: any) => {
+      if (window.toast) {
+        const msg = error?.response?.data?.message || error?.message || 'Failed to create shipment';
+        window.toast.error(msg);
+      }
+    }
   });
 
   // Update status mutation
@@ -98,7 +170,6 @@ const Shipments = () => {
     <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Outgoing Shipments</h1>
-        <Button onClick={() => setShowCreate(true)} className="flex gap-2"><Plus className="h-4 w-4" />Create Shipment</Button>
       </div>
       <Card>
         <CardHeader>
@@ -181,73 +252,7 @@ const Shipments = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Create Shipment Modal */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Shipment</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); createMutation.mutate(createData); }} className="space-y-4">
-            <div>
-              <label>Batch</label>
-              <Select value={createData.batch_id} onValueChange={v => setCreateData(d => ({ ...d, batch_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select Batch" /></SelectTrigger>
-                <SelectContent>
-                  {batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.batchnumber} ({b.drugname})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label>Distributor Company</label>
-              <Select value={createData.distributor_company_id} onValueChange={v => setCreateData(d => ({ ...d, distributor_company_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select Distributor" /></SelectTrigger>
-                <SelectContent>
-                  {distributorList.map(dc => <SelectItem key={dc.id} value={String(dc.id)}>{dc.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label>Facility</label>
-              <Select value={createData.destination_facility_id} onValueChange={v => setCreateData(d => ({ ...d, destination_facility_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select Facility" /></SelectTrigger>
-                <SelectContent>
-                  {facilities.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.facility}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label>Quantity</label>
-              <Input type="number" value={createData.quantity_shipped} onChange={e => setCreateData(d => ({ ...d, quantity_shipped: e.target.value }))} required />
-            </div>
-            <div>
-              <label>Vehicle Number</label>
-              <Input value={createData.vehicle_number} onChange={e => setCreateData(d => ({ ...d, vehicle_number: e.target.value }))} />
-            </div>
-            <div>
-              <label>Route</label>
-              <Input value={createData.route} onChange={e => setCreateData(d => ({ ...d, route: e.target.value }))} />
-            </div>
-            <div>
-              <label>Temperature</label>
-              <Input value={createData.temperature} onChange={e => setCreateData(d => ({ ...d, temperature: e.target.value }))} />
-            </div>
-            <div>
-              <label>Shipment Type</label>
-              <Select value={createData.shipment_type} onValueChange={v => setCreateData(d => ({ ...d, shipment_type: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Manufacturer→Distributor">Manufacturer→Distributor</SelectItem>
-                  <SelectItem value="Distributor→Pharmacist">Distributor→Pharmacist</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={createMutation.isPending}>Save Shipment</Button>
-              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Shipment creation removed for manufacturer role. Only viewing shipments is allowed. */}
     </DashboardLayout>
   );
 };

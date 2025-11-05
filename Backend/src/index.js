@@ -26,12 +26,17 @@ dotenv.config();
 
 const app = express();
 
+
+import path from "path";
 // ===============================
 // Middleware
 // ===============================
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
+
+// Serve uploads directory for QR code images and other files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 
 // --- Request Logger (for debugging) ---

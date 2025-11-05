@@ -44,20 +44,25 @@ export async function createDrugBatch(req, res, next) {
       return res.status(400).json({ message: "Drug not found." });
 
     // Verify distributor company/facility
-    let distributorCompany = { name: "Not Assigned", facility: "N/A" };
+    let distributorCompany = { name: "Not Assigned", facility: "N/A", facility_id: null };
+    let distributorFacilityId = null;
     if (distributorcompanyid) {
       const distResult = await query(
-        `SELECT name, facility FROM distributor_company WHERE id = $1`,
+        `SELECT dc.name, f.id as facility_id, f.name as facility_name, f.address as facility_address, f.phone as facility_phone, f.location as facility_location
+         FROM distributor_company dc
+         JOIN facility f ON dc.facility_id = f.id
+         WHERE dc.id = $1`,
         [distributorcompanyid]
       );
       if (!distResult.rows.length)
         return res.status(400).json({ message: "Distributor company not found." });
 
       distributorCompany = distResult.rows[0];
+      distributorFacilityId = distResult.rows[0].facility_id;
 
       // Auto-combine name + facility if manufacturingfacility not provided
       if (!manufacturingfacility || manufacturingfacility.trim() === "") {
-        req.body.manufacturingfacility = `${distributorCompany.name} - ${distributorCompany.facility}`;
+        req.body.manufacturingfacility = `${distributorCompany.name} - ${distributorCompany.facility_name}`;
       }
     }
 
@@ -78,8 +83,8 @@ export async function createDrugBatch(req, res, next) {
       `INSERT INTO drugbatch (
         manufacturerid, drugid, manufacturedate, expirydate,
         quantity, storagetemperature, manufacturingfacility,
-        qualitycontrolofficerid, distributorcompanyid, datechecked, status, qrcode
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'') RETURNING *`,
+        qualitycontrolofficerid, distributorcompanyid, distributor_facility_id, datechecked, status, qrcode
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'') RETURNING *`,
       [
         manufacturer.id,
         drugid,
@@ -90,6 +95,7 @@ export async function createDrugBatch(req, res, next) {
         req.body.manufacturingfacility?.trim() || null,
         qualitycontrolofficerid || null,
         distributorcompanyid || null,
+        distributorFacilityId || null,
         datechecked || null,
         status
       ]
@@ -127,15 +133,17 @@ export async function createDrugBatch(req, res, next) {
     const completeBatch = await query(
       `SELECT
         db.id, db.batchnumber, db.manufacturedate, db.expirydate, db.quantity, db.status,
-        db.qrcode, db.storagetemperature, db.manufacturingfacility, db.datechecked,
+        db.qrcode_path, db.storagetemperature, db.manufacturingfacility, db.datechecked,
         db.blockchaintx, COALESCE(s.shipmentnumber, 'N/A') AS shipment_number,
         db.distributorcompanyid,
         d.name AS drugname, mc.name AS manufacturername,
+        mf.name AS manufacturerfacility,
         s2.fullname AS qualityofficer, dc.name AS distributorcompany, dc.facility AS distributorfacility
        FROM drugbatch db
        LEFT JOIN drug d ON db.drugid = d.id
        LEFT JOIN manufacturer m ON db.manufacturerid = m.id
        LEFT JOIN manufacturer_company mc ON m.companyid = mc.id
+       LEFT JOIN facility mf ON mc.facility_id = mf.id
        LEFT JOIN staff s2 ON db.qualitycontrolofficerid = s2.id
        LEFT JOIN distributor_company dc ON db.distributorcompanyid = dc.id
        LEFT JOIN shipment s ON db.id = s.batch_id
@@ -170,19 +178,19 @@ export async function getAllDrugBatches(req, res, next) {
 
     // FIXED: Join with shipment table to get shipment number
     let sqlQuery = `
-      SELECT db.id, db.batchnumber, db.manufacturedate, db.expirydate, db.quantity, db.status,
-      db.qrcode, db.storagetemperature, db.manufacturingfacility, db.datechecked, db.blockchaintx,
-      COALESCE(s.shipmentnumber, 'N/A') AS shipment_number,
-      db.distributorcompanyid,
-      d.name AS drugname, mc.name AS manufacturername,
-      s2.fullname AS qualityofficer, dc.name AS distributorcompany, dc.facility AS distributorfacility
-      FROM drugbatch db
-      LEFT JOIN drug d ON db.drugid = d.id
-      LEFT JOIN manufacturer m ON db.manufacturerid = m.id
-      LEFT JOIN manufacturer_company mc ON m.companyid = mc.id
-      LEFT JOIN staff s2 ON db.qualitycontrolofficerid = s2.id
-      LEFT JOIN distributor_company dc ON db.distributorcompanyid = dc.id
-      LEFT JOIN shipment s ON db.id = s.batch_id
+  SELECT db.id, db.batchnumber, db.manufacturedate, db.expirydate, db.quantity, db.status,
+  db.qrcode_path, db.storagetemperature, db.manufacturingfacility, db.datechecked, db.blockchaintx,
+  COALESCE(s.shipmentnumber, 'N/A') AS shipment_number,
+  db.distributorcompanyid,
+  d.name AS drugname, mc.name AS manufacturername,
+  s2.fullname AS qualityofficer, dc.name AS distributorcompany, dc.facility AS distributorfacility
+  FROM drugbatch db
+  LEFT JOIN drug d ON db.drugid = d.id
+  LEFT JOIN manufacturer m ON db.manufacturerid = m.id
+  LEFT JOIN manufacturer_company mc ON m.companyid = mc.id
+  LEFT JOIN staff s2 ON db.qualitycontrolofficerid = s2.id
+  LEFT JOIN distributor_company dc ON db.distributorcompanyid = dc.id
+  LEFT JOIN shipment s ON db.id = s.batch_id
     `;
 
     if (whereClause) sqlQuery += ` ${whereClause}`;
@@ -207,7 +215,7 @@ export async function getDrugBatch(req, res, next) {
     // FIXED: Join with shipment table to get shipment number
     const result = await query(
       `SELECT db.id, db.batchnumber, db.manufacturedate, db.expirydate, db.quantity, db.status,
-        db.qrcode, db.storagetemperature, db.manufacturingfacility, db.datechecked,
+        db.qrcode_path, db.storagetemperature, db.manufacturingfacility, db.datechecked,
         db.blockchaintx, COALESCE(s.shipmentnumber, 'N/A') AS shipment_number,
         db.distributorcompanyid,
         d.name AS drugname, mc.name AS manufacturername,
@@ -268,7 +276,7 @@ export async function updateDrugBatch(req, res, next) {
     // FIXED: Join with shipment table to get shipment number
     const updatedBatch = await query(
       `SELECT db.id, db.batchnumber, db.manufacturedate, db.expirydate, db.quantity, db.status,
-        db.qrcode, db.storagetemperature, db.manufacturingfacility, db.datechecked,
+        db.qrcode_path, db.storagetemperature, db.manufacturingfacility, db.datechecked,
         db.blockchaintx, COALESCE(s.shipmentnumber, 'N/A') AS shipment_number,
         db.distributorcompanyid,
         d.name AS drugname, mc.name AS manufacturername,
@@ -320,10 +328,17 @@ export async function getDropdownData(req, res, next) {
       query("SELECT id, fullname FROM staff WHERE role = 'Quality Control Officer' ORDER BY fullname ASC"),
       query(`
         SELECT 
-          id, name, facility, facility_address, facility_phone, facility_location,
-          name || ' - ' || facility AS display_name
-        FROM distributor_company
-        ORDER BY name, facility ASC
+          dc.id, 
+          dc.name,
+          f.id as facility_id,
+          f.name as facility_name,
+          f.address as facility_address,
+          f.phone as facility_phone,
+          f.location as facility_location,
+          dc.name || ' - ' || f.location AS display_name
+        FROM distributor_company dc
+        JOIN facility f ON dc.facility_id = f.id
+        ORDER BY dc.name ASC
       `)
     ]);
 
@@ -332,10 +347,13 @@ export async function getDropdownData(req, res, next) {
       qualityOfficers: qualityOfficers.rows,
       distributors: distributors.rows.map(d => ({
         id: d.id,
-        display_name: d.display_name,
+        name: d.name,
+        facility_id: d.facility_id,
+        facility_name: d.facility_name,
         facility_address: d.facility_address,
         facility_phone: d.facility_phone,
-        facility_location: d.facility_location
+        facility_location: d.facility_location,
+        display_name: d.display_name
       }))
     });
   } catch (error) {
