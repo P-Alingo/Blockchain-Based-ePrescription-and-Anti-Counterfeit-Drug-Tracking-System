@@ -9,17 +9,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Activity, Search, Filter, Download, Calendar, User, Pill, Package, Shield, PillBottle, FileText, CheckCircle, AlertTriangle, Clock, Eye } from "lucide-react";
 
 const PharmacistAnalytics = () => {
-   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
-    { icon: Activity, label: 'Blockchain', path: '/pharmacist/blockchain', active: false },
-    { icon: Activity, label: 'Analytics', path: '/pharmacist/analytics', active: true },
-    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
-    { icon: Package, label: 'Distributors', path: '/pharmacist/distributors', active: false },
-    { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
-    { icon: FileText, label: 'My Prescriptions', path: '/pharmacist/myprescriptions', active: false },
-    { icon: Activity, label: 'Requests', path: '/pharmacist/requests', active: false },
-    { icon: Package, label: 'Shipments', path: '/pharmacist/shipments', active: false },
-  ];
+const sidebarItems = [
+  { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
+  { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
+  { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: true },
+  { icon: PillBottle, label: "Dispense Drug", path: "/pharmacist/dispense", active: false },
+  { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
+  { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
+  { icon: Package, label: "Shipments", path: "/pharmacist/shipments", active: false },
+];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [actionFilter, setActionFilter] = useState("all");

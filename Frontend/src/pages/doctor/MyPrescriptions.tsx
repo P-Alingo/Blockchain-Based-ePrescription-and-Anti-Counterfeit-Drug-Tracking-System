@@ -522,40 +522,7 @@ const MyPrescriptions: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* QR Code Modal */}
-        <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
-          <DialogContent className="sm:max-w-[400px]">
-            <DialogHeader>
-              <DialogTitle>Prescription QR Code</DialogTitle>
-            </DialogHeader>
-            {selectedPrescription ? (
-              <div className="flex flex-col items-center p-4 space-y-4">
-                {selectedPrescription.qrcode ? (
-                  <img src={selectedPrescription.qrcode} alt="Prescription QR Code" className="w-64 h-64 rounded-lg shadow-md" />
-                ) : (
-                  <div className="w-64 h-64 flex items-center justify-center bg-gray-100 rounded-lg">
-                    <p className="text-muted-foreground">No QR Code Available</p>
-                  </div>
-                )}
-                <div className="text-sm text-left w-full space-y-2">
-                  <p><span className="font-medium">Patient:</span> {selectedPrescription.patient_name}</p>
-                  <p><span className="font-medium">Drug:</span> {selectedPrescription.drug_name}</p>
-                  <p><span className="font-medium">Dosage:</span> {selectedPrescription.dosage_amount} {selectedPrescription.dosage_unit}</p>
-                  <p><span className="font-medium">Duration:</span> {selectedPrescription.duration} days</p>
-                  <p><span className="font-medium">Issued:</span> {formatDate(selectedPrescription.issued)}</p>
-                  <p><span className="font-medium">Valid Until:</span> {formatDate(selectedPrescription.valid)}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground">No prescription selected</p>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={copyQrLink} disabled={!selectedPrescription?.qrcode}>
-                <Copy className="mr-2 w-3 h-3" />Copy QR Link
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* QR Code Modal removed */}
 
         {/* Details Modal */}
         <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>

@@ -18,7 +18,6 @@ export async function updatePrescription(id, doctorId, updateData) {
 function snakeCase(str) {
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
-import QRCode from "qrcode";
 import { query } from "../config/database.js";
 
 // Expose query helper for doctorController dashboard logic
@@ -78,17 +77,6 @@ export async function createPrescription({
   ];
   const insertResult = await query(insertText, insertValues);
   const prescriptionId = insertResult.rows[0].id;
-  // Generate QR code PNG buffer
-  const qrBuffer = await QRCode.toBuffer(`http://localhost:8080/prescription/${prescriptionId}`, {
-    errorCorrectionLevel: "H",
-    width: 400,
-    margin: 2,
-    color: { dark: "#166534", light: "#FFFFFF" }
-  });
-  // Save QR code file
-  const qrFilename = `prescription-${prescriptionId}.png`;
-  const { url: qrFileUrl } = await import("./fileService.js").then(m => m.saveQRCodeFile(qrBuffer, qrFilename));
-  await query(`UPDATE prescription SET qrcode_path = $1 WHERE id = $2`, [qrFileUrl, prescriptionId]);
   const result = await query(
     `SELECT 
        p.id, 
@@ -104,7 +92,6 @@ export async function createPrescription({
        p.instructions, 
        p.issue_date, 
        p.valid_until, 
-       p.qrcode_path, 
        p.status,
        p.prescription_code
      FROM prescription p
@@ -129,7 +116,6 @@ export async function getPrescriptionsByDoctor(doctorId) {
         p.instructions,
         p.issue_date,
         p.valid_until,
-        p.qrcode_path,
         p.status,
         pat.id AS patient_id,
         u.full_name AS patient_name,
@@ -163,7 +149,6 @@ export async function getPrescriptionById(id, doctorId) {
        p.instructions, 
        p.issue_date, 
        p.valid_until, 
-       p.qrcode_path, 
        p.status
      FROM prescription p
      JOIN patient pt ON pt.id = p.patient_id

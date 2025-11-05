@@ -126,7 +126,6 @@ export async function fetchPatientPrescriptions(userId, status) {
     drug: p.drug_name_full || p.drug_name || 'Unknown Drug',
     status: p.status,
     hospital: p.hospital,
-    qrCode: p.qr_code,
     dosage: p.dosage_amount ? `${p.dosage_amount} ${p.dosage_unit || p.drug_dosage_unit || 'mg'}` : 'N/A',
     duration: p.duration ? `${p.duration} days` : 'N/A',
     instructions: p.instructions || 'Take as directed'
@@ -136,12 +135,6 @@ export async function fetchPatientPrescriptions(userId, status) {
 export async function fetchPrescriptionDetails(prescriptionId) {
   const { rows } = await query("SELECT * FROM prescription WHERE id = $1", [prescriptionId]);
   return rows[0] || null;
-}
-
-// Get QR code data for prescription
-export async function fetchQRCodeData(prescriptionId) {
-  const { rows } = await query("SELECT qr_code FROM prescription WHERE id = $1", [prescriptionId]);
-  return rows[0]?.qr_code || null;
 }
 
 // Search prescriptions by drug/doctor name
@@ -156,7 +149,6 @@ export async function searchPatientPrescriptions(userId, queryStr) {
     drug: p.drug_name,
     status: p.status,
     hospital: p.hospital,
-    qrCode: p.qr_code,
   }));
 }
 
@@ -214,7 +206,6 @@ export async function fetchPatientDashboard(userId) {
     date: p.issue_date,
     status: p.calculated_status, // Use calculated status instead of p.status
     drug: p.drug_name_full || p.drug_name || 'Unknown Drug',
-    qrCode: p.qr_code,
   }));
 
   // Status breakdown for chart - USE CALCULATED STATUS

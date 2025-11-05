@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   FileText,
-  QrCode,
   Activity,
   Search,
   Download,
@@ -21,15 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-// Updated interface to match backend response
+// Removed qrCode from Prescription interface
 interface Prescription {
   prescriptionNo: string;
   doctorName: string;
   date: string;
   drug: string;
   status: string;
-  qrCode?: string;
   hospital?: string;
   dosage?: string;
   duration?: string;
@@ -45,13 +45,17 @@ const MyPrescriptions = () => {
   const [doctorFilter, setDoctorFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("new");
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [modalPrescription, setModalPrescription] = useState<Prescription | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState("");
   
   const navigate = useNavigate();
 
   const sidebarItems = [
     { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
     { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: true },
-    { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: false },
     { icon: Activity, label: "Analytics", path: "/patient/analytics", active: false },
   ];
 
@@ -175,19 +179,33 @@ const MyPrescriptions = () => {
     document.body.removeChild(link);
   };
   
-  // ✅ Handle QR code viewing
-  const handleViewQR = (prescription: Prescription) => {
-    const prescriptionData = {
-      prescriptionNo: prescription.prescriptionNo,
-      doctorName: prescription.doctorName,
-      drug: prescription.drug,
-      date: prescription.date,
-      status: prescription.status,
-      qrCode: prescription.qrCode
-    };
-    
-    localStorage.setItem('selectedPrescription', JSON.stringify(prescriptionData));
-    navigate('/patient/qr-viewer');
+  // Remove QR button and its logic
+
+  const handleShowDetails = async (prescriptionNo: string) => {
+    setModalLoading(true);
+    setModalError("");
+    setShowDetailsModal(true);
+    try {
+      const storedUserData = localStorage.getItem("userData");
+      if (!storedUserData) throw new Error("User not logged in.");
+      const { token } = JSON.parse(storedUserData);
+      // Fetch prescription details from backend
+      const res = await axios.get(
+        `http://localhost:4000/api/patient/prescriptions/${prescriptionNo}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setModalPrescription(res.data as Prescription);
+    } catch (err: any) {
+      setModalError(err.response?.data?.message || "Failed to fetch prescription details.");
+      setModalPrescription(null);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+  const handleCloseModal = () => {
+    setShowDetailsModal(false);
+    setModalPrescription(null);
+    setModalError("");
   };
 
   // ✅ Render prescription row
@@ -206,14 +224,8 @@ const MyPrescriptions = () => {
         </Badge>
       </td>
       <td className="px-4 py-3">
-        <Button 
-          size="sm" 
-          variant="outline"
-          onClick={() => handleViewQR(p)}
-          className="flex items-center gap-1"
-        >
-          <QrCode className="w-4 h-4" />
-          View QR
+        <Button size="sm" variant="outline" onClick={() => handleShowDetails(p.prescriptionNo)}>
+          Details
         </Button>
       </td>
     </tr>
@@ -288,110 +300,143 @@ const MyPrescriptions = () => {
             Export Summary
           </Button>
         </div>
+        <Tabs defaultValue="new" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="new">New Prescriptions</TabsTrigger>
+            <TabsTrigger value="history">Prescription History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="new" className="space-y-4">
+            {/* Search & Filter for new prescriptions */}
+            <Card className="card-elevated">
+              <CardHeader>
+                <CardTitle>Search & Filter</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* ...existing code... */}
+                </div>
+                {/* Results Count */}
+                <div className="mt-4 text-sm text-muted-foreground">
+                  Showing {filteredPrescriptions.filter(p => p.status.toLowerCase() !== "dispensed").length} of {prescriptions.filter(p => p.status.toLowerCase() !== "dispensed").length} new prescriptions
+                </div>
+              </CardContent>
+            </Card>
+            {/* New Prescriptions Table */}
+            <Card className="card-elevated">
+              <CardHeader>
+                <CardTitle>New Prescriptions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-4 py-3 text-left font-semibold">Prescription No</th>
+                        <th className="px-4 py-3 text-left font-semibold">Doctor</th>
+                        <th className="px-4 py-3 text-left font-semibold">Date Issued</th>
+                        <th className="px-4 py-3 text-left font-semibold">Drug</th>
+                        <th className="px-4 py-3 text-left font-semibold">Status</th>
+                        <th className="px-4 py-3 text-left font-semibold">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPrescriptions.filter(p => p.status.toLowerCase() !== "dispensed").length > 0 ? (
+                        filteredPrescriptions.filter(p => p.status.toLowerCase() !== "dispensed").map(renderPrescriptionRow)
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No new prescriptions found matching your filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="history" className="space-y-4">
+            {/* Search & Filter for history */}
+            <Card className="card-elevated">
+              <CardHeader>
+                <CardTitle>Search & Filter</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* ...existing code... */}
+                </div>
+                {/* Results Count */}
+                <div className="mt-4 text-sm text-muted-foreground">
+                  Showing {filteredPrescriptions.filter(p => p.status.toLowerCase() === "dispensed").length} of {prescriptions.filter(p => p.status.toLowerCase() === "dispensed").length} dispensed prescriptions
+                </div>
+              </CardContent>
+            </Card>
+            {/* Prescription History Table */}
+            <Card className="card-elevated">
+              <CardHeader>
+                <CardTitle>Prescription History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-4 py-3 text-left font-semibold">Prescription No</th>
+                        <th className="px-4 py-3 text-left font-semibold">Doctor</th>
+                        <th className="px-4 py-3 text-left font-semibold">Date Issued</th>
+                        <th className="px-4 py-3 text-left font-semibold">Drug</th>
+                        <th className="px-4 py-3 text-left font-semibold">Status</th>
+                        <th className="px-4 py-3 text-left font-semibold">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPrescriptions.filter(p => p.status.toLowerCase() === "dispensed").length > 0 ? (
+                        filteredPrescriptions.filter(p => p.status.toLowerCase() === "dispensed").map(renderPrescriptionRow)
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No dispensed prescriptions found matching your filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
-        {/* Search & Filter */}
-        <Card className="card-elevated">
-          <CardHeader>
-            <CardTitle>Search & Filter</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search Input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder="Search prescriptions..."
-                  className="pl-10 focus:ring-primary"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+        {/* Modal for prescription details */}
+        {showDetailsModal && (
+          <Dialog open={showDetailsModal} onOpenChange={handleCloseModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Prescription Details</DialogTitle>
+              </DialogHeader>
+              {modalLoading ? (
+                <div>Loading...</div>
+              ) : modalError ? (
+                <div className="text-red-500">{modalError}</div>
+              ) : modalPrescription ? (
+                <div className="space-y-2">
+                  <div><strong>Prescription No:</strong> {modalPrescription.prescriptionNo}</div>
+                  <div><strong>Doctor:</strong> {modalPrescription.doctorName}</div>
+                  <div><strong>Date Issued:</strong> {new Date(modalPrescription.date).toLocaleDateString()}</div>
+                  <div><strong>Drug:</strong> {modalPrescription.drug}</div>
+                  <div><strong>Status:</strong> {modalPrescription.status}</div>
+                  <div><strong>Dosage:</strong> {modalPrescription.dosage}</div>
+                  <div><strong>Duration:</strong> {modalPrescription.duration}</div>
+                  <div><strong>Instructions:</strong> {modalPrescription.instructions}</div>
+                  <div><strong>Hospital:</strong> {modalPrescription.hospital}</div>
+                </div>
+              ) : null}
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" onClick={handleCloseModal}>Close</Button>
               </div>
-
-              {/* Doctor Filter */}
-              <Select value={doctorFilter} onValueChange={setDoctorFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by Doctor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Doctors</SelectItem>
-                  {uniqueDoctors.map((doctor) => (
-                    <SelectItem key={doctor} value={doctor}>
-                      {doctor}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {uniqueStatuses.map((status) => (
-                    <SelectItem key={status} value={status.toLowerCase()}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Date Filter */}
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="quarter">This Quarter</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Results Count */}
-            <div className="mt-4 text-sm text-muted-foreground">
-              Showing {filteredPrescriptions.length} of {prescriptions.length} prescriptions
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Prescription Table */}
-        <Card className="card-elevated">
-          <CardHeader>
-            <CardTitle>Prescription History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="px-4 py-3 text-left font-semibold">Prescription No</th>
-                    <th className="px-4 py-3 text-left font-semibold">Doctor</th>
-                    <th className="px-4 py-3 text-left font-semibold">Date Issued</th>
-                    <th className="px-4 py-3 text-left font-semibold">Drug</th>
-                    <th className="px-4 py-3 text-left font-semibold">Status</th>
-                    <th className="px-4 py-3 text-left font-semibold">QR Code</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPrescriptions.length > 0 ? (
-                    filteredPrescriptions.map(renderPrescriptionRow)
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No prescriptions found matching your filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </DashboardLayout>
   );

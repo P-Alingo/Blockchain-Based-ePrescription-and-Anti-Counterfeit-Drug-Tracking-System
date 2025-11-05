@@ -1,5 +1,4 @@
 import * as doctorService from "../services/doctorService.js";
-import QRCode from "qrcode";
 import {
   createPrescription as createPrescriptionService,
   getPrescriptionsByDoctor,
@@ -85,7 +84,7 @@ export async function createPrescription(req, res) {
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
     if (doctorResult.rowCount === 0) {
-      return res.status(404).json({ message: "Doctor profile not found" });
+      return res.status(404).json({ message: "Doctor not found" });
     }
     const doctorId = doctorResult.rows[0].id;
     let {
@@ -112,6 +111,7 @@ export async function createPrescription(req, res) {
     frequency = frequency.trim();
     instructions = instructions ? instructions.trim() : "";
     duration = Number(duration);
+    // Create prescription without QR code logic
     const prescription = await createPrescriptionService({
       doctorId,
       patientId: patientTableId,
@@ -124,44 +124,9 @@ export async function createPrescription(req, res) {
       issueDate,
       validUntil,
     });
-
-    // Generate QR code data
-    const qrData = JSON.stringify({
-      prescription_id: prescription.id,
-      patient_id: patientTableId,
-      doctor_id: doctorId,
-      drug_id: drugId,
-      dosage_amount: dosageAmount,
-      dosage_unit: dosageUnit,
-      frequency,
-      duration,
-      instructions,
-      issue_date: issueDate,
-      valid_until: validUntil,
-      status: "Active",
-    });
-
-    // Generate QR code image buffer (PNG)
-    const QRCodeLib = (await import('qrcode')).default;
-    const qrBuffer = await QRCodeLib.toBuffer(qrData, {
-      errorCorrectionLevel: 'H',
-      type: 'png',
-      width: 400,
-      margin: 2,
-      color: { dark: '#166534', light: '#FFFFFF' }
-    });
-
-    // Save QR code image file
-    const fileService = await import('../services/fileService.js');
-    const qrFilename = `prescription_${prescription.id}_qr.png`;
-    const qrFileInfo = await fileService.saveQRCodeFile(qrBuffer, qrFilename);
-
-    // Update prescription with QR code image URL
-    await query("UPDATE prescription SET qrcode_path = $1 WHERE id = $2", [qrFileInfo.url, prescription.id]);
-
     return res.status(201).json({
       message: "Prescription created successfully",
-      prescription: { ...prescription, qrcode_path: qrFileInfo.url },
+      prescription,
     });
   } catch (error) {
     console.error("❌ Error creating prescription:", error);
@@ -303,7 +268,6 @@ export async function getDoctorDashboard(req, res) {
         p.instructions,
         p.issue_date,
         p.valid_until,
-        p.qrcode_path,
         p.status
       FROM prescription p
       JOIN patient pt ON pt.id = p.patient_id
@@ -358,10 +322,12 @@ export async function listExpiredPrescriptions(req, res) {
   try {
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
-    if (doctorResult.rowCount === 0) return res.status(404).json({ message: "Doctor profile not found" });
+    if (doctorResult.rowCount === 0) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
     const doctorId = doctorResult.rows[0].id;
-    const prescriptions = await getExpiredPrescriptions(doctorId);
-    return res.status(200).json(prescriptions ?? []);
+    const expiredPrescriptions = await getExpiredPrescriptions(doctorId);
+    return res.status(200).json(expiredPrescriptions ?? []);
   } catch (error) {
     console.error("❌ Error listing expired prescriptions:", error);
     return res.status(500).json({ message: "Internal server error" });

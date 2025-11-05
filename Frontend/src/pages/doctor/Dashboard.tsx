@@ -25,7 +25,7 @@ interface Prescription {
   frequency?: string;
   duration?: number;
   instructions?: string;
-  qrcode_path?: string;
+  // qrcode_path removed
   prescription_code?: string;
 }
 
@@ -299,15 +299,7 @@ const DoctorDashboard = () => {
                                 Instructions: {rx.instructions}
                               </p>
                             )}
-                            {rx.qrcode_path && (
-                              <div className="mt-2">
-                                <img 
-                                  src={rx.qrcode_path} 
-                                  alt={`QR for prescription ${rx.prescription_code || rx.id}`} 
-                                  className="w-16 h-16 border rounded" 
-                                />
-                              </div>
-                            )}
+                            {/* QR code image removed */}
                           </div>
                         </div>
                       );

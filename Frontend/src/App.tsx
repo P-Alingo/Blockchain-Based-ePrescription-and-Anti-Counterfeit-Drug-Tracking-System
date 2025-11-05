@@ -20,17 +20,14 @@ import DoctorAnalytics from "./pages/doctor/Analytics";
 // Patient Dashboard Pages
 import PatientDashboard from "./pages/patient/Dashboard";
 import PatientPrescriptions from "./pages/patient/MyPrescriptions";
-import QRCodeViewer from "./pages/patient/QRCodeViewer";
 import PatientAnalytics from "./pages/patient/Analytics";
 
 // Pharmacist Dashboard Pages
 import PharmacistDashboard from "./pages/pharmacist/Dashboard";
 import DispenseDrug from "./pages/pharmacist/DispenseDrug";
-import Inventory from "./pages/pharmacist/Inventory";
+import InventoryAndRequests from "./pages/pharmacist/InventoryAndRequests";
 import PharmacistAnalytics from "./pages/pharmacist/Analytics";
 import PharmacistBlockchain from "./pages/pharmacist/Blockchain";
-import PharmacistDistributors from "./pages/pharmacist/Distributors";
-import PharmacistRequests from "./pages/pharmacist/Requests";
 import PharmacistShipments from "./pages/pharmacist/Shipments";
 import PharmacistPrescriptions from "./pages/pharmacist/MyPrescriptions";
 
@@ -46,7 +43,6 @@ import ManufacturerShipments from "./pages/manufacturer/Shipments";
 import DistributorDashboard from "./pages/distributor/Dashboard";
 import DistributorAnalytics from "./pages/distributor/Analytics";
 import DistributorBlockchain from "./pages/distributor/Blockchain";
-import DistributorInventory from "./pages/distributor/Inventory";
 import DistributorRequests from "./pages/distributor/Requests";
 import DistributorShipments from "./pages/distributor/Shipments";
 
@@ -193,18 +189,15 @@ const App = () => {
             {/* Patient Routes */}
             <Route path="/patient/dashboard" element={<ProtectedRoute allowedRoles={["patient"]}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/prescriptions" element={<ProtectedRoute allowedRoles={["patient"]}><PatientPrescriptions /></ProtectedRoute>} />
-            <Route path="/patient/qr-viewer" element={<ProtectedRoute allowedRoles={["patient"]}><QRCodeViewer /></ProtectedRoute>} />
             <Route path="/patient/analytics" element={<ProtectedRoute allowedRoles={["patient"]}><PatientAnalytics /></ProtectedRoute>} />
 
             {/* Pharmacist Routes */}
             <Route path="/pharmacist/dashboard" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistDashboard /></ProtectedRoute>} />
             <Route path="/pharmacist/myprescriptions" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistPrescriptions /></ProtectedRoute>} />
             <Route path="/pharmacist/dispense" element={<ProtectedRoute allowedRoles={["pharmacist"]}><DispenseDrug /></ProtectedRoute>} />
-            <Route path="/pharmacist/inventory" element={<ProtectedRoute allowedRoles={["pharmacist"]}><Inventory /></ProtectedRoute>} />
+            <Route path="/pharmacist/inventory-requests" element={<ProtectedRoute allowedRoles={["pharmacist"]}><InventoryAndRequests /></ProtectedRoute>} />
             <Route path="/pharmacist/analytics" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistAnalytics /></ProtectedRoute>} />
             <Route path="/pharmacist/blockchain" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistBlockchain /></ProtectedRoute>} />
-            <Route path="/pharmacist/distributors" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistDistributors /></ProtectedRoute>} />
-            <Route path="/pharmacist/requests" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistRequests /></ProtectedRoute>} />
             <Route path="/pharmacist/shipments" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistShipments /></ProtectedRoute>} />
 
             {/* Manufacturer Routes */}
@@ -219,7 +212,6 @@ const App = () => {
             <Route path="/distributor/dashboard" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorDashboard /></ProtectedRoute>} />
             <Route path="/distributor/analytics" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorAnalytics /></ProtectedRoute>} />
             <Route path="/distributor/blockchain" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorBlockchain /></ProtectedRoute>} />
-            <Route path="/distributor/inventory" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorInventory /></ProtectedRoute>} />
             <Route path="/distributor/requests" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorRequests /></ProtectedRoute>} />
             <Route path="/distributor/shipments" element={<ProtectedRoute allowedRoles={["distributor"]}><DistributorShipments /></ProtectedRoute>} />
 

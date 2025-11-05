@@ -102,12 +102,6 @@ export default function Analytics() {
         if (res.data.lastActivity) {
           setActivityLogs([
             {
-              action: "QR Code Viewed",
-              prescription: res.data.lastActivity.prescriptionNo,
-              timestamp: new Date().toLocaleString(),
-              details: `Viewed QR code for ${res.data.lastActivity.drug} prescription`,
-            },
-            {
               action: "Prescription Status Update", 
               prescription: res.data.lastActivity.prescriptionNo,
               timestamp: new Date(res.data.lastActivity.date).toLocaleString(),

@@ -16,7 +16,7 @@ import {
   BarElement,
   RadialLinearScale,
 } from "chart.js";
-import { FileText, QrCode, Pill, Activity, Shield } from "lucide-react";
+import { FileText, Pill, Activity, Shield } from "lucide-react";
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, BarElement, RadialLinearScale);
 
@@ -62,16 +62,7 @@ const Analytics = () => {
         setAnalytics(res.data);
         // Fetch activity logs (stub: use analytics.lastActivity for now)
         // TODO: Replace with real activity logs endpoint if available
-        if (res.data.lastActivity) {
-          setActivityLogs([
-            {
-              action: "QR Code Viewed",
-              prescription: `RX-${res.data.lastActivity.prescriptionNo}`,
-              timestamp: new Date(res.data.lastActivity.date).toLocaleString(),
-              details: `Viewed QR code for ${res.data.lastActivity.drug} prescription`,
-            },
-          ]);
-        }
+        // QR code activity log removed
       } catch (err) {
         setError("Failed to load analytics.");
       } finally {
@@ -149,7 +140,6 @@ const Analytics = () => {
 
   const getActionIcon = (action: string) => {
     switch (action) {
-      case "QR Code Viewed": return <QrCode className="w-4 h-4" />;
       case "Medication Taken": return <Pill className="w-4 h-4" />;
       default: return <Activity className="w-4 h-4" />;
     }
@@ -160,7 +150,6 @@ const Analytics = () => {
       sidebarItems={[
         { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: false },
         { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: false },
-        { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer", active: false },
         { icon: Activity, label: "Analytics", path: "/patient/analytics", active: true },
       ]}
       userRole="patient"

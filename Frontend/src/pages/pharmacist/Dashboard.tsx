@@ -8,16 +8,14 @@ import { Button } from '@/components/ui/button';
 
 const PharmacistDashboard = () => {
   const sidebarItems = [
-    { icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: true },
-    { icon: Activity, label: 'Blockchain', path: '/pharmacist/blockchain', active: false },
-    { icon: Activity, label: 'Analytics', path: '/pharmacist/analytics', active: false },
-    { icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
-    { icon: Package, label: 'Distributors', path: '/pharmacist/distributors', active: false },
-    { icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
-    { icon: FileText, label: 'My Prescriptions', path: '/pharmacist/myprescriptions', active: false },
-    { icon: Activity, label: 'Requests', path: '/pharmacist/requests', active: false },
-    { icon: Package, label: 'Shipments', path: '/pharmacist/shipments', active: false },
-  ];
+  { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: true },
+  { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
+  { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
+  { icon: PillBottle, label: "Dispense Drug", path: "/pharmacist/dispense", active: false },
+  { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
+  { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
+  { icon: Package, label: "Shipments", path: "/pharmacist/shipments", active: false },
+];
 
   const [stats, setStats] = useState({
     todaysPrescriptions: 0,

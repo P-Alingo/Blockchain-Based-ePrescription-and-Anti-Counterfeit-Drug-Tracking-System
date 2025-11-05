@@ -16,16 +16,14 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const Shipments = () => {
 			const sidebarItems = [
-				{ icon: Shield, label: 'Dashboard', path: '/pharmacist/dashboard', active: false },
-				{ icon: Activity, label: 'Blockchain', path: '/pharmacist/blockchain', active: false },
-				{ icon: Activity, label: 'Analytics', path: '/pharmacist/analytics', active: false },
-				{ icon: PillBottle, label: 'Dispense Drug', path: '/pharmacist/dispense', active: false },
-				{ icon: Package, label: 'Distributors', path: '/pharmacist/distributors', active: false },
-				{ icon: Package, label: 'Inventory', path: '/pharmacist/inventory', active: false },
-				{ icon: FileText, label: 'My Prescriptions', path: '/pharmacist/myprescriptions', active: false },
-				{ icon: Activity, label: 'Requests', path: '/pharmacist/requests', active: false },
-				{ icon: Package, label: 'Shipments', path: '/pharmacist/shipments', active: true },
-			];
+  { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
+  { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
+  { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
+  { icon: PillBottle, label: "Dispense Drug", path: "/pharmacist/dispense", active: false },
+  { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
+  { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
+  { icon: Package, label: "Shipments", path: "/pharmacist/shipments", active: true },
+];
 		const [shipments, setShipments] = useState([]);
 		const [loading, setLoading] = useState(true);
 		const [error, setError] = useState(null);
@@ -76,6 +74,7 @@ const Shipments = () => {
 											<th>Drug</th>
 											<th>Status</th>
 											<th>Arrival</th>
+											<th>Type</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -86,6 +85,7 @@ const Shipments = () => {
 												<td>{s.drugname}</td>
 												<td>{s.status}</td>
 												<td>{s.arrival_date}</td>
+												<td>{s.status === 'Pending' ? 'Waiting For Arrival' : 'Received'}</td>
 											</tr>
 										))}
 									</tbody>

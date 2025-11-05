@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   FileText,
-  QrCode,
   Bell,
   Activity,
   Clock,
@@ -46,7 +45,6 @@ const PatientDashboard = () => {
   const sidebarItems = [
     { icon: Shield, label: "Dashboard", path: "/patient/dashboard" },
     { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions" },
-    { icon: QrCode, label: "QR Code Viewer", path: "/patient/qr-viewer" },
     { icon: Activity, label: "Analytics", path: "/patient/analytics" },
   ];
 
@@ -178,12 +176,7 @@ const PatientDashboard = () => {
               Track your prescriptions and medication schedule
             </p>
           </div>
-          <Link to="/patient/qr-viewer">
-            <Button className="btn-gradient-primary">
-              <QrCode className="mr-2 w-5 h-5" />
-              Show QR Code
-            </Button>
-          </Link>
+          {/* QR code button removed */}
         </div>
 
         {/* Statistic Cards */}
@@ -254,7 +247,7 @@ const PatientDashboard = () => {
                   <th className="px-4 py-2 text-left">Doctor Name</th>
                   <th className="px-4 py-2 text-left">Date</th>
                   <th className="px-4 py-2 text-left">Status</th>
-                  <th className="px-4 py-2 text-left">QR View</th>
+                  {/* QR View column removed */}
                 </tr>
               </thead>
 <tbody>
@@ -269,11 +262,7 @@ const PatientDashboard = () => {
             {p.status === 'issued' ? 'Active' : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
           </Badge>
         </td>
-        <td className="px-4 py-2">
-          <Link to={`/patient/qr-viewer?prescription=${p.prescriptionNo}`}>
-            <Button size="sm" variant="outline">View QR</Button>
-          </Link>
-        </td>
+        {/* QR View cell removed */}
       </tr>
     ))
   ) : (
