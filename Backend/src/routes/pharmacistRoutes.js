@@ -14,7 +14,9 @@ import {
 	getPharmacistDistributors,
 	getPharmacistShipments,
 	getPharmacistBlockchain,
-	getPharmacistAnalytics
+	getPharmacistAnalytics,
+	getPharmacistPrescriptions,
+	deletePharmacistRequest
 } from "../controllers/pharmacistController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -28,6 +30,8 @@ router.get("/dashboard", getPharmacistDashboard);
 router.post("/verify", verifyPrescription);
 router.post("/dispense", dispenseDrug);
 
+router.get("/prescriptions", getPharmacistPrescriptions);
+
 router.get("/inventory", getPharmacistInventory);
 router.post("/inventory", addPharmacistInventory);
 router.put("/inventory/:id", updatePharmacistInventory);
@@ -35,6 +39,7 @@ router.delete("/inventory/:id", deletePharmacistInventory);
 
 router.get("/requests", getPharmacistRequests);
 router.post("/requests", createPharmacistRequest);
+router.delete("/requests/:id", deletePharmacistRequest);
 
 router.get("/distributors", getPharmacistDistributors);
 router.get("/shipments", getPharmacistShipments);

@@ -1,3 +1,70 @@
+// Get all drugs, batches, batch quantities, and requests for distributor dashboard
+async function getDistributorDrugRequests(distributorId) {
+  // Get all drugs
+  const drugsRes = await query(`SELECT * FROM drug WHERE is_deleted = false ORDER BY name ASC`);
+  const drugs = drugsRes.rows;
+
+  // Get all batches for this distributor
+  const batchesRes = await query(`
+    SELECT db.*, d.name as drug_name
+    FROM drugbatch db
+    JOIN drug d ON db.drugid = d.id
+    WHERE db.distributorcompanyid = (SELECT companyid FROM distributor WHERE id = $1)
+      AND db.is_deleted = false
+    ORDER BY db.id DESC
+  `, [distributorId]);
+  const batches = batchesRes.rows;
+
+  // Get all requests for this distributor, including pharmacist facility and manufacturer name
+  const requestsRes = await query(`
+    SELECT br.*, u.full_name as pharmacist_name,
+      pc.name as pharmacy_company_name, f.name as pharmacy_facility_name,
+      mc.name as manufacturer_company_name, mf.name as manufacturer_facility_name
+    FROM batch_request br
+    LEFT JOIN pharmacist p ON p.id = br.pharmacist_id
+    LEFT JOIN users u ON p.userid = u.id
+    LEFT JOIN pharmacy_company pc ON p.companyid = pc.id
+    LEFT JOIN facility f ON pc.facility_id = f.id
+    LEFT JOIN drugbatch db ON br.batch_id = db.id
+    LEFT JOIN manufacturer m ON db.manufacturerid = m.id
+    LEFT JOIN manufacturer_company mc ON m.companyid = mc.id
+    LEFT JOIN facility mf ON mc.facility_id = mf.id
+    WHERE br.distributor_id = $1 AND (br.is_deleted IS NULL OR br.is_deleted = false)
+    ORDER BY br.request_date DESC
+  `, [distributorId]);
+  const requests = requestsRes.rows;
+
+  // Build result: for each drug, show batches, batch quantities, and requests
+  const result = drugs.map(drug => {
+    // Find batches for this drug
+    const drugBatches = batches.filter(b => b.drugid === drug.id);
+    // Find requests for this drug
+    const drugRequests = requests.filter(r => r.drug_id === drug.id);
+    return {
+      drug,
+      batches: drugBatches.map(batch => ({
+        batch_id: batch.id,
+        batchnumber: batch.batchnumber,
+        quantity: batch.quantity,
+        expirydate: batch.expirydate,
+        status: batch.status
+      })),
+      requests: drugRequests.map(r => ({
+        request_id: r.id,
+        pharmacist_id: r.pharmacist_id,
+        pharmacist_name: r.pharmacist_name,
+        batch_id: r.batch_id,
+        batchnumber: r.batchnumber,
+        quantity_requested: r.quantity_requested,
+        status: r.status,
+        request_date: r.request_date,
+        pharmacist_facility: r.pharmacy_facility_name,
+        manufacturer_name: r.manufacturer_company_name
+      }))
+    };
+  });
+  return result;
+}
 // Dashboard
 async function getDistributorDashboard(distributorId) {
   // Shipments handled this month
@@ -40,10 +107,9 @@ async function getDistributorRequests(distributorId) {
   return rows;
 }
 async function approveDistributorRequest(distributorId, requestId) {
-  // Mark request as approved
-  await query(`UPDATE batch_request SET status = 'Approved', approved_date = CURRENT_DATE WHERE id = $1 AND distributor_id = $2`, [requestId, distributorId]);
-  // Create shipment from manufacturer (simplified)
-  // You may want to fetch batch info and call shipment creation logic here
+  // Mark request as in_transit (to match shipment status)
+  await query(`UPDATE batch_request SET status = 'in_transit', approved_date = CURRENT_DATE WHERE id = $1 AND distributor_id = $2`, [requestId, distributorId]);
+  // Optionally, create shipment here if not already created (logic can be added if needed)
   return true;
 }
 async function rejectDistributorRequest(distributorId, requestId) {
@@ -68,15 +134,41 @@ async function getDistributorShipments(distributorId) {
 }
 async function createDistributorShipment(distributorId, shipmentData) {
   // Insert new shipment (simplified)
-  const { batch_id, drug_id, shipment_type, departure_date, route, vehicle_number, quantity } = shipmentData;
+  const { batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, origin_facility_id, destination_facility_id } = shipmentData;
+  let final_manufacturer_id = manufacturer_id;
+  if (!final_manufacturer_id && batch_id) {
+    // Fetch manufacturer_id from drugbatch
+    const batchRes = await query('SELECT manufacturerid FROM drugbatch WHERE id = $1', [batch_id]);
+    final_manufacturer_id = batchRes.rows[0]?.manufacturerid;
+  }
   await query(`
-    INSERT INTO shipment (distributor_id, batch_id, drug_id, shipment_type, departure_date, route, vehicle_number, quantity, status)
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending')
-  `, [distributorId, batch_id, drug_id, shipment_type, departure_date, route, vehicle_number, quantity]);
+    INSERT INTO shipment (
+      batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, origin_facility_id, destination_facility_id, status
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'in_transit'::shipment_status
+    )
+  `, [
+    batch_id,
+    drug_id,
+    final_manufacturer_id,
+    distributor_id,
+    pharmacist_id,
+    quantity_shipped,
+    temperature,
+    route,
+    vehicle_number,
+    departure_date,
+    origin_facility_id,
+    destination_facility_id
+  ]);
+  // Subtract shipped quantity from drugbatch
+  if (quantity_shipped && batch_id) {
+    await query(`UPDATE drugbatch SET quantity = quantity - $1 WHERE id = $2`, [quantity_shipped, batch_id]);
+  }
   return true;
 }
 async function updateDistributorShipmentStatus(distributorId, shipmentId, status) {
-  // Update shipment status and record arrival/condition if delivered
+  // Update shipment status and record arrival/condition if delivered or cancelled
   await query(`UPDATE shipment SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND distributor_id = $3`, [status, shipmentId, distributorId]);
   return true;
 }
@@ -194,4 +286,5 @@ export {
   addDistributorInventory,
   getDistributorBlockchain,
   getDistributorAnalytics
+  ,getDistributorDrugRequests
 };

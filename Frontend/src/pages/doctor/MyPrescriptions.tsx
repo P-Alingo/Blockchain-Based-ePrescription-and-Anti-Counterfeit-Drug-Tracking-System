@@ -78,7 +78,6 @@ const MyPrescriptions: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
-  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
@@ -312,21 +311,9 @@ const MyPrescriptions: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const openQrModal = (prescription: Prescription) => {
-    setSelectedPrescription(prescription);
-    setQrModalOpen(true);
-  };
-
   const openDetailsModal = (prescription: Prescription) => {
     setSelectedPrescription(prescription);
     setDetailsModalOpen(true);
-  };
-
-  const copyQrLink = () => {
-    if (selectedPrescription && selectedPrescription.qrcode) {
-      navigator.clipboard.writeText(selectedPrescription.qrcode);
-      toast.success("QR link copied to clipboard!");
-    }
   };
 
   return (
@@ -434,9 +421,6 @@ const MyPrescriptions: React.FC = () => {
                           <Button variant="outline" size="sm" onClick={() => openDetailsModal(p)}>
                             <Eye className="mr-2 w-3 h-3" />View Details
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => openQrModal(p)}>
-                            <QrCode className="mr-2 w-3 h-3" />QR Code
-                          </Button>
                           <Button variant="outline" size="sm" onClick={() => handleEdit(p)}>
                             <Edit className="mr-2 w-3 h-3" />Edit
                           </Button>
@@ -522,7 +506,7 @@ const MyPrescriptions: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* QR Code Modal removed */}
+  {/* QR Code Modal removed */}
 
         {/* Details Modal */}
         <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>

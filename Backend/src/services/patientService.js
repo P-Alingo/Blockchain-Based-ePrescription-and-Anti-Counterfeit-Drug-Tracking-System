@@ -1,5 +1,5 @@
 // Patient analytics aggregation - FIXED VERSION
-export async function fetchPatientAnalytics(userId) {
+async function fetchPatientAnalytics(userId) {
   // Get patient id
   const { rows: patientRows } = await query("SELECT id FROM patient WHERE userid=$1", [userId]);
   if (patientRows.length === 0) throw new Error("Patient record not found");
@@ -93,8 +93,9 @@ export async function fetchPatientAnalytics(userId) {
     lastActivity,
   };
 }
+
 // List all prescriptions for patient (with optional status filter)
-export async function fetchPatientPrescriptions(userId, status) {
+async function fetchPatientPrescriptions(userId, status) {
   let sql = `
     SELECT 
       p.*, 
@@ -132,13 +133,59 @@ export async function fetchPatientPrescriptions(userId, status) {
   }));
 }
 // Get single prescription details
-export async function fetchPrescriptionDetails(prescriptionId) {
+async function fetchPrescriptionDetails(prescriptionId) {
   const { rows } = await query("SELECT * FROM prescription WHERE id = $1", [prescriptionId]);
   return rows[0] || null;
 }
 
+async function fetchPrescriptionDetailsByNo(prescriptionNo) {
+  // Try to find by prescription_code first, join drug and doctor tables
+  let { rows } = await query(`
+    SELECT p.*, d.name as drug_name, d.dosageunit as drug_dosage_unit, u.full_name as doctor_name,
+      h.name as hospital_name
+    FROM prescription p
+    LEFT JOIN drug d ON p.drug_id = d.id
+    LEFT JOIN doctor doc ON p.doctor_id = doc.id
+    LEFT JOIN users u ON doc.userid = u.id
+    LEFT JOIN hospital h ON doc.hospital_id = h.id
+    WHERE p.prescription_code = $1
+  `, [prescriptionNo]);
+  if (rows.length === 0) {
+    // Fallback: try to extract numeric id from code (e.g., PRESC-12345)
+    const match = prescriptionNo.match(/(\d+)$/);
+    if (match) {
+      const id = parseInt(match[1], 10);
+      ({ rows } = await query(`
+        SELECT p.*, d.name as drug_name, d.dosageunit as drug_dosage_unit, u.full_name as doctor_name,
+          h.name as hospital_name
+        FROM prescription p
+        LEFT JOIN drug d ON p.drug_id = d.id
+        LEFT JOIN doctor doc ON p.doctor_id = doc.id
+        LEFT JOIN users u ON doc.userid = u.id
+        LEFT JOIN hospital h ON doc.hospital_id = h.id
+        WHERE p.id = $1
+      `, [id]));
+    }
+  }
+  if (!rows[0]) return null;
+  const p = rows[0];
+  return {
+    prescriptionNo: p.prescription_code || `RX-${String(p.id).padStart(5, '0')}`,
+    doctorName: p.doctor_name || 'Unknown Doctor',
+    date: p.issue_date,
+    drug: p.drug_name || 'Unknown Drug',
+    status: p.status,
+    hospital: p.hospital_name || '',
+    dosage: p.dosage_amount ? `${p.dosage_amount} ${p.dosage_unit || p.drug_dosage_unit || 'mg'}` : '',
+    frequency: p.frequency || '',
+    duration: p.duration || '',
+    instructions: p.instructions || '',
+    validUntil: p.valid_until,
+  };
+}
+
 // Search prescriptions by drug/doctor name
-export async function searchPatientPrescriptions(userId, queryStr) {
+async function searchPatientPrescriptions(userId, queryStr) {
   const sql = `SELECT * FROM prescription WHERE patient_id = (SELECT id FROM patient WHERE userid = $1) AND (drug_name ILIKE $2 OR doctor_name ILIKE $2) ORDER BY issue_date DESC`;
   const params = [userId, `%${queryStr}%`];
   const { rows } = await query(sql, params);
@@ -153,11 +200,11 @@ export async function searchPatientPrescriptions(userId, queryStr) {
 }
 
 // Export prescriptions summary (stub: returns empty PDF buffer)
-export async function exportPatientPrescriptions(userId) {
+async function exportPatientPrescriptions(userId) {
   // TODO: Implement PDF/CSV export logic
   return Buffer.from([]);
 }
-export async function fetchPatientDashboard(userId) {
+async function fetchPatientDashboard(userId) {
   // Get user info
   const { rows: users } = await query(
     "SELECT id, full_name, email, wallet_address, role FROM users WHERE id=$1",
@@ -321,4 +368,15 @@ async function searchPatients(searchTerm) {
   }));
 }
 
-export { getPatientByUserId, updatePatientByUserId, searchPatients };
+export {
+  fetchPatientAnalytics,
+  fetchPatientPrescriptions,
+  fetchPrescriptionDetails,
+  fetchPrescriptionDetailsByNo,
+  searchPatientPrescriptions,
+  exportPatientPrescriptions,
+  fetchPatientDashboard,
+  getPatientByUserId,
+  updatePatientByUserId,
+  searchPatients
+};

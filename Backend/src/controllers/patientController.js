@@ -23,8 +23,9 @@ export async function getPatientPrescriptions(req, res) {
 // Get single prescription details
 export async function getSinglePrescription(req, res) {
   try {
-    const prescriptionId = req.params.id;
-    const details = await patientService.fetchPrescriptionDetails(prescriptionId);
+    // Accept prescriptionNo as string (e.g., 'PRESC-333252')
+    const prescriptionNo = req.params.id;
+    const details = await patientService.fetchPrescriptionDetailsByNo(prescriptionNo);
     if (!details) return res.status(404).json({ message: "Prescription not found" });
     res.json(details);
   } catch (error) {

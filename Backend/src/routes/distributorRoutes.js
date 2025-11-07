@@ -12,7 +12,8 @@ import {
 	getDistributorInventory,
 	addDistributorInventory,
 	getDistributorBlockchain,
-	getDistributorAnalytics
+	getDistributorAnalytics,
+	getDistributorDrugRequests
 } from "../controllers/distributorController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -39,6 +40,9 @@ router.put("/shipments/:id/status", updateDistributorShipmentStatus);
 // Inventory
 router.get("/inventory", getDistributorInventory);
 router.post("/inventory", addDistributorInventory);
+
+// Drug requests dashboard (all drugs, batches, requests)
+router.get("/drug-requests", getDistributorDrugRequests);
 
 // Blockchain
 router.get("/blockchain", getDistributorBlockchain);

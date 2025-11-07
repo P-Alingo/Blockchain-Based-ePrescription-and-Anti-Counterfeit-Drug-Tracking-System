@@ -1,3 +1,17 @@
+export async function deletePharmacistRequest(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const requestId = req.params.id;
+    const result = await pharmacistService.deletePharmacistRequest(userId, requestId);
+    res.json(result);
+  } catch (error) { next(error); }
+}
+export async function getPharmacistPrescriptions(req, res, next) {
+  try {
+    const prescriptions = await pharmacistService.getPharmacistPrescriptions();
+    res.json(prescriptions);
+  } catch (error) { next(error); }
+}
 import * as pharmacistService from "../services/pharmacistService.js";
 
 export async function getPharmacistProfile(req, res, next) {

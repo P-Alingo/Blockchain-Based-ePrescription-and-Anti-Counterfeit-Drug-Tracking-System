@@ -29,24 +29,121 @@ const sidebarItems = [
 ];
 
 export default function InventoryAndRequests() {
+  // Edit Request Modal State
+  const [editRequestModal, setEditRequestModal] = useState(false);
+  const [editRequest, setEditRequest] = useState<Request | null>(null);
+  const [editQuantity, setEditQuantity] = useState("");
+
+  const handleEditRequest = (request: Request) => {
+    setEditRequest(request);
+    setEditQuantity(String(request.quantity));
+    setEditRequestModal(true);
+  };
+
+  const closeEditRequestModal = () => {
+    setEditRequestModal(false);
+    setEditRequest(null);
+    setEditQuantity("");
+  };
+
+  const submitEditRequest = async () => {
+    if (!editRequest || !editQuantity || isNaN(Number(editQuantity)) || Number(editQuantity) <= 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    try {
+      await api.put(`/api/pharmacist/requests/${editRequest.id}`, { quantity: Number(editQuantity) });
+      toast.success("Request updated");
+      closeEditRequestModal();
+      // Refresh requests
+      const res = await api.get("/api/pharmacist/requests");
+      setRequests(res.data as Request[]);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update request");
+    }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    try {
+      await api.delete(`/api/pharmacist/requests/${id}`);
+      toast.success("Request deleted");
+      // Refresh requests
+      const res = await api.get("/api/pharmacist/requests");
+      setRequests(res.data as Request[]);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete request");
+    }
+  };
+  // Inventory State (single declaration)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [inventoryData, setInventoryData] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [inventoryError, setInventoryError] = useState(null);
+
+  // Get all drugs that are expiring soon (e.g., within 30 days)
+  const expiringSoonDrugs = inventoryData.filter((item: any) => {
+    if (!item.expiry_date) return false;
+    const expiry = new Date(item.expiry_date);
+    const now = new Date();
+    const diffDays = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays > 0 && diffDays <= 30;
+  });
   // Modal state for requesting a drug
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [modalDrug, setModalDrug] = useState<any>(null);
+  const [selectedDrugId, setSelectedDrugId] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [selectedDistributorId, setSelectedDistributorId] = useState("");
   const [modalQuantity, setModalQuantity] = useState("");
+  // Get all drugs that are low/out of stock
+  const lowStockDrugs = inventoryData.filter((item: any) => {
+    const minStock = typeof item.minStock === 'number' ? item.minStock : 1;
+    return Number(item.quantity) <= minStock;
+  });
+  // Open modal with drug, batch, distributor pre-filled
   const openRequestModal = (drug: any) => {
-    setModalDrug(drug);
-    setModalQuantity("");
+    setSelectedDrugId(String(drug.drug_id));
+    let batch = null;
+    if (drug.batches && drug.batches.length > 0) {
+      batch = drug.batches.find((b: any) => Number(b.inventory_quantity) > 0) || drug.batches[0];
+    }
+    setSelectedBatchId(batch ? String(batch.batch_id) : "");
+    setSelectedDistributorId(batch ? String(batch.distributorcompanyid || "") : "");
+    setEditRequest({
+      id: "new",
+      drugId: String(drug.drug_id),
+      batchId: batch ? String(batch.batch_id) : "",
+      quantity: "",
+      status: "pending",
+      drugName: drug.drug_name
+    });
+    setEditQuantity("");
     setShowRequestModal(true);
   };
+
   const closeRequestModal = () => {
     setShowRequestModal(false);
-    setModalDrug(null);
+    setSelectedDrugId("");
+    setSelectedBatchId("");
+    setSelectedDistributorId("");
     setModalQuantity("");
   };
+
   const handleModalRequest = async () => {
-    if (!modalDrug || !modalQuantity) return;
+    if (!selectedDrugId || !modalQuantity || isNaN(Number(modalQuantity)) || Number(modalQuantity) <= 0) {
+      toast.error("Please enter a valid quantity");
+      return;
+    }
+    if (!selectedBatchId) {
+      toast.error("No batch available for this drug");
+      return;
+    }
     try {
-      await api.post("/api/pharmacist/requests", { drugId: modalDrug.id, quantity: modalQuantity });
+      await api.post("/api/pharmacist/requests", {
+        drugId: selectedDrugId,
+        quantity: Number(modalQuantity),
+        batchId: selectedBatchId,
+        distributorId: selectedDistributorId
+      });
       toast.success("Request created");
       closeRequestModal();
       // Refresh requests after creation
@@ -56,48 +153,49 @@ export default function InventoryAndRequests() {
       toast.error(err.response?.data?.message || "Failed to create request");
     }
   };
-  // Inventory State
-  const [searchTerm, setSearchTerm] = useState("");
-  const [inventoryData, setInventoryData] = useState([]);
-  const [inventoryLoading, setInventoryLoading] = useState(true);
-  const [inventoryError, setInventoryError] = useState(null);
 
   // Requests State
-  type Request = { id: string; drugId: string; quantity: number | string; status: string };
+  type Request = { id: string; drugId: string; batchId?: string; quantity: number | string; status: string; drugName?: string };
   const [requests, setRequests] = useState<Request[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState(null);
   const [newRequest, setNewRequest] = useState({ drugId: "", quantity: "" });
 
+  // Fetch functions for manual and auto refresh
+  const fetchInventory = async (setInventoryLoading, setInventoryError, setInventoryData) => {
+    setInventoryLoading(true);
+    try {
+      const res = await api.get("/api/pharmacist/inventory");
+      setInventoryData(res.data);
+    } catch (err) {
+      setInventoryError("Failed to fetch inventory");
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+  const fetchRequests = async (setRequestsLoading, setRequestsError, setRequests) => {
+    setRequestsLoading(true);
+    try {
+      const res = await api.get("/api/pharmacist/requests");
+      setRequests(res.data);
+    } catch (err) {
+      setRequestsError("Failed to fetch requests");
+      toast.error("Failed to fetch requests");
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
+  // Remove auto-refresh useEffect and add manual refresh button for the whole page
   useEffect(() => {
-    // Fetch Inventory
-    const fetchInventory = async () => {
-      setInventoryLoading(true);
-      try {
-        const res = await api.get("/api/pharmacist/inventory");
-        setInventoryData(res.data as any[]);
-      } catch (err) {
-        setInventoryError("Failed to fetch inventory");
-      } finally {
-        setInventoryLoading(false);
-      }
-    };
-    fetchInventory();
-    // Fetch Requests
-    const fetchRequests = async () => {
-      setRequestsLoading(true);
-      try {
-        const res = await api.get("/api/pharmacist/requests");
-        setRequests(res.data as Request[]);
-      } catch (err) {
-        setRequestsError("Failed to fetch requests");
-        toast.error("Failed to fetch requests");
-      } finally {
-        setRequestsLoading(false);
-      }
-    };
-    fetchRequests();
+    fetchInventory(setInventoryLoading, setInventoryError, setInventoryData);
+    fetchRequests(setRequestsLoading, setRequestsError, setRequests);
   }, []);
+
+  const handleManualRefresh = () => {
+    fetchInventory(setInventoryLoading, setInventoryError, setInventoryData);
+    fetchRequests(setRequestsLoading, setRequestsError, setRequests);
+  };
 
   const handleCreateRequest = async () => {
     try {
@@ -126,6 +224,10 @@ export default function InventoryAndRequests() {
     <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
       <div className="space-y-8">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Inventory & Requests</h1>
+        {/* Add general refresh button above Tabs */}
+        <div className="flex justify-end mb-4">
+          <Button variant="outline" size="sm" onClick={handleManualRefresh}>Refresh Page</Button>
+        </div>
         <Tabs defaultValue="inventory" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="inventory">Inventory</TabsTrigger>
@@ -154,9 +256,7 @@ export default function InventoryAndRequests() {
                       <AlertTriangle className="h-6 w-6 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{
-                        inventoryData.filter((item: any) => item.quantity <= item.minStock).length
-                      }</p>
+                      <p className="text-2xl font-bold">{lowStockDrugs.length}</p>
                       <p className="text-sm text-muted-foreground">Low Stock</p>
                     </div>
                   </div>
@@ -169,9 +269,7 @@ export default function InventoryAndRequests() {
                       <AlertTriangle className="h-6 w-6 text-red-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{
-                        inventoryData.filter((item: any) => item.status === "Expiring Soon").length
-                      }</p>
+                      <p className="text-2xl font-bold">{expiringSoonDrugs.length}</p>
                       <p className="text-sm text-muted-foreground">Expiring Soon</p>
                     </div>
                   </div>
@@ -214,68 +312,63 @@ export default function InventoryAndRequests() {
               <CardContent>
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Medication</TableHead>
-                      <TableHead>Batch Number</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Expiry Date</TableHead>
-                      <TableHead>Supplier</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
+                    <tr>
+                      <th>Medication</th>
+                      <th>Batch Number</th>
+                      <th>Formulation</th>
+                      <th>Dosage</th>
+                      <th>Batches Available</th>
+                      <th>Total Batch Quantity</th>
+                      <th>Inventory Quantity</th>
+                      <th>Expiry Date</th>
+                      <th>Distributor</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
                   </TableHeader>
                   <TableBody>
-                    {inventoryLoading ? (
-                      <TableRow><TableCell colSpan={7}>Loading...</TableCell></TableRow>
-                    ) : inventoryError ? (
-                      <TableRow><TableCell colSpan={7}>{inventoryError}</TableCell></TableRow>
-                    ) : inventoryData.length === 0 ? (
-                      <TableRow><TableCell colSpan={7}>No inventory found</TableCell></TableRow>
-                    ) : (
-                      inventoryData.filter((item: any) => item.name.toLowerCase().includes(searchTerm.toLowerCase())).map((item: any) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell>{item.batchNumber}</TableCell>
-                          <TableCell>{item.quantity}</TableCell>
-                          <TableCell>{item.expiryDate}</TableCell>
-                          <TableCell>{item.supplier}</TableCell>
-                          <TableCell>{getStatusBadge(item.status, item.quantity, item.minStock)}</TableCell>
-                          <TableCell>
-                            <Button variant="outline" size="sm">Edit</Button>
-                            {item.quantity <= item.minStock && (
-                              <Button variant="default" size="sm" className="ml-2" onClick={() => openRequestModal(item)}>
+                    {inventoryData.filter((item: any) => item.drug_name.toLowerCase().includes(searchTerm.toLowerCase())).map((drug: any) => {
+                      // Find the first batch with inventory_quantity > 0, sorted by expiry date
+                      const availableBatches = drug.batches ? drug.batches.slice().sort((a: any, b: any) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()) : [];
+                      const firstAvailableBatch = availableBatches.length > 0 ? availableBatches[0] : null;
+                      const totalBatchQuantity = drug.batches ? drug.batches.reduce((sum: number, b: any) => sum + Number(b.batch_quantity || 0), 0) : 0;
+                      const totalInventoryQuantity = drug.batches ? drug.batches.reduce((sum: number, b: any) => sum + Number(b.inventory_quantity || 0), 0) : 0;
+                      return (
+                        <tr key={drug.drug_id}>
+                          <td>{drug.drug_name}</td>
+                          <td>{firstAvailableBatch ? firstAvailableBatch.batch_number : "-"}</td>
+                          <td>{drug.formulation}</td>
+                          <td>{drug.dosageunit}</td>
+                          <td>{drug.batches ? drug.batches.length : 0}</td>
+                          <td>{drug.batches ? drug.batches.reduce((sum: number, b: any) => sum + Number(b.batch_quantity || 0), 0) : 0}</td>
+                          <td>{totalInventoryQuantity}</td>
+                          <td>{firstAvailableBatch && firstAvailableBatch.expiry_date ? new Date(firstAvailableBatch.expiry_date).toLocaleDateString() : "-"}</td>
+                          <td>{firstAvailableBatch && firstAvailableBatch.distributorcompanyid ? firstAvailableBatch.distributorcompanyid : "-"}</td>
+                          <td>
+                            {getStatusBadge(
+                              drug.batches && drug.batches.length > 0 && drug.batches.some((b: any) => {
+                                const expiry = b.expiry_date ? new Date(b.expiry_date) : null;
+                                const now = new Date();
+                                return expiry && (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) <= 30 && (expiry.getTime() - now.getTime()) > 0;
+                              }) ? "Expiring Soon" : "Low Stock",
+                              totalInventoryQuantity,
+                              1 // minStock
+                            )}
+                          </td>
+                          <td>
+                            {drug.batches && drug.batches.length > 0 ? (
+                              <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>
                                 Request
                               </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" disabled>
+                                No batch available
+                              </Button>
                             )}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-      {/* Request Modal */}
-      {showRequestModal && modalDrug && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-2">Request Drug</h2>
-            <p className="mb-2">Drug: <span className="font-semibold">{modalDrug.name}</span></p>
-            <p className="mb-2">Batch Number: <span className="font-semibold">{modalDrug.batchNumber}</span></p>
-            <div className="mb-4">
-              <label className="block mb-1">Quantity</label>
-              <input
-                type="number"
-                min={1}
-                value={modalQuantity}
-                onChange={e => setModalQuantity(e.target.value)}
-                className="border px-2 py-1 rounded w-full"
-                placeholder="Enter quantity"
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={closeRequestModal}>Cancel</Button>
-              <Button variant="default" onClick={handleModalRequest}>Submit Request</Button>
-            </div>
-          </div>
-        </div>
-      )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -287,52 +380,115 @@ export default function InventoryAndRequests() {
               <CardHeader>
                 <CardTitle>Pharmacist Batch Requests</CardTitle>
                 <CardDescription>Request new drug batches from distributors</CardDescription>
+                {/* Removed Refresh Now button */}
               </CardHeader>
               <CardContent>
-                <div className="mb-4 flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Drug ID"
-                    value={newRequest.drugId}
-                    onChange={e => setNewRequest(r => ({ ...r, drugId: e.target.value }))}
-                    className="border px-2 py-1 rounded"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Quantity"
-                    value={newRequest.quantity}
-                    onChange={e => setNewRequest(r => ({ ...r, quantity: e.target.value }))}
-                    className="border px-2 py-1 rounded"
-                  />
-                  <Button onClick={handleCreateRequest}>Create Request</Button>
-                </div>
-                {requestsLoading ? (
-                  <div className="p-8 text-center">Loading requests...</div>
-                ) : requestsError ? (
-                  <div className="p-8 text-center text-red-500">{requestsError}</div>
-                ) : requests.length === 0 ? (
-                  <div className="text-center py-8">No requests found</div>
-                ) : (
-                  <table className="w-full">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Drug</th>
-                        <th>Quantity</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {requests.map(r => (
+                {/* Removed create request button and input fields from Requests tab */}
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Drug</th>
+                      <th>Batch ID</th>
+                      <th>Quantity</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requestsLoading ? (
+                      <tr><td colSpan={6} className="text-center">Loading requests...</td></tr>
+                    ) : requestsError ? (
+                      <tr><td colSpan={6} className="text-center text-red-500">{requestsError}</td></tr>
+                    ) : requests.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center">No requests found</td></tr>
+                    ) : (
+                      requests.map(r => (
                         <tr key={r.id}>
                           <td>{r.id}</td>
-                          <td>{r.drugId}</td>
+                          <td>{r.drugName ? r.drugName : r.drugId}</td>
+                          <td>{r.batchId || '-'}</td>
                           <td>{r.quantity}</td>
                           <td>{r.status}</td>
+                          <td>
+                            <Button variant="outline" size="sm" onClick={() => handleEditRequest(r)}>Edit</Button>
+                            <Button variant="destructive" size="sm" className="ml-2" onClick={() => handleDeleteRequest(r.id)}>Delete</Button>
+                          </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      ))
+                    )
+                  }
+                  </tbody>
+                </table>
+                {/* Edit Request Modal */}
+                {editRequestModal && editRequest && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+                      <h2 className="text-xl font-bold mb-2">Edit Request</h2>
+                      <p className="mb-2">Drug: <span className="font-semibold">{editRequest.drugName || editRequest.drugId}</span></p>
+                      <div className="mb-4">
+                        <label className="block mb-1">Quantity</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={editQuantity}
+                          onChange={e => setEditQuantity(e.target.value)}
+                          className="border px-2 py-1 rounded w-full"
+                          placeholder="Enter quantity"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={closeEditRequestModal}>Cancel</Button>
+                        <Button variant="default" onClick={submitEditRequest} disabled={!editQuantity || isNaN(Number(editQuantity)) || Number(editQuantity) <= 0}>Save</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Request Modal */}
+                {showRequestModal && editRequest && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+                      <h2 className="text-xl font-bold mb-4">Request Drug Batch</h2>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Drug</label>
+                        <input type="text" value={editRequest.drugName || ""} readOnly className="w-full border rounded px-2 py-1 bg-gray-100" />
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">Quantity Needed</label>
+                        <input type="number" min="1" value={editQuantity} onChange={e => setEditQuantity(e.target.value)} className="w-full border rounded px-2 py-1" />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => { setShowRequestModal(false); setEditRequest(null); setEditQuantity(""); }}>Cancel</Button>
+                        <Button onClick={async () => {
+                          if (!editQuantity || isNaN(Number(editQuantity)) || Number(editQuantity) <= 0) {
+                            toast.error("Please enter a valid quantity");
+                            return;
+                          }
+                          if (!editRequest.batchId) {
+                            toast.error("No batch available for this drug");
+                            return;
+                          }
+                          try {
+                            await api.post("/api/pharmacist/requests", {
+                              drugId: editRequest.drugId,
+                              quantity: Number(editQuantity),
+                              batchId: editRequest.batchId,
+                              distributorId: selectedDistributorId
+                            });
+                            toast.success("Request created");
+                            setShowRequestModal(false);
+                            setEditRequest(null);
+                            setEditQuantity("");
+                            // Refresh requests after creation
+                            const res = await api.get("/api/pharmacist/requests");
+                            setRequests(res.data as Request[]);
+                          } catch (err) {
+                            toast.error(err.response?.data?.message || "Failed to create request");
+                          }
+                        }}>Submit Request</Button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

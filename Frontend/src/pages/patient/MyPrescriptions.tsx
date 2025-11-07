@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import dayjs from "dayjs";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -34,6 +35,8 @@ interface Prescription {
   dosage?: string;
   duration?: string;
   instructions?: string;
+  validUntil?: string;
+  frequency?: string;
 }
 
 const MyPrescriptions = () => {
@@ -213,7 +216,7 @@ const MyPrescriptions = () => {
     <tr key={p.prescriptionNo} className="border-t hover:bg-gray-50">
       <td className="px-4 py-3 font-mono text-sm">{p.prescriptionNo}</td>
       <td className="px-4 py-3">{p.doctorName}</td>
-      <td className="px-4 py-3">{new Date(p.date).toLocaleDateString()}</td>
+  <td className="px-4 py-3">{dayjs(p.date).isValid() ? dayjs(p.date).format("DD MMM YYYY") : "-"}</td>
       <td className="px-4 py-3">{p.drug}</td>
       <td className="px-4 py-3">
         <Badge variant={
@@ -313,7 +316,51 @@ const MyPrescriptions = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* ...existing code... */}
+                  {/* Search Bar */}
+                  <Input
+                    type="text"
+                    placeholder="Search by prescription no, drug, or doctor..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full"
+                  />
+                  {/* Doctor Filter */}
+                  <Select value={doctorFilter} onValueChange={setDoctorFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Doctor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Doctors</SelectItem>
+                      {uniqueDoctors.map((doc) => (
+                        <SelectItem key={doc} value={doc}>{doc}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Status Filter */}
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {uniqueStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Date Filter */}
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Date Range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="week">This Week</SelectItem>
+                      <SelectItem value="month">This Month</SelectItem>
+                      <SelectItem value="quarter">This Quarter</SelectItem>
+                      <SelectItem value="year">This Year</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 {/* Results Count */}
                 <div className="mt-4 text-sm text-muted-foreground">
@@ -363,7 +410,51 @@ const MyPrescriptions = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* ...existing code... */}
+                  {/* Search Bar */}
+                  <Input
+                    type="text"
+                    placeholder="Search by prescription no, drug, or doctor..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full"
+                  />
+                  {/* Doctor Filter */}
+                  <Select value={doctorFilter} onValueChange={setDoctorFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Doctor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Doctors</SelectItem>
+                      {uniqueDoctors.map((doc) => (
+                        <SelectItem key={doc} value={doc}>{doc}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Status Filter */}
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {uniqueStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Date Filter */}
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Date Range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="week">This Week</SelectItem>
+                      <SelectItem value="month">This Month</SelectItem>
+                      <SelectItem value="quarter">This Quarter</SelectItem>
+                      <SelectItem value="year">This Year</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 {/* Results Count */}
                 <div className="mt-4 text-sm text-muted-foreground">
@@ -422,11 +513,13 @@ const MyPrescriptions = () => {
                 <div className="space-y-2">
                   <div><strong>Prescription No:</strong> {modalPrescription.prescriptionNo}</div>
                   <div><strong>Doctor:</strong> {modalPrescription.doctorName}</div>
-                  <div><strong>Date Issued:</strong> {new Date(modalPrescription.date).toLocaleDateString()}</div>
+                  <div><strong>Date Issued:</strong> {dayjs(modalPrescription.date).isValid() ? dayjs(modalPrescription.date).format("DD MMM YYYY") : "-"}</div>
+                  <div><strong>Valid Until:</strong> {modalPrescription.validUntil ? dayjs(modalPrescription.validUntil).format("DD MMM YYYY") : "-"}</div>
                   <div><strong>Drug:</strong> {modalPrescription.drug}</div>
                   <div><strong>Status:</strong> {modalPrescription.status}</div>
                   <div><strong>Dosage:</strong> {modalPrescription.dosage}</div>
-                  <div><strong>Duration:</strong> {modalPrescription.duration}</div>
+                  <div><strong>Frequency:</strong> {modalPrescription.frequency}</div>
+                  <div><strong>Duration:</strong> {modalPrescription.duration ? `${modalPrescription.duration} days` : "-"}</div>
                   <div><strong>Instructions:</strong> {modalPrescription.instructions}</div>
                   <div><strong>Hospital:</strong> {modalPrescription.hospital}</div>
                 </div>

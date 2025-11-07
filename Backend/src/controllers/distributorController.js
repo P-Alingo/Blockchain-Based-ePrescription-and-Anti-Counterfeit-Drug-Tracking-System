@@ -1,3 +1,13 @@
+// Drug requests dashboard (all drugs, batches, requests)
+async function getDistributorDrugRequests(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const distributor = await distributorService.getDistributorByUserId(userId);
+    if (!distributor) return res.status(404).json({ message: "Distributor not found" });
+    const data = await distributorService.getDistributorDrugRequests(distributor.id);
+    res.json(data);
+  } catch (error) { next(error); }
+}
 // Dashboard
 async function getDistributorDashboard(req, res, next) {
   try {
@@ -151,4 +161,5 @@ export {
   addDistributorInventory,
   getDistributorBlockchain,
   getDistributorAnalytics
+  ,getDistributorDrugRequests
 };
