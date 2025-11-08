@@ -151,22 +151,22 @@ async function getDistributorShipments(distributorId) {
       db.batchnumber, db.drugid,
       d.name AS drugname,
       mc.name AS manufacturer_company_name,
+      mf.name AS manufacturer_facility_name,
       pc.name AS pharmacy_company_name,
       pf.name AS pharmacy_facility_name,
       dc.name AS distributorname,
-      f.name AS destination_facility,
       db.quantity,
-      db.expirydate,
-      db.status AS batch_status
+      db.expirydate
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
     LEFT JOIN drug d ON db.drugid = d.id
-    LEFT JOIN manufacturer_company mc ON db.manufacturerid = mc.id
+    LEFT JOIN manufacturer m ON s.manufacturer_id = m.id
+    LEFT JOIN manufacturer_company mc ON m.companyid = mc.id
+    LEFT JOIN facility mf ON mc.facility_id = mf.id
     LEFT JOIN distributor_company dc ON db.distributorcompanyid = dc.id
-    LEFT JOIN batch_request br ON br.batch_id = s.batch_id AND br.pharmacist_id = s.pharmacist_id
-    LEFT JOIN pharmacy_company pc ON br.pharmacist_id IS NOT NULL AND pc.id = (SELECT companyid FROM pharmacist WHERE id = br.pharmacist_id)
+    LEFT JOIN pharmacist p ON s.pharmacist_id = p.id
+    LEFT JOIN pharmacy_company pc ON p.companyid = pc.id
     LEFT JOIN facility pf ON pc.facility_id = pf.id
-    LEFT JOIN facility f ON f.id = s.destination_facility_id
     WHERE s.distributor_id = $1
     ORDER BY s.departure_date DESC
   `, [distributorId]);
@@ -174,18 +174,17 @@ async function getDistributorShipments(distributorId) {
 }
 async function createDistributorShipment(distributorId, shipmentData) {
   // Insert new shipment (simplified)
-  const { batch_id, drug_id, manufacturer_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, origin_facility_id, destination_facility_id } = shipmentData;
+  const { batch_id, drug_id, manufacturer_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date } = shipmentData;
   let final_manufacturer_id = manufacturer_id;
-  if (!final_manufacturer_id && batch_id) {
-    // Fetch manufacturer_id from drugbatch
-    const batchRes = await query('SELECT manufacturerid FROM drugbatch WHERE id = $1', [batch_id]);
-    final_manufacturer_id = batchRes.rows[0]?.manufacturerid;
-  }
+  // Fetch batch details
+  const batchRes = await query('SELECT manufacturerid FROM drugbatch WHERE id = $1', [batch_id]);
+  final_manufacturer_id = final_manufacturer_id || batchRes.rows[0]?.manufacturerid;
+
   await query(`
     INSERT INTO shipment (
-      batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, origin_facility_id, destination_facility_id, status
+      batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, status
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'in_transit'::shipment_status
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_transit'::shipment_status
     )
   `, [
     batch_id,
@@ -197,9 +196,7 @@ async function createDistributorShipment(distributorId, shipmentData) {
     temperature,
     route,
     vehicle_number,
-    departure_date,
-    origin_facility_id,
-    destination_facility_id
+    departure_date
   ]);
   // Subtract shipped quantity from drugbatch
   if (quantity_shipped && batch_id) {
@@ -208,8 +205,42 @@ async function createDistributorShipment(distributorId, shipmentData) {
   return true;
 }
 async function updateDistributorShipmentStatus(distributorId, shipmentId, status) {
-  // Update shipment status and record arrival/condition if delivered or cancelled
-  await query(`UPDATE shipment SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND distributor_id = $3`, [status, shipmentId, distributorId]);
+  // Update shipment status, arrival_date, received_condition, and updated_at
+  // Accepts status, arrival_date, received_condition from the controller
+  let arrival_date = null;
+  let received_condition = null;
+  if (typeof status === 'object' && status !== null) {
+    // If called with an object (from controller), extract fields
+    arrival_date = status.arrival_date || null;
+    received_condition = status.received_condition || null;
+    status = status.status;
+  }
+  await query(
+    `UPDATE shipment SET status = $1, arrival_date = $2, received_condition = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND distributor_id = $5`,
+    [status, arrival_date, received_condition, shipmentId, distributorId]
+  );
+
+  // Update related drugbatch and batch_request status
+  // Get batch_id and pharmacist_id from shipment
+  const shipRes = await query('SELECT batch_id, pharmacist_id FROM shipment WHERE id = $1', [shipmentId]);
+  const batch_id = shipRes.rows[0]?.batch_id;
+  const pharmacist_id = shipRes.rows[0]?.pharmacist_id;
+  if (batch_id && pharmacist_id) {
+    let requestStatus = null;
+    // Use correct enum values for request_status only
+    if (status === 'delivered') {
+      requestStatus = 'delivered';
+    } else if (status === 'cancelled' || status === 'failed') {
+      requestStatus = 'cancelled';
+    } else if (status === 'flagged') {
+      requestStatus = 'flagged';
+    } else if (status === 'in_transit') {
+      requestStatus = 'in_transit';
+    }
+    if (requestStatus) {
+      await query('UPDATE batch_request SET status = $1 WHERE batch_id = $2 AND pharmacist_id = $3', [requestStatus, batch_id, pharmacist_id]);
+    }
+  }
   return true;
 }
 

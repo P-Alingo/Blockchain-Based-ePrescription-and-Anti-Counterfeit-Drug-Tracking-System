@@ -406,25 +406,17 @@ const DistributorShipments = () => {
                   <label className="block text-sm font-medium mb-1">Status</label>
                   <select className="border rounded px-2 py-1 w-full" value={updateFields.status} onChange={e => setUpdateFields(f => ({ ...f, status: e.target.value }))}>
                     <option value="delivered">Delivered</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="failed">Failed</option>
                     <option value="flagged">Flagged</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Temperature</label>
-                  <input className="border rounded px-2 py-1 w-full" value={updateFields.temperature} onChange={e => setUpdateFields(f => ({ ...f, temperature: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Notes / Condition</label>
-                  <input className="border rounded px-2 py-1 w-full" value={updateFields.received_condition} onChange={e => setUpdateFields(f => ({ ...f, received_condition: e.target.value }))} />
-                </div>
-                <div>
                   <label className="block text-sm font-medium mb-1">Arrival Date</label>
-                  <input type="datetime-local" className="border rounded px-2 py-1 w-full" value={updateFields.arrival_date} onChange={e => setUpdateFields(f => ({ ...f, arrival_date: e.target.value }))} />
+                  <input type="date" className="border rounded px-2 py-1 w-full" value={updateFields.arrival_date} onChange={e => setUpdateFields(f => ({ ...f, arrival_date: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Destination Facility</label>
-                  <input className="border rounded px-2 py-1 w-full" value={updateFields.destination_facility} onChange={e => setUpdateFields(f => ({ ...f, destination_facility: e.target.value }))} />
+                  <label className="block text-sm font-medium mb-1">Received Condition / Notes</label>
+                  <textarea className="border rounded px-2 py-1 w-full" value={updateFields.received_condition} onChange={e => setUpdateFields(f => ({ ...f, received_condition: e.target.value }))} />
                 </div>
                 <Button className="w-full mt-4" onClick={handleUpdateShipment}>Update Shipment</Button>
               </div>
