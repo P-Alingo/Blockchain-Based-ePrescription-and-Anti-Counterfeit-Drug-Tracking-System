@@ -107,9 +107,32 @@ async function getDistributorRequests(distributorId) {
   return rows;
 }
 async function approveDistributorRequest(distributorId, requestId) {
-  // Mark request as in_transit (to match shipment status)
-  await query(`UPDATE batch_request SET status = 'in_transit', approved_date = CURRENT_DATE WHERE id = $1 AND distributor_id = $2`, [requestId, distributorId]);
-  // Optionally, create shipment here if not already created (logic can be added if needed)
+  // Mark request as approved
+  // Ensure status is updated for the correct distributor and request
+  await query(`UPDATE batch_request SET status = 'approved', approved_date = CURRENT_DATE WHERE id = $1 AND distributor_id = $2`, [requestId, distributorId]);
+
+  // Fetch request details to create shipment
+  const reqRes = await query(`SELECT * FROM batch_request WHERE id = $1 AND distributor_id = $2`, [requestId, distributorId]);
+  const request = reqRes.rows[0];
+  if (request) {
+    // Fetch batch details
+    const batchRes = await query('SELECT * FROM drugbatch WHERE id = $1', [request.batch_id]);
+    const batch = batchRes.rows[0];
+    // Create shipment using request and batch info, always set distributor_id
+    await createDistributorShipment(distributorId, {
+      batch_id: request.batch_id,
+      drug_id: request.drug_id || (batch ? batch.drugid : null),
+      manufacturer_id: batch ? batch.manufacturerid : null,
+      pharmacist_id: request.pharmacist_id,
+      quantity_shipped: request.quantity_requested,
+      temperature: null,
+      route: null,
+      vehicle_number: null,
+      departure_date: new Date().toISOString(),
+      origin_facility_id: batch ? batch.origin_facility_id : null,
+      destination_facility_id: request.destination_facility_id || null
+    });
+  }
   return true;
 }
 async function rejectDistributorRequest(distributorId, requestId) {
@@ -121,11 +144,28 @@ async function rejectDistributorRequest(distributorId, requestId) {
 
 // Shipments
 async function getDistributorShipments(distributorId) {
-  // Get all shipments for distributor
+  // Get all shipments for distributor, with all fields needed by frontend
   const { rows } = await query(`
-    SELECT s.*, db.batchnumber, db.drugid, f.name AS facility, db.quantity
+    SELECT s.*, 
+      s.shipmentnumber,
+      db.batchnumber, db.drugid,
+      d.name AS drugname,
+      mc.name AS manufacturer_company_name,
+      pc.name AS pharmacy_company_name,
+      pf.name AS pharmacy_facility_name,
+      dc.name AS distributorname,
+      f.name AS destination_facility,
+      db.quantity,
+      db.expirydate,
+      db.status AS batch_status
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
+    LEFT JOIN drug d ON db.drugid = d.id
+    LEFT JOIN manufacturer_company mc ON db.manufacturerid = mc.id
+    LEFT JOIN distributor_company dc ON db.distributorcompanyid = dc.id
+    LEFT JOIN batch_request br ON br.batch_id = s.batch_id AND br.pharmacist_id = s.pharmacist_id
+    LEFT JOIN pharmacy_company pc ON br.pharmacist_id IS NOT NULL AND pc.id = (SELECT companyid FROM pharmacist WHERE id = br.pharmacist_id)
+    LEFT JOIN facility pf ON pc.facility_id = pf.id
     LEFT JOIN facility f ON f.id = s.destination_facility_id
     WHERE s.distributor_id = $1
     ORDER BY s.departure_date DESC
@@ -134,7 +174,7 @@ async function getDistributorShipments(distributorId) {
 }
 async function createDistributorShipment(distributorId, shipmentData) {
   // Insert new shipment (simplified)
-  const { batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, origin_facility_id, destination_facility_id } = shipmentData;
+  const { batch_id, drug_id, manufacturer_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, origin_facility_id, destination_facility_id } = shipmentData;
   let final_manufacturer_id = manufacturer_id;
   if (!final_manufacturer_id && batch_id) {
     // Fetch manufacturer_id from drugbatch
@@ -151,7 +191,7 @@ async function createDistributorShipment(distributorId, shipmentData) {
     batch_id,
     drug_id,
     final_manufacturer_id,
-    distributor_id,
+    distributorId,
     pharmacist_id,
     quantity_shipped,
     temperature,

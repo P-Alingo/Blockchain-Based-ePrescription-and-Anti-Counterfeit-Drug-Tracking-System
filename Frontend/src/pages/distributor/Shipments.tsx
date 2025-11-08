@@ -46,6 +46,8 @@ interface Shipment {
   manufacturername: string;
   distributorname: string | null;
   shipment_type?: 'assigned' | 'destination' | 'assigned_no_destination' | 'other';
+  manufacturer_company_name?: string;
+  pharmacy_facility_name?: string;
 }
 
 // --------------------
@@ -131,7 +133,8 @@ const DistributorShipments = () => {
   // Removed manufacturer dropdown API call and related state
   const { shipments, loading, error, refresh } = useShipments();
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'active' | 'incoming' | 'all'>('active');
+  // Only show 'all' shipments
+  const [tab, setTab] = useState<'all'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
@@ -177,17 +180,18 @@ const DistributorShipments = () => {
 
   // Tab logic
   const getTabShipments = () => {
-    const safeShipments = Array.isArray(shipments) ? shipments : [];
-    // Show all shipments, including those with null distributor_id or missing facility IDs
-    if (tab === 'active') return safeShipments.filter(s => s.status && (s.status.toLowerCase() === 'in transit' || s.status.toLowerCase() === 'pending'));
-    if (tab === 'incoming') return safeShipments.filter(s => s.distributor_id === null || s.distributor_id === undefined);
-    return safeShipments;
+    // Always show all shipments
+    return Array.isArray(shipments) ? shipments : [];
   };
 
   // Filter logic
   const filteredShipments = getTabShipments().filter(s => {
-    const matchesSearch = s.shipmentnumber.toLowerCase().includes(search.toLowerCase()) || s.drugname.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || s.status.toLowerCase() === filterStatus;
+    // Defensive: handle missing/null fields
+    const shipmentNum = (s.shipmentnumber || `SH-${s.id}`).toString().toLowerCase();
+    const drugName = (s.drugname || '').toString().toLowerCase();
+    const status = (s.status || '').toString().toLowerCase();
+    const matchesSearch = shipmentNum.includes(search.toLowerCase()) || drugName.includes(search.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -278,9 +282,7 @@ const DistributorShipments = () => {
       <div className="space-y-8">
         {/* Tabs + Filters */}
         <div className="flex gap-4 items-center mb-4">
-          <Button variant={tab === 'active' ? 'default' : 'outline'} onClick={() => setTab('active')}>Active Shipments</Button>
-          <Button variant={tab === 'incoming' ? 'default' : 'outline'} onClick={() => setTab('incoming')}>Incoming Shipments</Button>
-          <Button variant={tab === 'all' ? 'default' : 'outline'} onClick={() => setTab('all')}>All Shipments</Button>
+          <Button variant="default">All Shipments</Button>
           <select className="border rounded px-2 py-1 ml-4" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
@@ -336,14 +338,15 @@ const DistributorShipments = () => {
                   <TableRow>
                     <TableHead>Shipment #</TableHead>
                     <TableHead>Drug & Batch</TableHead>
-                    <TableHead>Manufacturer</TableHead>
+                    <TableHead>Manufacturer Company</TableHead>
+                    <TableHead>Pharmacy Facility</TableHead>
                     <TableHead>Qty</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Progress</TableHead>
                     <TableHead>Departure</TableHead>
                     <TableHead>Arrival</TableHead>
-                    <TableHead>Condition</TableHead>
+                    <TableHead>Condition/Notes</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -351,39 +354,40 @@ const DistributorShipments = () => {
                   {filteredShipments.map(s => (
                     <TableRow key={s.id} className={`cursor-pointer hover:bg-gray-50 transition-colors ${isUnassigned(s) ? "bg-orange-50 hover:bg-orange-100" : ""} ${isOverdue(s) ? "bg-red-50" : ""}`}>
                       <TableCell>{s.shipmentnumber || `SH-${s.id}`}{isUnassigned(s) && <Badge className="bg-yellow-100 text-yellow-800 text-xs ml-1">Unclaimed</Badge>}</TableCell>
-    <TableCell>
-      <p className="font-medium">{s.drugname}</p>
-      <p className="text-xs text-muted-foreground">Batch: {s.batchnumber}</p>
-    </TableCell>
-    <TableCell>{s.manufacturername}</TableCell>
-    <TableCell>{s.quantity_shipped}</TableCell>
-    <TableCell>
-      <Badge variant={getStatusColor(s.status)}>{getStatusDisplay(s.status)}</Badge>
-      {isOverdue(s) && <Badge className="bg-red-100 text-red-800 ml-1">Overdue</Badge>}
-    </TableCell>
-    <TableCell>{getShipmentTypeBadge(s)}</TableCell>
-    <TableCell>
-      <Progress value={getProgressValue(s)} className="h-2" />
-    </TableCell>
-    <TableCell>{formatDate(s.departure_date)}</TableCell>
-    <TableCell>{formatDate(s.arrival_date || '')}</TableCell>
-    <TableCell>{s.received_condition || '-'}</TableCell>
-    <TableCell>
-      <div className="flex gap-2">
-        <Button size="sm" variant="outline" onClick={() => openModal(s)}>
-          <Edit className="h-4 w-4 mr-1" />Update
-        </Button>
-        {isUnassigned(s) && (
-          <Button size="sm" variant="default" onClick={e => handleClaimShipment(s.id, e)}>
-            Claim
-          </Button>
-        )}
-        <Button size="sm" variant="destructive" onClick={() => handleCancelShipment(s.id)}>
-          Cancel
-        </Button>
-      </div>
-    </TableCell>
-  </TableRow>
+                      <TableCell>
+                        <p className="font-medium">{s.drugname}</p>
+                        <p className="text-xs text-muted-foreground">Batch: {s.batchnumber}</p>
+                      </TableCell>
+                      <TableCell>{s.manufacturer_company_name}</TableCell>
+                      <TableCell>{s.pharmacy_facility_name}</TableCell>
+                      <TableCell>{s.quantity_shipped}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(s.status)}>{getStatusDisplay(s.status)}</Badge>
+                        {isOverdue(s) && <Badge className="bg-red-100 text-red-800 ml-1">Overdue</Badge>}
+                      </TableCell>
+                      <TableCell>{getShipmentTypeBadge(s)}</TableCell>
+                      <TableCell>
+                        <Progress value={getProgressValue(s)} className="h-2" />
+                      </TableCell>
+                      <TableCell>{formatDate(s.departure_date)}</TableCell>
+                      <TableCell>{formatDate(s.arrival_date || '')}</TableCell>
+                      <TableCell>{s.received_condition || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openModal(s)}>
+                            <Edit className="h-4 w-4 mr-1" />Update
+                          </Button>
+                          {isUnassigned(s) && (
+                            <Button size="sm" variant="default" onClick={e => handleClaimShipment(s.id, e)}>
+                              Claim
+                            </Button>
+                          )}
+                          <Button size="sm" variant="destructive" onClick={() => handleCancelShipment(s.id)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ))}
                 </TableBody>
               </Table>
@@ -401,11 +405,8 @@ const DistributorShipments = () => {
                 <div>
                   <label className="block text-sm font-medium mb-1">Status</label>
                   <select className="border rounded px-2 py-1 w-full" value={updateFields.status} onChange={e => setUpdateFields(f => ({ ...f, status: e.target.value }))}>
-                    <option value="pending">Pending</option>
-                    <option value="in transit">In Transit</option>
                     <option value="delivered">Delivered</option>
                     <option value="cancelled">Cancelled</option>
-                    <option value="failed">Failed</option>
                     <option value="flagged">Flagged</option>
                   </select>
                 </div>
@@ -414,7 +415,7 @@ const DistributorShipments = () => {
                   <input className="border rounded px-2 py-1 w-full" value={updateFields.temperature} onChange={e => setUpdateFields(f => ({ ...f, temperature: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Received Condition / Notes</label>
+                  <label className="block text-sm font-medium mb-1">Notes / Condition</label>
                   <input className="border rounded px-2 py-1 w-full" value={updateFields.received_condition} onChange={e => setUpdateFields(f => ({ ...f, received_condition: e.target.value }))} />
                 </div>
                 <div>

@@ -113,25 +113,25 @@ const DistributorRequests: React.FC = () => {
         }
       }
       await api.post('/api/distributor/shipments', {
-        batch_id: selectedRequest.batch_id,
-        drug_id,
-        manufacturer_id: selectedRequest.manufacturer_id,
-        distributor_id: selectedRequest.distributor_id,
-        pharmacist_id: selectedRequest.pharmacist_id,
-        quantity_shipped: shipmentFields.quantity,
-        temperature: shipmentFields.temperature,
-        route: shipmentFields.route,
-        vehicle_number: shipmentFields.vehicle_number,
-        departure_date: shipmentFields.departure_date,
-        origin_facility_id: selectedRequest.manufacturer_facility_id,
-        destination_facility_id: selectedRequest.pharmacist_facility_id,
+  batch_id: selectedRequest.batch_id,
+  drug_id,
+  manufacturer_id: selectedRequest.manufacturer_id,
+  pharmacist_id: selectedRequest.pharmacist_id,
+  quantity_shipped: shipmentFields.quantity,
+  temperature: shipmentFields.temperature,
+  route: shipmentFields.route,
+  vehicle_number: shipmentFields.vehicle_number,
+  departure_date: shipmentFields.departure_date,
+  origin_facility_id: selectedRequest.manufacturer_facility_id,
+  destination_facility_id: selectedRequest.pharmacist_facility_id,
       });
       await api.put(`/api/distributor/requests/${selectedRequest.id}/approve`);
-      toast.success('Request accepted and shipment created');
-      setAcceptModalOpen(false);
-      setSelectedRequest(null);
-      setShipmentFields({ departure_date: '', route: '', vehicle_number: '', quantity: '', temperature: '' });
-      loadDrugRequests();
+  toast.success('Request accepted and shipment created');
+  setAcceptModalOpen(false);
+  setSelectedRequest(null);
+  setShipmentFields({ departure_date: '', route: '', vehicle_number: '', quantity: '', temperature: '' });
+  // Auto-refresh after request is created
+  setTimeout(() => { loadDrugRequests(); }, 500);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to create shipment');
     } finally {
@@ -165,24 +165,24 @@ const DistributorRequests: React.FC = () => {
         }
       }
       await api.post('/api/distributor/shipments', {
-        batch_id: selectedRequest.batch_id,
-        drug_id,
-        manufacturer_id: selectedRequest.manufacturer_id,
-        distributor_id: selectedRequest.distributor_id,
-        pharmacist_id: selectedRequest.pharmacist_id,
-        quantity_shipped: shipmentFields.quantity,
-        temperature: shipmentFields.temperature,
-        route: shipmentFields.route,
-        vehicle_number: shipmentFields.vehicle_number,
-        departure_date: shipmentFields.departure_date,
-        origin_facility_id: selectedRequest.manufacturer_facility_id,
-        destination_facility_id: selectedRequest.pharmacist_facility_id,
+  batch_id: selectedRequest.batch_id,
+  drug_id,
+  manufacturer_id: selectedRequest.manufacturer_id,
+  pharmacist_id: selectedRequest.pharmacist_id,
+  quantity_shipped: shipmentFields.quantity,
+  temperature: shipmentFields.temperature,
+  route: shipmentFields.route,
+  vehicle_number: shipmentFields.vehicle_number,
+  departure_date: shipmentFields.departure_date,
+  origin_facility_id: selectedRequest.manufacturer_facility_id,
+  destination_facility_id: selectedRequest.pharmacist_facility_id,
       });
-      toast.success('Shipment created');
-      setShipmentModalOpen(false);
-      setSelectedRequest(null);
-      setShipmentFields({ quantity: '', temperature: '', route: '', vehicle_number: '', departure_date: '' });
-      // Optionally refresh shipments or requests here
+  toast.success('Shipment created');
+  setShipmentModalOpen(false);
+  setSelectedRequest(null);
+  setShipmentFields({ quantity: '', temperature: '', route: '', vehicle_number: '', departure_date: '' });
+  // Auto-refresh after shipment is created
+  setTimeout(() => { loadDrugRequests(); }, 500);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to create shipment');
     }
@@ -268,10 +268,19 @@ const DistributorRequests: React.FC = () => {
                                         </Button>
                                       );
                                     }
+                                    // Only show Accept if status is pending
                                     if (request.status === 'pending' && batch.quantity > 0) {
                                       return (
                                         <Button variant="default" size="sm" onClick={() => handleAcceptClick(request)}>
                                           Accept
+                                        </Button>
+                                      );
+                                    }
+                                    // Disable Accept for approved/in_transit/delivered/cancelled/other statuses
+                                    if (request.status !== 'pending') {
+                                      return (
+                                        <Button variant="default" size="sm" disabled>
+                                          {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                                         </Button>
                                       );
                                     }
