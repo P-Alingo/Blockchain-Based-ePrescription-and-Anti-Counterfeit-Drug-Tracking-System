@@ -190,20 +190,28 @@ const Shipments = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {shipments.map(s => (
-                <TableRow key={s.id}>
-                  <TableCell>{s.shipmentnumber}</TableCell>
-                  <TableCell>{s.batchnumber}</TableCell>
-                  <TableCell>{s.drug}</TableCell>
-                  <TableCell>{s.distributor}</TableCell>
-                  <TableCell><Badge variant={s.status === 'Delivered' ? 'secondary' : s.status === 'In Transit' ? 'outline' : 'default'}>{s.status}</Badge></TableCell>
-                  <TableCell>{s.departure_date ? new Date(s.departure_date).toLocaleString() : '-'}</TableCell>
-                  <TableCell>{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</TableCell>
-                  <TableCell>
-                    <Button size="sm" variant="outline" onClick={() => { setSelectedShipment(s); setShowDetails(true); }}><Eye className="h-4 w-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                {shipments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      No shipments found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  shipments.map(s => (
+                    <TableRow key={s.id}>
+                      <TableCell>{s.shipmentnumber}</TableCell>
+                      <TableCell>{s.batchnumber}</TableCell>
+                      <TableCell>{s.drug}</TableCell>
+                      <TableCell>{s.distributor}</TableCell>
+                      <TableCell><Badge variant={s.status === 'Delivered' ? 'secondary' : s.status === 'In Transit' ? 'outline' : 'default'}>{s.status}</Badge></TableCell>
+                      <TableCell>{s.departure_date ? new Date(s.departure_date).toLocaleString() : '-'}</TableCell>
+                      <TableCell>{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedShipment(s); setShowDetails(true); }}><Eye className="h-4 w-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
             </TableBody>
           </Table>
         </CardContent>

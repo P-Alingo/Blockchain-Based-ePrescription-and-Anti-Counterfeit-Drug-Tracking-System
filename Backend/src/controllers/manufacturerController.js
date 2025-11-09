@@ -1,3 +1,26 @@
+// Create Drug Batch controller
+async function createDrugBatch(req, res, next) {
+  try {
+    const userId = req.user.id;
+    // Get manufacturer id
+    const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
+    if (manufacturerResult.rowCount === 0) {
+      return res.status(404).json({ message: "Manufacturer profile not found" });
+    }
+    const manufacturerId = manufacturerResult.rows[0].id;
+
+    // Get batch data from request body
+    const batchData = req.body;
+
+    // Call service to create batch
+    const newBatch = await manufacturerService.createDrugBatch(manufacturerId, batchData);
+
+    res.status(201).json(newBatch);
+  } catch (error) {
+    console.error("❌ Error in createDrugBatch:", error);
+    res.status(500).json({ message: "Failed to create drug batch", error: error.message });
+  }
+}
 import { query } from "../config/database.js";
 import QRCode from 'qrcode';
 import * as manufacturerService from "../services/manufacturerService.js";
@@ -69,6 +92,7 @@ async function getShipmentFormDropdowns(req, res, next) {
       error: 'Failed to fetch shipment dropdown data'
     });
   }
+}
 
 // Get all shipments for manufacturer
 async function getManufacturerShipments(req, res, next) {
@@ -87,7 +111,6 @@ async function getManufacturerShipments(req, res, next) {
     res.status(500).json({ message: "Failed to fetch shipments", error: error.message });
   }
 }
-}
 
 // Dropdowns for batch registration form - CLEAN VERSION (No Fallback Data)
 async function getManufacturerDropdowns(req, res, next) {
@@ -96,16 +119,39 @@ async function getManufacturerDropdowns(req, res, next) {
   try {
     // Get drugs from database
     const drugsResult = await query(`
-      SELECT id, name, code, formulation, dosageunit 
-      FROM drug 
-      WHERE is_deleted = false OR is_deleted IS NULL 
+      SELECT id, name, code, formulation, dosageunit
+      FROM drug
+      WHERE is_deleted = false OR is_deleted IS NULL
       ORDER BY name ASC
     `);
     console.log(' Drugs found:', drugsResult.rows.length);
+
+    // Get distributors (id, name)
+    const distributorsResult = await query(`
+      SELECT id, name FROM distributor_company ORDER BY name ASC
+    `);
+    console.log(' Distributors found:', distributorsResult.rows.length);
+
+    // Get distributor facilities (company_id, facility_id, facility_name, facility_location)
+    const distributorFacilitiesResult = await query(`
+      SELECT dc.id AS distributor_company_id, f.id AS facility_id, f.name AS facility_name, f.location AS facility_location
+      FROM distributor_company dc
+      JOIN facility f ON dc.facility_id = f.id
+      ORDER BY dc.name ASC
+    `);
+    console.log(' Distributor facilities found:', distributorFacilitiesResult.rows.length);
+
+    // Get quality officers (id, fullname)
+    const qualityOfficersResult = await query(`
+      SELECT id, fullname FROM staff WHERE role = 'Quality Control Officer' ORDER BY fullname ASC
+    `);
+    console.log(' Quality officers found:', qualityOfficersResult.rows.length);
+
     const response = {
       drugs: drugsResult.rows,
-      distributors: [], // Placeholder for distributors
-      qualityOfficers: [] // Placeholder for quality officers
+      distributors: distributorsResult.rows,
+      distributorFacilities: distributorFacilitiesResult.rows,
+      qualityOfficers: qualityOfficersResult.rows
     };
     console.log('✅ FINAL RESPONSE from database:', response);
     res.json(response);
@@ -117,198 +163,6 @@ async function getManufacturerDropdowns(req, res, next) {
       distributors: [],
       qualityOfficers: [],
       error: "Failed to fetch data from database"
-    });
-  }
-}
-
-async function createDrugBatch(req, res, next) {
-  try {
-    const userId = req.user.id;
-    console.log('🚀 Creating drug batch for user:', userId);
-    
-    // Get manufacturer id and company info
-    const manufacturerResult = await query("SELECT id, companyid FROM manufacturer WHERE userid = $1", [userId]);
-    if (manufacturerResult.rowCount === 0) {
-      return res.status(404).json({ message: "Manufacturer profile not found" });
-    }
-    const manufacturerId = manufacturerResult.rows[0].id;
-    const companyId = manufacturerResult.rows[0].companyid;
-
-    console.log('🏭 Manufacturer ID:', manufacturerId, 'Company ID:', companyId);
-
-    // Get facility info
-    const companyResult = await query(`
-      SELECT mc.name, f.name as facility_name, f.address as facility_address
-      FROM manufacturer_company mc
-      JOIN facility f ON mc.facility_id = f.id
-      WHERE mc.id = $1
-    `, [companyId]);
-    
-    if (companyResult.rowCount === 0) {
-      return res.status(404).json({ message: "Manufacturer company not found" });
-    }
-    
-    const manufacturingFacility = companyResult.rows[0]?.facility_name || "";
-    const manufacturerCompanyName = companyResult.rows[0]?.name || "";
-
-    console.log('🏢 Manufacturing facility:', manufacturingFacility);
-    console.log('🏭 Manufacturer company:', manufacturerCompanyName);
-
-    // Form fields - ONLY use distributorcompanyid, not distributor_facility_id
-    const { drugid, quantity, manufacturedate, expirydate, storagetemperature, distributorcompanyid, qualitycontrolofficerid } = req.body;
-
-    console.log('📦 Form data:', {
-      drugid, quantity, manufacturedate, expirydate, storagetemperature, distributorcompanyid, qualitycontrolofficerid
-    });
-
-    // Get drug details
-    const drugResult = await query("SELECT name, code, formulation, dosageunit FROM drug WHERE id = $1", [drugid]);
-    if (!drugResult.rows.length) {
-      return res.status(400).json({ message: "Drug not found." });
-    }
-    const drug = drugResult.rows[0];
-    console.log('💊 Drug details:', drug);
-
-    // Get distributor company details
-    let distributorCompany = null;
-    if (distributorcompanyid) {
-      const distResult = await query(`
-        SELECT dc.id, dc.name, f.name as facility_name, f.address as facility_address, 
-               f.phone as facility_phone, f.location as facility_location
-        FROM distributor_company dc
-        JOIN facility f ON dc.facility_id = f.id
-        WHERE dc.id = $1
-      `, [distributorcompanyid]);
-      distributorCompany = distResult.rows[0] || null;
-      console.log('🚚 Distributor details:', distributorCompany);
-    }
-
-    // Generate batchnumber, blockchain tx
-    const batchnumber = `BATCH-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    const blockchaintx = `0x${Buffer.from(`${batchnumber}-${Date.now()}`).toString('hex')}`;
-    
-    console.log('🔢 Generated batch number:', batchnumber);
-    console.log('⛓️ Generated blockchain tx:', blockchaintx);
-
-    // Generate QR code data
-    const qrData = {
-      manufacturer: manufacturerCompanyName,
-      drug: drug.name,
-      batchnumber: batchnumber,
-      manufacturedate: manufacturedate,
-      expirydate: expirydate,
-      blockchaintx: blockchaintx,
-      quantity: quantity,
-      dosage: drug.dosageunit,
-      distributor: distributorCompany?.name || 'Not assigned'
-    };
-
-    // Generate QR code as file
-    console.log('📱 Generating QR code file...');
-    let qrcodePath = null;
-    
-    try {
-      // Create uploads directory if it doesn't exist
-      const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'qrcodes');
-      await fs.mkdir(uploadsDir, { recursive: true });
-      
-      // Generate QR code file
-      const fileName = `batch-${batchnumber}-${Date.now()}.png`;
-      const filePath = path.join(uploadsDir, fileName);
-      
-      await QRCode.toFile(filePath, JSON.stringify(qrData), {
-        width: 300,
-        height: 300,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      });
-      
-      // Store relative path for database
-      qrcodePath = `/uploads/qrcodes/${fileName}`;
-      console.log('✅ QR code file saved:', qrcodePath);
-      
-    } catch (qrError) {
-      console.error('❌ QR code file generation failed:', qrError);
-      // Continue without QR code file
-    }
-
-    // Insert batch into DB with qrcode_path and qualitycontrolofficerid
-    console.log('💾 Inserting batch into database...');
-    const insertResult = await query(`
-      INSERT INTO drugbatch (
-        manufacturerid, drugid, batchnumber, manufacturedate, expirydate, 
-        blockchaintx, qrcode_path, quantity, storagetemperature, 
-        manufacturingfacility, distributorcompanyid, qualitycontrolofficerid, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
-      RETURNING id
-    `, [
-      manufacturerId, 
-      drugid, 
-      batchnumber, 
-      manufacturedate, 
-      expirydate, 
-      blockchaintx, 
-      qrcodePath,        // Only storing file path now
-      quantity, 
-      storagetemperature, 
-      manufacturingFacility, 
-      distributorcompanyid || null,
-      qualitycontrolofficerid || null
-    ]);
-
-    const batchId = insertResult.rows[0].id;
-    console.log('✅ Batch created successfully with ID:', batchId);
-
-    // Fetch full batch details for response
-    const detailsSql = `
-      SELECT db.id, db.batchnumber, db.quantity, db.manufacturedate, db.expirydate, db.status, db.blockchaintx,
-        db.qrcode_path,
-        d.name AS drugname,
-        db.manufacturingfacility,
-        db.storagetemperature,
-        db.datechecked,
-        s.shipmentnumber AS shipment_number,
-        dc.name AS distributorcompany,
-        dc.id AS distributorcompanyid,
-        f.name AS distributor_facility_name,
-        f.address AS distributor_facility_address,
-        f.phone AS distributor_facility_phone,
-        f.location AS distributor_facility_location,
-        st.fullname AS quality_officer,
-        mc.name AS manufacturer_company_name,
-        mf.name AS manufacturer_facility_name,
-        mf.address AS manufacturer_facility_address,
-        mf.phone AS manufacturer_facility_phone,
-        mf.location AS manufacturer_facility_location
-      FROM drugbatch db
-      JOIN drug d ON d.id = db.drugid
-      LEFT JOIN distributor_company dc ON dc.id = db.distributorcompanyid
-      LEFT JOIN facility f ON dc.facility_id = f.id
-      LEFT JOIN staff st ON st.id = db.qualitycontrolofficerid
-      LEFT JOIN shipment s ON s.batch_id = db.id
-      JOIN manufacturer m ON m.id = db.manufacturerid
-      JOIN manufacturer_company mc ON mc.id = m.companyid
-      JOIN facility mf ON mc.facility_id = mf.id
-      WHERE db.id = $1
-      LIMIT 1
-    `;
-    const detailsResult = await query(detailsSql, [batchId]);
-    const batchDetails = detailsResult.rows[0];
-
-    // Add QR code info to response
-    batchDetails.qrCodeData = qrData;
-    batchDetails.qrCodeImageUrl = qrcodePath ? `${req.protocol}://${req.get('host')}${qrcodePath}` : null;
-
-    return res.status(201).json(batchDetails);
-
-  } catch (error) {
-    console.error('❌ Error in createDrugBatch:', error);
-    res.status(500).json({ 
-      message: "Failed to create drug batch",
-      error: error.message 
     });
   }
 }
@@ -455,6 +309,7 @@ async function createManufacturerShipment(req, res, next) {
 
     // Get batch details for shipment creation
     const batchResult = await query(`
+        createDrugBatch
       SELECT 
         db.id AS batch_id,
         db.batchnumber,
@@ -735,17 +590,16 @@ async function getManufacturerBatches(req, res, next) {
     const manufacturerId = manufacturerResult.rows[0].id;
 
     // Filters
-    const { status, drugid, manufacturedate, expirydate } = req.query;
+    const { drugid, manufacturedate, expirydate } = req.query;
     let filterSql = "";
     let params = [manufacturerId];
     let paramIdx = 2;
-    if (status) { filterSql += ` AND db.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (drugid) { filterSql += ` AND db.drugid = $${paramIdx}`; params.push(drugid); paramIdx++; }
     if (manufacturedate) { filterSql += ` AND db.manufacturedate >= $${paramIdx}`; params.push(manufacturedate); paramIdx++; }
     if (expirydate) { filterSql += ` AND db.expirydate <= $${paramIdx}`; params.push(expirydate); paramIdx++; }
 
     const sql = `
-      SELECT db.id, db.batchnumber, d.name AS drugname, db.quantity, db.manufacturedate, db.expirydate, db.status, db.blockchaintx, db.qrcode_path,
+      SELECT db.id, db.batchnumber, d.name AS drugname, db.quantity, db.manufacturedate, db.expirydate, db.blockchaintx, db.qrcode_path,
         s.shipmentnumber, db.manufacturingfacility
       FROM drugbatch db
       JOIN drug d ON d.id = db.drugid
@@ -771,7 +625,7 @@ async function getManufacturerBatchDetails(req, res, next) {
     }
     const manufacturerId = manufacturerResult.rows[0].id;
     const sql = `
-      SELECT db.id, db.batchnumber, db.quantity, db.manufacturedate, db.expirydate, db.status, db.blockchaintx,
+      SELECT db.id, db.batchnumber, db.quantity, db.manufacturedate, db.expirydate, db.blockchaintx,
         db.qrcode_path,
         d.name AS drugname,
         db.manufacturingfacility,
@@ -823,18 +677,16 @@ async function getManufacturerDashboard(req, res, next) {
     }
     const manufacturerId = manufacturerResult.rows[0].id;
 
-    // Summary cards - FIXED: Use correct ENUM values
+    // Summary cards - Remove status references
     const totalBatchesResult = await query("SELECT COUNT(*) AS total FROM drugbatch WHERE manufacturerid = $1", [manufacturerId]);
-    const pendingQCResult = await query("SELECT COUNT(*) AS pending FROM drugbatch WHERE manufacturerid = $1 AND status = 'pending'", [manufacturerId]);
-    
-    // FIXED: Use correct shipment status ENUM values
+    // Remove pendingQCResult (no status column)
+    // Remove activeShipmentsResult and deliveredShipmentsResult status filters
     const activeShipmentsResult = await query(
-      "SELECT COUNT(*) AS active FROM shipment WHERE manufacturer_id = $1 AND status IN ('pending', 'in_transit')", 
+      "SELECT COUNT(*) AS active FROM shipment WHERE manufacturer_id = $1", 
       [manufacturerId]
     );
-    
     const deliveredShipmentsResult = await query(
-      "SELECT COUNT(*) AS delivered FROM shipment WHERE manufacturer_id = $1 AND status = 'delivered'", 
+      "SELECT COUNT(*) AS delivered FROM shipment WHERE manufacturer_id = $1", 
       [manufacturerId]
     );
 
@@ -848,9 +700,9 @@ async function getManufacturerDashboard(req, res, next) {
       LIMIT 5
     `, [manufacturerId]);
 
-    // Recent shipments (last 5) - FIXED: Use correct status values
+    // Recent shipments (last 5)
     const recentShipmentsResult = await query(`
-      SELECT s.shipmentnumber, db.batchnumber, dc.name AS distributor, s.status, s.departure_date
+      SELECT s.shipmentnumber, db.batchnumber, dc.name AS distributor, s.departure_date
       FROM shipment s
       JOIN drugbatch db ON db.id = s.batch_id
       LEFT JOIN distributor_company dc ON dc.id = db.distributorcompanyid
@@ -871,7 +723,7 @@ async function getManufacturerDashboard(req, res, next) {
       return res.json({
         summary: {
           totalBatches: Number(totalBatchesResult.rows[0]?.total ?? 0),
-          pendingQualityChecks: Number(pendingQCResult.rows[0]?.pending ?? 0),
+          // Remove pendingQualityChecks
           activeShipments: Number(activeShipmentsResult.rows[0]?.active ?? 0),
           deliveredShipments: Number(deliveredShipmentsResult.rows[0]?.delivered ?? 0),
         },
@@ -925,23 +777,62 @@ async function deleteManufacturerShipment(req, res, next) {
   }
 }
 
+// Add missing updateManufacturerBatch controller function
+async function updateManufacturerBatch(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const batchId = req.params.id;
+    const updateData = req.body;
+    // Get manufacturer id from user
+    const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
+    if (manufacturerResult.rowCount === 0) {
+      return res.status(404).json({ message: "Manufacturer profile not found" });
+    }
+    const manufacturerId = manufacturerResult.rows[0].id;
+    const updatedBatch = await manufacturerService.updateManufacturerBatch(manufacturerId, batchId, updateData);
+    res.status(200).json(updatedBatch);
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+}
+
+// Add missing deleteManufacturerBatch controller function
+async function deleteManufacturerBatch(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const batchId = req.params.id;
+    // Get manufacturer id from user
+    const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
+    if (manufacturerResult.rowCount === 0) {
+      return res.status(404).json({ message: "Manufacturer profile not found" });
+    }
+    const manufacturerId = manufacturerResult.rows[0].id;
+    await manufacturerService.deleteManufacturerBatch(manufacturerId, batchId);
+    res.status(200).json({ success: true, message: "Batch deleted successfully" });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+}
+
+// Export block at the end of the file
 export {
-  getManufacturerProfile, 
-  updateManufacturerProfile, 
-  getManufacturerDashboard, 
-  createDrugBatch, 
-  getManufacturerBatches, 
-  getManufacturerBatchDetails, 
+  getManufacturerProfile,
+  updateManufacturerProfile,
+  getManufacturerDashboard,
+  getManufacturerBatches,
+  getManufacturerBatchDetails,
   updateManufacturerBatch,
-  getManufacturerBlockchain, 
-  getManufacturerBlockchainTx, 
-  getManufacturerAnalytics, 
-  getManufacturerShipments, 
-  getManufacturerShipmentDetails, 
-  createManufacturerShipment, 
-  updateManufacturerShipmentStatus, 
+  getManufacturerBlockchain,
+  getManufacturerBlockchainTx,
+  getManufacturerAnalytics,
+  getManufacturerShipments,
+  getManufacturerShipmentDetails,
+  createManufacturerShipment,
+  updateManufacturerShipmentStatus,
   deleteManufacturerShipment,
   getManufacturerDropdowns,
   getBatchesReadyForShipping,
-  getShipmentFormDropdowns
+  getShipmentFormDropdowns,
+  createDrugBatch,
+  deleteManufacturerBatch // Ensure this is exported
 };

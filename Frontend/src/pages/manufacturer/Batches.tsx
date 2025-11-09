@@ -77,7 +77,7 @@ interface Batch {
   manufacturedate: string;
   expirydate: string;
   quantity: number;
-  status: string;
+    // status: string; // Removed, no longer in backend
   qrcode?: string;
   qrcode_path?: string;
   manufacturername: string;
@@ -101,7 +101,7 @@ interface EditBatchForm {
   manufacturingfacility?: string;
   qualitycontrolofficerid?: number;
   datechecked?: string;
-  status: string;
+    // status: string; // Removed, no longer in backend
   distributorcompanyid?: number;
 }
 
@@ -137,7 +137,7 @@ const Batches = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  // Status filter removed
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [showQrDialog, setShowQrDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -159,7 +159,7 @@ const Batches = () => {
     manufacturingfacility: "",
     qualitycontrolofficerid: undefined,
     datechecked: "",
-    status: "pending",
+    // status: "pending", // Removed
     distributorcompanyid: undefined
   };
 
@@ -186,10 +186,9 @@ const Batches = () => {
         setError("Authentication required");
         return;
       }
-      // Build query params for filters
-      const params: any = {};
-      if (filterStatus !== "all") params.status = filterStatus;
-      if (searchTerm) params.drugid = drugs.find(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))?.id;
+  // Build query params for filters
+  const params: any = {};
+  if (searchTerm) params.drugid = drugs.find(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))?.id;
       // Manufacture/expiry date filters can be added here if UI supports
       const url = `${API_BASE}/api/manufacturer/batches`;
       const res = await axios.get<Batch[]>(url, {
@@ -308,7 +307,6 @@ const Batches = () => {
       manufacturingfacility: batch.manufacturingfacility || "",
       qualitycontrolofficerid: batch.qualitycontrolofficerid,
       datechecked: batch.datechecked ? formatDate(batch.datechecked) : "",
-      status: batch.status?.toLowerCase() || "pending",
       distributorcompanyid: batch.distributorcompanyid
     });
     setShowEditDialog(true);
@@ -348,8 +346,7 @@ const Batches = () => {
       
       if (editForm.datechecked !== (selectedBatch.datechecked ? formatDate(selectedBatch.datechecked) : "")) 
         payload.datechecked = editForm.datechecked;
-      if (editForm.status !== selectedBatch.status?.toLowerCase()) 
-        payload.status = editForm.status;
+      // status removed
 
       // Only send request if there are changes
       if (Object.keys(payload).length === 0) {
@@ -419,17 +416,12 @@ const Batches = () => {
 
   // Search + Filter logic
   const filteredBatches = batches.filter((batch) => {
-    const matchesSearch =
+    return (
       batch.batchnumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       batch.drugname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       batch.manufacturername?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      batch.shipment_number?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesFilter =
-      filterStatus === "all" ||
-      batch.status?.toLowerCase() === filterStatus.toLowerCase();
-
-    return matchesSearch && matchesFilter;
+      batch.shipment_number?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   // Handle QR code modal
@@ -445,7 +437,7 @@ const Batches = () => {
       return;
     }
 
-    const headers = ["Batch Number", "Shipment Number", "Drug Name", "Manufacturer", "Manufacture Date", "Expiry Date", "Quantity", "Status", "Quality Officer", "Distributor"];
+    const headers = ["Batch Number", "Shipment Number", "Drug Name", "Manufacturer", "Manufacture Date", "Expiry Date", "Quantity", "Quality Officer", "Distributor"];
     const rows = filteredBatches.map((batch) => [
       batch.batchnumber || "N/A",
       batch.shipment_number || "N/A",
@@ -454,7 +446,6 @@ const Batches = () => {
       formatDate(batch.manufacturedate),
       formatDate(batch.expirydate),
       batch.quantity || "",
-      batch.status || "",
       batch.qualityofficer || "Not Assigned",
       batch.distributorcompany || "Not Assigned",
     ]);
@@ -475,17 +466,8 @@ const Batches = () => {
     toast.success(`Exported ${filteredBatches.length} batches successfully`);
   };
 
-  // Get status counts for statistics
-  const statusCounts = {
-    total: batches.length,
-    pending: batches.filter(b => b.status?.toLowerCase() === "pending").length,
-    approved: batches.filter(b => b.status?.toLowerCase() === "approved").length,
-    active: batches.filter(b => b.status?.toLowerCase() === "active").length,
-    rejected: batches.filter(b => b.status?.toLowerCase() === "rejected").length,
-    underReview: batches.filter(b => b.status?.toLowerCase() === "under review").length,
-    completed: batches.filter(b => b.status?.toLowerCase() === "completed").length,
-    inProduction: batches.filter(b => b.status?.toLowerCase() === "in production").length,
-  };
+  // Status counts removed
+  const batchCount = batches.length;
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const userName = userData.fullName || "Manufacturer";
@@ -503,6 +485,31 @@ const Batches = () => {
       setDetailsModalOpen(true);
     } catch (err) {
       toast.error("Failed to fetch batch details");
+    }
+  };
+
+  // Shipment modal logic
+  const [shipmentModalOpen, setShipmentModalOpen] = useState(false);
+  const [shipmentDetails, setShipmentDetails] = useState<any>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(false);
+
+  const handleViewShipment = async (batch: Batch) => {
+    setShipmentLoading(true);
+    setShipmentDetails(null);
+    setShipmentModalOpen(true);
+    try {
+      const token = localStorage.getItem("token");
+      const url = `http://localhost:4000/api/manufacturer/shipments`;
+      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      let shipment = null;
+      if (Array.isArray(res.data)) {
+        shipment = res.data.find((s: any) => s.batchnumber === batch.batchnumber);
+      }
+      setShipmentDetails(shipment || null);
+    } catch (err) {
+      setShipmentDetails(null);
+    } finally {
+      setShipmentLoading(false);
     }
   };
 
@@ -545,7 +552,7 @@ const Batches = () => {
           </Button>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Card - Only show total batches */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-primary/20">
             <CardContent className="p-6 flex items-center gap-4">
@@ -553,44 +560,8 @@ const Batches = () => {
                 <Package2 className="h-6 w-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{statusCounts.total}</p>
+                <p className="text-2xl font-bold">{batchCount}</p>
                 <p className="text-sm text-muted-foreground">Total Batches</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Shield className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{statusCounts.approved + statusCounts.active + statusCounts.completed}</p>
-                <p className="text-sm text-muted-foreground">Approved/Active</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Calendar className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{statusCounts.pending + statusCounts.underReview + statusCounts.inProduction}</p>
-                <p className="text-sm text-muted-foreground">In Progress</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Beaker className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{statusCounts.rejected}</p>
-                <p className="text-sm text-muted-foreground">Rejected</p>
               </div>
             </CardContent>
           </Card>
@@ -606,24 +577,7 @@ const Batches = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Batches</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="under review">Under Review</SelectItem>
-                      <SelectItem value="in production">In Production</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Status filter removed */}
 
                 <div className="flex items-center gap-2">
                   <Search className="h-4 w-4 text-muted-foreground" />
@@ -664,7 +618,7 @@ const Batches = () => {
               <div className="text-center py-6">
                 <Package2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-muted-foreground mb-2">No batches found</p>
-                {searchTerm || filterStatus !== "all" ? (
+                {searchTerm ? (
                   <p className="text-sm text-muted-foreground">
                     Try adjusting your search or filter criteria
                   </p>
@@ -682,10 +636,6 @@ const Batches = () => {
             <TableHead>Batch Number</TableHead>
             <TableHead>Drug Name</TableHead>
             <TableHead>Quantity</TableHead>
-            <TableHead>Manufacture Date</TableHead>
-            <TableHead>Expiry Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Shipment No.</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -695,23 +645,16 @@ const Batches = () => {
               <TableCell>{batch.batchnumber}</TableCell>
               <TableCell>{batch.drugname}</TableCell>
               <TableCell>{batch.quantity}</TableCell>
-              <TableCell>{formatDate(batch.manufacturedate)}</TableCell>
-              <TableCell>{formatDate(batch.expirydate)}</TableCell>
-              <TableCell>{getStatusBadge(batch.status)}</TableCell>
-              <TableCell>{batch.shipment_number || "N/A"}</TableCell>
               <TableCell>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleViewQRCode(batch)} disabled={!(batch.qrcode_path || batch.qrcode)} title="View QR Code">
-                    <QrCode className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => window.open(`https://blockchain-explorer.com/tx/${batch.blockchaintx}`, "_blank")} disabled={!batch.blockchaintx} title="View on Blockchain">
-                    <Shield className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => window.location.href = `/manufacturer/shipments?batch=${batch.batchnumber}`} title="Initiate Shipment">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleViewShipment(batch)} title="Shipment Details">
                     <Truck className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => fetchBatchDetails(batch.id)} title="Details">
+                  <Button variant="outline" size="sm" onClick={() => fetchBatchDetails(batch.id) || setDetailsModalOpen(true)} title="Details">
                     <List className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleViewQRCode(batch)} title="QR Code">
+                    <QrCode className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => handleEditClick(batch)} title="Edit">
                     <Edit className="h-4 w-4" />
@@ -719,6 +662,32 @@ const Batches = () => {
                   <Button variant="outline" size="sm" onClick={() => handleDeleteClick(batch)} title="Delete">
                     <Trash2 className="h-4 w-4 text-red-600" />
                   </Button>
+        {/* Batch Details Modal */}
+        <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Batch Details</DialogTitle>
+            </DialogHeader>
+            {batchDetails ? (
+              <div className="space-y-2">
+                <div><strong>Batch Number:</strong> {batchDetails.batchnumber}</div>
+                <div><strong>Drug Name:</strong> {batchDetails.drugname}</div>
+                <div><strong>Quantity:</strong> {batchDetails.quantity}</div>
+                <div><strong>Manufacture Date:</strong> {batchDetails.manufacturedate}</div>
+                <div><strong>Expiry Date:</strong> {batchDetails.expirydate}</div>
+                <div><strong>Manufacturing Facility:</strong> {batchDetails.manufacturingfacility}</div>
+                <div><strong>Distributor Company:</strong> {batchDetails.distributorcompany || 'N/A'}</div>
+                <div><strong>Quality Officer:</strong> {batchDetails.quality_officer || 'N/A'}</div>
+                <div><strong>Shipment Number:</strong> {batchDetails.shipment_number || 'N/A'}</div>
+                {/* QR Code removed from Batch Details modal as requested */}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-red-600 font-semibold">
+                No details found for this batch.<br />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
                 </div>
               </TableCell>
             </TableRow>
@@ -739,71 +708,73 @@ const Batches = () => {
                 Scan or save this QR code for tracking and verification purposes.
               </DialogDescription>
             </DialogHeader>
-            {selectedBatch && (selectedBatch.qrcode_path || selectedBatch.qrcode) ? (
-              <div className="flex flex-col items-center gap-4 py-4">
-                <img
-                  src={selectedBatch.qrcode_path ? `http://localhost:4000${selectedBatch.qrcode_path}` : selectedBatch.qrcode}
-                  alt={`QR Code for ${selectedBatch.batchnumber || 'N/A'}`}
-                  className="w-48 h-48 border rounded-lg shadow-md"
-                />
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><strong>Batch Number:</strong> {selectedBatch.batchnumber || 'N/A'}</p>
-                  <p><strong>Shipment Number:</strong> {selectedBatch.shipment_number || 'N/A'}</p>
-                  <p><strong>Drug Name:</strong> {selectedBatch.drugname || 'N/A'}</p>
-                  <p><strong>Manufacturer Company:</strong> {selectedBatch.manufacturername ? selectedBatch.manufacturername : 'N/A'}</p>
-                  <p><strong>Status:</strong> {selectedBatch.status || 'N/A'}</p>
-                  {selectedBatch.qualityofficer && (
-                    <p><strong>Quality Officer:</strong> {selectedBatch.qualityofficer}</p>
-                  )}
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const link = document.createElement("a");
-                    link.href = selectedBatch.qrcode_path ? `http://localhost:4000${selectedBatch.qrcode_path}` : selectedBatch.qrcode;
-                    link.download = `batch_${selectedBatch.batchnumber || 'N/A'}_qrcode.png`;
-                    link.click();
-                  }}
-                >
-                  Download QR Code
-                </Button>
+        {selectedBatch && (selectedBatch.qrcode_path || selectedBatch.qrcode) ? (
+          <div className="flex flex-col items-center gap-4 py-4">
+            <img
+              src={selectedBatch.qrcode_path ? `http://localhost:4000${selectedBatch.qrcode_path}` : selectedBatch.qrcode}
+              alt={`QR Code for ${selectedBatch.batchnumber || 'N/A'}`}
+              className="w-48 h-48 border rounded-lg shadow-md"
+            />
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>Batch Number:</strong> {selectedBatch.batchnumber || 'N/A'}</p>
+              <p><strong>Shipment Number:</strong> {selectedBatch.shipment_number || 'N/A'}</p>
+              <p><strong>Drug Name:</strong> {selectedBatch.drugname || 'N/A'}</p>
+              <p><strong>Manufacturer Company:</strong> {
+                selectedBatch.manufacturername || batchDetails?.manufacturer_company_name || 'N/A'
+              }</p>
+              {selectedBatch.qualityofficer && (
+                <p><strong>Quality Officer:</strong> {selectedBatch.qualityofficer}</p>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const link = document.createElement("a");
+                link.href = selectedBatch.qrcode_path ? `http://localhost:4000${selectedBatch.qrcode_path}` : selectedBatch.qrcode;
+                link.download = `batch_${selectedBatch.batchnumber || 'N/A'}_qrcode.png`;
+                link.click();
+              }}
+            >
+              Download QR Code
+            </Button>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <QrCode className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-muted-foreground">No QR code available for this batch.</p>
+          </div>
+        )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Shipment Details Modal */}
+        <Dialog open={shipmentModalOpen} onOpenChange={setShipmentModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Shipment Details</DialogTitle>
+            </DialogHeader>
+            {shipmentLoading ? (
+              <div className="text-center py-8">Loading shipment details...</div>
+            ) : shipmentDetails ? (
+              <div className="space-y-2">
+                <div><strong>Shipment Number:</strong> {shipmentDetails.shipmentnumber}</div>
+                <div><strong>Batch Number:</strong> {shipmentDetails.batchnumber}</div>
+                <div><strong>Drug:</strong> {shipmentDetails.drug}</div>
+                <div><strong>Distributor:</strong> {shipmentDetails.distributor}</div>
+                <div><strong>Status:</strong> {shipmentDetails.status}</div>
+                <div><strong>Departure Date:</strong> {shipmentDetails.departure_date}</div>
+                <div><strong>Arrival Date:</strong> {shipmentDetails.arrival_date || 'N/A'}</div>
+                <div><strong>Route:</strong> {shipmentDetails.route}</div>
+                <div><strong>Vehicle Number:</strong> {shipmentDetails.vehicle_number}</div>
+                <div><strong>Temperature:</strong> {shipmentDetails.temperature}</div>
               </div>
             ) : (
-              <div className="text-center py-6">
-                <QrCode className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-muted-foreground">No QR code available for this batch.</p>
+              <div className="text-center py-8 text-red-600 font-semibold">
+                No shipment has been created for this batch.<br />
               </div>
             )}
           </DialogContent>
         </Dialog>
-
-        {/* Details Modal */}
-        <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Batch Details</DialogTitle>
-            </DialogHeader>
-            {batchDetails ? (
-              <div className="space-y-2">
-                <div><strong>Batch Number:</strong> {batchDetails.batchnumber}</div>
-                <div><strong>Drug Name:</strong> {batchDetails.drugname}</div>
-                <div><strong>Quantity:</strong> {batchDetails.quantity}</div>
-                <div><strong>Manufacture Date:</strong> {formatDate(batchDetails.manufacturedate)}</div>
-                <div><strong>Expiry Date:</strong> {formatDate(batchDetails.expirydate)}</div>
-                <div><strong>Status:</strong> {batchDetails.status}</div>
-                <div><strong>Shipment No:</strong> {batchDetails.shipment_number || "N/A"}</div>
-                <div><strong>Manufacturer Company:</strong> {batchDetails.manufacturer_company_name || 'N/A'}</div>
-                <div><strong>Distributor Facility:</strong> {batchDetails.distributor_facility_name || batchDetails.facility_name || batchDetails.manufacturingfacility || 'N/A'}</div>
-                <div><strong>Distributor Facility Address:</strong> {batchDetails.distributor_facility_address || batchDetails.facility_address || ''}</div>
-                <div><strong>Distributor Facility Phone:</strong> {batchDetails.distributor_facility_phone || batchDetails.facility_phone || ''}</div>
-                <div><strong>Distributor Facility Location:</strong> {batchDetails.distributor_facility_location || batchDetails.facility_location || ''}</div>
-                <div><strong>Quality Officer:</strong> {batchDetails.quality_officer || "Not Assigned"}</div>
-                <div><strong>Blockchain Tx:</strong> {batchDetails.blockchaintx}</div>
-              </div>
-            ) : <div>Loading...</div>}
-          </DialogContent>
-        </Dialog>
-
         {/* Edit Batch Dialog */}
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -951,27 +922,7 @@ const Batches = () => {
                 />
               </div>
 
-              {/* Status */}
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select 
-                  value={editForm.status || "pending"} 
-                  onValueChange={(value) => setEditForm({...editForm, status: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="under review">Under Review</SelectItem>
-                    <SelectItem value="in production">In Production</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Status field removed from edit form */}
             </div>
 
             <DialogFooter>

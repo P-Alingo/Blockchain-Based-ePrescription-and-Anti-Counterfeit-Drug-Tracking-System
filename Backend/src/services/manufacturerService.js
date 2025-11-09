@@ -70,15 +70,11 @@ async function getManufacturerShipments(manufacturerId) {
       s.route, 
       s.vehicle_number, 
       s.temperature, 
-      s.qrcode, 
-      s.shipment_type,
-      ph.name AS destination_pharmacy,
-  -- Removed destination_facility_id
+      s.qrcode_path
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
     JOIN drug d ON d.id = s.drug_id
     LEFT JOIN distributor_company dc ON dc.id = db.distributorcompanyid
-  -- Removed join on destination_facility_id
     WHERE s.manufacturer_id = $1
     ORDER BY s.id DESC
   `, [manufacturerId])).rows;
@@ -169,15 +165,16 @@ async function updateManufacturerShipmentStatus(manufacturerId, shipmentId, stat
     'UPDATE shipment SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE manufacturer_id = $2 AND id = $3 RETURNING *',
     [status, manufacturerId, shipmentId]
   );
-  
-  if (result.rowCount === 0) {
-    throw new Error('Shipment not found or does not belong to manufacturer');
-  }
-  
-  return result.rows[0];
+        // Remove reference to non-existent 'status' column
+        // Instead, calculate qualityPassRate as percent of batches with a quality officer assigned
+        const qualityCheckedResult = await query(
+          'SELECT COUNT(*) FROM drugbatch WHERE manufacturerid = $1 AND qualitycontrolofficerid IS NOT NULL',
+          [manufacturerId]
+        );
+        const qualityChecked = parseInt(qualityCheckedResult.rows[0].count, 10);
 }
 
-// Manufacturer Analytics - FIXED QUERIES
+ // Manufacturer Analytics - FIXED QUERIES
 async function getManufacturerAnalytics(manufacturerId) {
   try {
     console.log('📊 Fetching analytics for manufacturer:', manufacturerId);
@@ -189,7 +186,6 @@ async function getManufacturerAnalytics(manufacturerId) {
         COUNT(*) as count
       FROM drugbatch 
       WHERE manufacturerid = $1 
-        AND manufacturedate IS NOT NULL
         AND manufacturedate >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY TO_CHAR(manufacturedate, 'YYYY-MM')
       ORDER BY month ASC
@@ -245,18 +241,14 @@ async function getManufacturerAnalytics(manufacturerId) {
     // 5. Geographic reach - FIXED: Handle different destination types
     const geoReach = await query(`
       SELECT 
-        COALESCE(
-          f.location, 
-          pc.name, 
-          dc.name, 
-          'Unknown Location'
-        ) as facility_location,
-        COUNT(s.id) as count
+        COALESCE(f.location, dc.name, 'Unknown Location') AS facility_location,
+        COUNT(s.id) AS count
       FROM shipment s
-  -- Removed joins on destination_facility_id
-      LEFT JOIN distributor_company dc ON s.distributor_id = dc.id
+      LEFT JOIN distributor d ON s.distributor_id = d.id
+      LEFT JOIN distributor_company dc ON d.companyid = dc.id
+      LEFT JOIN facility f ON dc.facility_id = f.id
       WHERE s.manufacturer_id = $1
-      GROUP BY f.location, pc.name, dc.name
+      GROUP BY f.location, dc.name
       ORDER BY count DESC
       LIMIT 10
     `, [manufacturerId]);
@@ -288,14 +280,12 @@ async function getManufacturerAnalytics(manufacturerId) {
       [manufacturerId]
     );
     
-    const qualityPassRate = await query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved
-      FROM drugbatch 
-      WHERE manufacturerid = $1
-    `, [manufacturerId]);
-
+    // Calculate qualityPassRate as percent of batches with a quality officer assigned
+    const qualityCheckedResult = await query(
+      'SELECT COUNT(*) FROM drugbatch WHERE manufacturerid = $1 AND qualitycontrolofficerid IS NOT NULL',
+      [manufacturerId]
+    );
+    const qualityChecked = parseInt(qualityCheckedResult.rows[0].count, 10);
     const totalBatchesCount = parseInt(totalBatches.rows[0]?.count) || 0;
 
     const analyticsData = {
@@ -307,7 +297,8 @@ async function getManufacturerAnalytics(manufacturerId) {
       blockchainPerf: blockchainPerf.rows,
       summary: {
         totalBatches: totalBatchesCount,
-        totalShipments: parseInt(totalShipments.rows[0]?.count) || 0
+        totalShipments: parseInt(totalShipments.rows[0]?.count) || 0,
+        qualityPassRate: totalBatchesCount > 0 ? (qualityChecked / totalBatchesCount) * 100 : 0
       }
     };
 
@@ -325,9 +316,7 @@ async function getManufacturerAnalytics(manufacturerId) {
 
   } catch (error) {
     console.error('❌ Error in getManufacturerAnalytics service:', error);
-    
-    // Return sample data for testing if database is empty
-    return getSampleAnalyticsData();
+    throw error;
   }
 }
 
@@ -638,9 +627,9 @@ async function createDrugBatch(manufacturerId, batchData) {
     INSERT INTO drugbatch (
       manufacturerid, drugid, batchnumber, manufacturedate, expirydate, 
       blockchaintx, qrcode_path, quantity, storagetemperature, 
-      manufacturingfacility, status, distributorcompanyid, qualitycontrolofficerid
+      manufacturingfacility, distributorcompanyid, qualitycontrolofficerid
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING *
   `, [
     manufacturerId, 
@@ -676,4 +665,4 @@ export {
   createManufacturerShipment,
   updateManufacturerShipmentStatus,
   deleteManufacturerShipment
-};
+}

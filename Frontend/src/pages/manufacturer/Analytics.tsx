@@ -20,7 +20,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Activity, BarChart2, PieChart, Package2, Truck, CheckCircle, Calendar } from 'lucide-react';
+import { Activity, BarChart2, PieChart, Package2, Truck, Package, List, Plus, Shield, CheckCircle, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export type ManufacturerAnalyticsData = {
@@ -30,7 +30,7 @@ export type ManufacturerAnalyticsData = {
     qualityPassRate?: number;
   };
   batchesByMonth?: Array<{ month: string; count: number }>;
-  shipmentStatus?: Array<{ status: string; count: number }>;
+  // shipmentStatus removed
   topDrugs?: Array<{ name: string; count: number }>;
   geoReach?: Array<{ facility_location: string; count: number }>;
   blockchainPerf?: Array<{ verified: boolean; count: number }>;
@@ -48,7 +48,7 @@ export default function ManufacturerAnalytics() {
   const [data, setData] = useState<ManufacturerAnalyticsData | null>(null);
   const [userData, setUserData] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  // Activity logs related to status removed
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -88,31 +88,7 @@ export default function ManufacturerAnalytics() {
         );
         setData(res.data);
         // Example activity logs
-        if (res.data.lastActivity) {
-          setActivityLogs([
-            {
-              action: "Batch Updated",
-              batchNo: res.data.lastActivity.batchNo,
-              timestamp: new Date().toLocaleString(),
-              details: `Updated batch for ${res.data.lastActivity.drug}`,
-            },
-            {
-              action: "Batch Status Update", 
-              batchNo: res.data.lastActivity.batchNo,
-              timestamp: new Date(res.data.lastActivity.date).toLocaleString(),
-              details: `Batch status changed recently`,
-            }
-          ]);
-        } else {
-          setActivityLogs([
-            {
-              action: "Analytics Viewed",
-              batchNo: "N/A",
-              timestamp: new Date().toLocaleString(),
-              details: `Viewed manufacturer analytics dashboard`,
-            }
-          ]);
-        }
+        // Activity logs related to status removed
       } catch (err: any) {
         setError(err?.response?.data?.message || "Failed to load analytics. Please try again.");
       } finally {
@@ -124,13 +100,13 @@ export default function ManufacturerAnalytics() {
 
   // Sidebar items for manufacturer
   const sidebarItems = [
-    { icon: Package2, label: "Dashboard", path: "/manufacturer/dashboard", active: location.pathname === "/manufacturer/dashboard" },
-    { icon: Activity, label: "Register Batch", path: "/manufacturer/register-batch", active: location.pathname === "/manufacturer/register-batch" },
-    { icon: Calendar, label: "Batches", path: "/manufacturer/batches", active: location.pathname === "/manufacturer/batches" },
-    { icon: CheckCircle, label: "Blockchain", path: "/manufacturer/blockchain", active: location.pathname === "/manufacturer/blockchain" },
-    { icon: BarChart2, label: "Analytics", path: "/manufacturer/analytics", active: location.pathname === "/manufacturer/analytics" },
-    { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: location.pathname === "/manufacturer/shipments" },
-  ];
+       { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
+       { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
+       { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
+       { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
+       { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: true},
+       { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
+   ];
 
   if (loading) {
     return (
@@ -201,7 +177,7 @@ export default function ManufacturerAnalytics() {
   const {
     summary = {},
     batchesByMonth = [],
-    shipmentStatus = [],
+  // shipmentStatus removed
     topDrugs = [],
     geoReach = [],
     blockchainPerf = [],
@@ -221,43 +197,59 @@ export default function ManufacturerAnalytics() {
     ],
   };
 
-  const pieData = {
-    labels: shipmentStatus.map((s: any) => s.status) || ['No Data'],
-    datasets: [
-      {
-        data: shipmentStatus.map((s: any) => s.count) || [1],
-        backgroundColor: ["#ea580c", "#2563eb", "#f59e42", "#e11d48"],
-      },
-    ],
-  };
-
-  const barData = {
-    labels: topDrugs.map((d: any) => d.name) || ['No Data'],
+  const barData = topDrugs.length > 0 ? {
+    labels: topDrugs.map((d: any) => d.name),
     datasets: [
       {
         label: "Top Drugs Produced",
-        data: topDrugs.map((d: any) => d.count) || [0],
+        data: topDrugs.map((d: any) => d.count),
+        backgroundColor: "#2563eb",
+      },
+    ],
+  } : {
+    labels: ['No Data'],
+    datasets: [
+      {
+        label: "Top Drugs Produced",
+        data: [0],
         backgroundColor: "#2563eb",
       },
     ],
   };
 
-  const geoBarData = {
-    labels: geoReach.map((g: any) => g.facility_location) || ['No Data'],
+  const geoBarData = geoReach.length > 0 ? {
+    labels: geoReach.map((g: any) => g.facility_location),
     datasets: [
       {
         label: "Shipments by Location",
-        data: geoReach.map((g: any) => g.count) || [0],
+        data: geoReach.map((g: any) => g.count),
+        backgroundColor: "#4BC0C0",
+      },
+    ],
+  } : {
+    labels: ['No Data'],
+    datasets: [
+      {
+        label: "Shipments by Location",
+        data: [0],
         backgroundColor: "#4BC0C0",
       },
     ],
   };
 
-  const blockchainPieData = {
+  const blockchainPieData = blockchainPerf.length > 0 ? {
     labels: blockchainPerf.map((b: any) => b.verified ? 'Verified' : 'Pending'),
     datasets: [
       {
-        data: blockchainPerf.map((b: any) => b.count) || [0],
+        data: blockchainPerf.map((b: any) => b.count),
+        backgroundColor: ["#10B981", "#F59E0B"],
+      },
+    ],
+  } : {
+    labels: ['No Data'],
+    datasets: [
+      {
+        data: [0],
         backgroundColor: ["#10B981", "#F59E0B"],
       },
     ],
@@ -318,22 +310,7 @@ export default function ManufacturerAnalytics() {
             </CardContent>
           </Card>
           <Card className="card-elevated">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-blue-700" /> 
-                Shipment Status Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Pie 
-                data={pieData} 
-                options={{ 
-                  responsive: true,
-                  maintainAspectRatio: false
-                }} 
-                height={300}
-              />
-            </CardContent>
+            {/* Shipment Status Breakdown chart removed */}
           </Card>
         </div>
 

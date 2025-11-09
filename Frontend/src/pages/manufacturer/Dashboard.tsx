@@ -103,7 +103,7 @@ const ManufacturerDashboard = () => {
                   <th className="p-2">Drug</th>
                   <th className="p-2">Quantity</th>
                   <th className="p-2">Expiry</th>
-                  <th className="p-2">Status</th>
+                  {/* <th className="p-2">Status</th> */}
                   <th className="p-2">Blockchain Tx</th>
                 </tr>
               </thead>
@@ -114,7 +114,7 @@ const ManufacturerDashboard = () => {
                     <td className="p-2">{b.drug}</td>
                     <td className="p-2">{b.quantity}</td>
                     <td className="p-2">{b.expirydate?.slice(0,10)}</td>
-                    <td className="p-2">{b.status}</td>
+                    {/* <td className="p-2">{b.status}</td> */}
                     <td className="p-2">{b.blockchaintx ? <span className="text-green-700">✔</span> : <span className="text-gray-400">-</span>}</td>
                   </tr>
                 )) : <tr><td colSpan={6} className="p-2 text-center text-muted-foreground">No recent batches</td></tr>}
@@ -136,7 +136,7 @@ const ManufacturerDashboard = () => {
                   <th className="p-2">Shipment No</th>
                   <th className="p-2">Batch No</th>
                   <th className="p-2">Distributor</th>
-                  <th className="p-2">Status</th>
+                  {/* <th className="p-2">Status</th> */}
                   <th className="p-2">Departure Date</th>
                 </tr>
               </thead>
@@ -146,7 +146,7 @@ const ManufacturerDashboard = () => {
                     <td className="p-2">{s.shipmentnumber}</td>
                     <td className="p-2">{s.batchnumber}</td>
                     <td className="p-2">{s.distributor}</td>
-                    <td className="p-2">{s.status}</td>
+                    {/* <td className="p-2">{s.status}</td> */}
                     <td className="p-2">{s.departure_date?.slice(0,10)}</td>
                   </tr>
                 )) : <tr><td colSpan={5} className="p-2 text-center text-muted-foreground">No recent shipments</td></tr>}
@@ -167,7 +167,7 @@ const ManufacturerDashboard = () => {
                 <tr className="bg-muted/40">
                   <th className="p-2">Batch No</th>
                   <th className="p-2">Blockchain Tx</th>
-                  <th className="p-2">Status</th>
+                  {/* <th className="p-2">Status</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -175,7 +175,7 @@ const ManufacturerDashboard = () => {
                   <tr key={idx} className="border-b">
                     <td className="p-2">{b.batchnumber}</td>
                     <td className="p-2">{b.blockchaintx}</td>
-                    <td className="p-2">{b.status}</td>
+                    {/* <td className="p-2">{b.status}</td> */}
                   </tr>
                 )) : <tr><td colSpan={3} className="p-2 text-center text-muted-foreground">No blockchain records</td></tr>}
               </tbody>

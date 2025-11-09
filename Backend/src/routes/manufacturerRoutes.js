@@ -1,9 +1,11 @@
 import express from "express";
-import { getManufacturerProfile, updateManufacturerProfile, getManufacturerDashboard, createDrugBatch, getManufacturerBatches, getManufacturerBatchDetails, updateManufacturerBatch, deleteManufacturerBatch, getManufacturerBlockchain, getManufacturerBlockchainTx, getManufacturerAnalytics, getManufacturerShipments, getManufacturerShipmentDetails, createManufacturerShipment, updateManufacturerShipmentStatus, deleteManufacturerShipment, getManufacturerDropdowns,  getBatchesReadyForShipping, getShipmentFormDropdowns } from "../controllers/manufacturerController.js";
+import { getManufacturerProfile, updateManufacturerProfile, getManufacturerDashboard, getManufacturerBatches, getManufacturerBatchDetails, updateManufacturerBatch, deleteManufacturerBatch, getManufacturerBlockchain, getManufacturerBlockchainTx, getManufacturerAnalytics, getManufacturerShipments, getManufacturerShipmentDetails, createManufacturerShipment, updateManufacturerShipmentStatus, deleteManufacturerShipment, getManufacturerDropdowns,  getBatchesReadyForShipping, getShipmentFormDropdowns, createDrugBatch } from "../controllers/manufacturerController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 router.use(authMiddleware);
+// Batch registration route
+router.post("/batches", createDrugBatch);
 router.get("/drugbatch/form/dropdowns", getManufacturerDropdowns);
 
 // Dropdowns for shipment creation form
@@ -28,7 +30,6 @@ router.put("/profile", updateManufacturerProfile);
 router.get("/dashboard", getManufacturerDashboard);
 
 router.get("/batches", getManufacturerBatches);
-router.post("/batches", createDrugBatch);
 router.get("/batches/:id", getManufacturerBatchDetails);
 router.put("/batches/:id", updateManufacturerBatch);
 router.delete("/batches/:id", deleteManufacturerBatch);

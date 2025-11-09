@@ -49,6 +49,7 @@ const RegisterBatch = () => {
   const [drugs, setDrugs] = useState<{ id: number; name: string }[]>([]);
   const [officers, setOfficers] = useState<{ id: number; fullname: string }[]>([]);
   const [distributors, setDistributors] = useState<Distributor[]>([]);
+  const [distributorFacilities, setDistributorFacilities] = useState<any[]>([]);
   const [selectedDistributorCompanyId, setSelectedDistributorCompanyId] = useState<string>("");
   const [selectedDistributorFacilityId, setSelectedDistributorFacilityId] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -103,17 +104,20 @@ const RegisterBatch = () => {
         drugs: { id: number; name: string }[];
         qualityOfficers: { id: number; fullname: string }[];
         distributors: Distributor[];
+        distributorFacilities: any[];
       };
 
       console.log("🎯 Parsed data counts:", {
         drugs: data.drugs?.length || 0,
         officers: data.qualityOfficers?.length || 0,
-        distributors: data.distributors?.length || 0
+        distributors: data.distributors?.length || 0,
+        distributorFacilities: data.distributorFacilities?.length || 0
       });
 
       setDrugs(data.drugs || []);
       setOfficers(data.qualityOfficers || []);
       setDistributors(data.distributors || []);
+      setDistributorFacilities(data.distributorFacilities || []);
       
       // Log the actual data for debugging
       if (data.drugs && data.drugs.length > 0) {
@@ -241,8 +245,9 @@ const RegisterBatch = () => {
     
     if (field === "distributor_facility_id") {
       setSelectedDistributorFacilityId(value);
-      const selectedDist = distributors.find(d => d.id === Number(value));
-      const facilityName = selectedDist ? `${selectedDist.name} - ${selectedDist.facility_location}` : "";
+      // Find selected facility from distributorFacilities
+      const selectedFacility = distributorFacilities.find(f => f.facility_id === Number(value));
+      const facilityName = selectedFacility ? `${selectedFacility.facility_name} - ${selectedFacility.facility_location}` : "";
       setFormData(prev => ({
         ...prev,
         manufacturingfacility: facilityName
@@ -338,11 +343,7 @@ const RegisterBatch = () => {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
             Register New Batch
           </h1>
-          <p className="text-muted-foreground">
-            Register a new drug batch with complete manufacturing details and blockchain verification.
-          </p>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Card>
@@ -354,7 +355,6 @@ const RegisterBatch = () => {
                   Enter essential manufacturing details for blockchain registration.
                 </CardDescription>
               </CardHeader>
-
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Basic Information</h3>
@@ -483,11 +483,11 @@ const RegisterBatch = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {formData.distributorcompanyid ? (
-                            distributors
-                              .filter(dist => dist.id === Number(formData.distributorcompanyid))
-                              .map(dist => (
-                                <SelectItem key={dist.facility_id} value={dist.facility_id.toString()}>
-                                  {dist.facility_name} ({dist.facility_location})
+                            distributorFacilities
+                              .filter(f => f.distributor_company_id === Number(formData.distributorcompanyid))
+                              .map(facility => (
+                                <SelectItem key={facility.facility_id} value={facility.facility_id.toString()}>
+                                  {facility.facility_name} ({facility.facility_location})
                                 </SelectItem>
                               ))
                           ) : (
