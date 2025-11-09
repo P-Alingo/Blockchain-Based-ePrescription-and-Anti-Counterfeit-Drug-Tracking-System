@@ -129,8 +129,7 @@ async function approveDistributorRequest(distributorId, requestId) {
       route: null,
       vehicle_number: null,
       departure_date: new Date().toISOString(),
-      origin_facility_id: batch ? batch.origin_facility_id : null,
-      destination_facility_id: request.destination_facility_id || null
+  // ...existing code...
     });
   }
   return true;
@@ -176,15 +175,16 @@ async function createDistributorShipment(distributorId, shipmentData) {
   // Insert new shipment (simplified)
   const { batch_id, drug_id, manufacturer_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date } = shipmentData;
   let final_manufacturer_id = manufacturer_id;
-  // Fetch batch details
-  const batchRes = await query('SELECT manufacturerid FROM drugbatch WHERE id = $1', [batch_id]);
+  // Fetch batch details including qrcode_path
+  const batchRes = await query('SELECT manufacturerid, qrcode_path FROM drugbatch WHERE id = $1', [batch_id]);
   final_manufacturer_id = final_manufacturer_id || batchRes.rows[0]?.manufacturerid;
-
+  const qrcode_path = batchRes.rows[0]?.qrcode_path || null;
+  // Insert shipment with qrcode_path from batch
   await query(`
     INSERT INTO shipment (
-      batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, status
+      batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, status, qrcode_path
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_transit'::shipment_status
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_transit'::shipment_status,$11
     )
   `, [
     batch_id,
@@ -196,7 +196,8 @@ async function createDistributorShipment(distributorId, shipmentData) {
     temperature,
     route,
     vehicle_number,
-    departure_date
+    departure_date,
+    qrcode_path
   ]);
   // Subtract shipped quantity from drugbatch
   if (quantity_shipped && batch_id) {
@@ -206,34 +207,57 @@ async function createDistributorShipment(distributorId, shipmentData) {
 }
 async function updateDistributorShipmentStatus(distributorId, shipmentId, status) {
   // Update shipment status, arrival_date, received_condition, and updated_at
-  // Accepts status, arrival_date, received_condition from the controller
   let arrival_date = null;
   let received_condition = null;
   if (typeof status === 'object' && status !== null) {
-    // If called with an object (from controller), extract fields
     arrival_date = status.arrival_date || null;
     received_condition = status.received_condition || null;
     status = status.status;
+  }
+  const allowedStatuses = ['delivered', 'failed', 'flagged'];
+  if (!allowedStatuses.includes(status)) {
+    throw new Error('Invalid status: Only delivered, failed, or flagged are allowed');
   }
   await query(
     `UPDATE shipment SET status = $1, arrival_date = $2, received_condition = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND distributor_id = $5`,
     [status, arrival_date, received_condition, shipmentId, distributorId]
   );
 
-  // Update related drugbatch and batch_request status
-  // Get batch_id and pharmacist_id from shipment
-  const shipRes = await query('SELECT batch_id, pharmacist_id FROM shipment WHERE id = $1', [shipmentId]);
+  // Get batch_id, pharmacist_id, and quantity_shipped from shipment after updating status
+  const shipRes = await query('SELECT batch_id, pharmacist_id, quantity_shipped FROM shipment WHERE id = $1', [shipmentId]);
   const batch_id = shipRes.rows[0]?.batch_id;
   const pharmacist_id = shipRes.rows[0]?.pharmacist_id;
+  const quantity_shipped = shipRes.rows[0]?.quantity_shipped || 0;
   if (batch_id && pharmacist_id) {
     let requestStatus = null;
-    // Use correct enum values for request_status only
     if (status === 'delivered') {
       requestStatus = 'delivered';
-    } else if (status === 'cancelled' || status === 'failed') {
-      requestStatus = 'cancelled';
+      // Update pharmacy inventory
+      const pharmRes = await query('SELECT companyid FROM pharmacist WHERE id = $1', [pharmacist_id]);
+      const pharmacyCompanyId = pharmRes.rows[0]?.companyid;
+      if (pharmacyCompanyId) {
+        const facilityRes = await query('SELECT facility_id FROM pharmacy_company WHERE id = $1', [pharmacyCompanyId]);
+        const pharmacyFacilityId = facilityRes.rows[0]?.facility_id;
+        if (pharmacyFacilityId) {
+          // Check if inventory row exists
+          const invRes = await query('SELECT id FROM inventory WHERE batch_id = $1 AND facility_type = $2 AND facility_id = $3', [batch_id, 'pharmacy', pharmacyFacilityId]);
+          if (invRes.rows.length > 0) {
+            // Update only available_quantity in the existing inventory row
+            await query('UPDATE inventory SET available_quantity = available_quantity + $1, last_updated = CURRENT_TIMESTAMP WHERE id = $2', [quantity_shipped, invRes.rows[0].id]);
+          } else {
+            // Insert new inventory row only if it does not exist, and include drug_id
+            const batchRes = await query('SELECT drugid FROM drugbatch WHERE id = $1', [batch_id]);
+            const drug_id = batchRes.rows[0]?.drugid;
+            await query('INSERT INTO inventory (batch_id, drug_id, available_quantity, facility_type, facility_id, last_updated) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)', [batch_id, drug_id, quantity_shipped, 'pharmacy', pharmacyFacilityId]);
+          }
+        }
+      }
+    } else if (status === 'failed') {
+      requestStatus = 'failed';
     } else if (status === 'flagged') {
       requestStatus = 'flagged';
+    } else if (status === 'cancelled') {
+      requestStatus = 'cancelled';
     } else if (status === 'in_transit') {
       requestStatus = 'in_transit';
     }
@@ -249,7 +273,7 @@ async function getDistributorInventory(distributorId) {
   // Get inventory batches and quantities for distributor
   // Join distributor -> drugbatch -> inventory
   const { rows } = await query(`
-    SELECT i.id, i.batch_id, db.batchnumber, db.drugid, i.quantity
+    SELECT i.id, i.batch_id, db.batchnumber, db.drugid, i.available_quantity
     FROM inventory i
     JOIN drugbatch db ON db.id = i.batch_id
     JOIN distributor d ON d.companyid = db.distributorcompanyid
@@ -266,7 +290,7 @@ async function addDistributorInventory(distributorId, batchData) {
   const companyId = distributor.rows[0]?.companyid;
   const company = await query('SELECT facility_id FROM distributor_company WHERE id = $1', [companyId]);
   const facilityId = company.rows[0]?.facility_id;
-  await query(`INSERT INTO inventory (batch_id, quantity, facility_type, facility_id) VALUES ($1,$2,'distributor',$3)`, [batch_id, quantity, facilityId]);
+  await query(`INSERT INTO inventory (batch_id, available_quantity, facility_type, facility_id) VALUES ($1,$2,'distributor',$3)`, [batch_id, quantity, facilityId]);
   return true;
 }
 
@@ -285,7 +309,7 @@ async function getDistributorAnalytics(distributorId) {
   const shipmentsPerRegion = await query(`
     SELECT f.name AS region, COUNT(*) AS count
     FROM shipment s
-    LEFT JOIN facility f ON f.id = s.destination_facility_id
+  -- Removed join on destination_facility_id
     WHERE s.distributor_id = $1
     GROUP BY f.name
     ORDER BY count DESC
@@ -312,7 +336,7 @@ async function getDistributorAnalytics(distributorId) {
     SELECT s.*, db.batchnumber, db.drugid, f.name AS facility
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
-    LEFT JOIN facility f ON f.id = s.destination_facility_id
+  -- Removed join on destination_facility_id
     WHERE s.distributor_id = $1
     ORDER BY s.departure_date DESC
   `, [distributorId]);

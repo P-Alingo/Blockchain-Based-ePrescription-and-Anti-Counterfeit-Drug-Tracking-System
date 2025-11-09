@@ -1,3 +1,4 @@
+import { confirmPharmacistDelivery } from "../controllers/pharmacistController.js";
 import express from "express";
 import {
 	getPharmacistProfile,
@@ -16,12 +17,16 @@ import {
 	getPharmacistBlockchain,
 	getPharmacistAnalytics,
 	getPharmacistPrescriptions,
-	deletePharmacistRequest
+	deletePharmacistRequest,
+	getPharmacistDrugBatches
 } from "../controllers/pharmacistController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
+
 const router = express.Router();
 router.use(authMiddleware);
+// Pharmacist confirms delivery of shipment
+router.post("/shipments/confirm-delivery", authMiddleware, confirmPharmacistDelivery);
 
 router.get("/profile", getPharmacistProfile);
 router.put("/profile", updatePharmacistProfile);
@@ -43,6 +48,7 @@ router.delete("/requests/:id", deletePharmacistRequest);
 
 router.get("/distributors", getPharmacistDistributors);
 router.get("/shipments", getPharmacistShipments);
+router.get("/drug-batches", getPharmacistDrugBatches);
 
 router.get("/blockchain", getPharmacistBlockchain);
 router.get("/analytics", getPharmacistAnalytics);

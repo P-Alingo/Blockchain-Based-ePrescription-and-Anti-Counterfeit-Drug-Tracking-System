@@ -75,8 +75,8 @@ async function updateDistributorShipmentStatus(req, res, next) {
     const distributor = await distributorService.getDistributorByUserId(userId);
     if (!distributor) return res.status(404).json({ message: "Distributor not found" });
     const shipmentId = req.params.id;
-    const { status } = req.body;
-    await distributorService.updateDistributorShipmentStatus(distributor.id, shipmentId, status);
+  // Pass all relevant fields for status update
+  await distributorService.updateDistributorShipmentStatus(distributor.id, shipmentId, req.body);
     res.json({ success: true });
   } catch (error) { next(error); }
 }

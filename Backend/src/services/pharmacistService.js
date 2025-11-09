@@ -1,3 +1,40 @@
+// Pharmacist confirms delivery of shipment
+export async function confirmPharmacistDelivery(userId, shipmentId, status) {
+  // Get pharmacist
+  const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
+  const pharmacist = pharmacistRes.rows[0];
+  if (!pharmacist) throw new Error('Pharmacist not found');
+
+  // Get shipment
+  const shipRes = await query("SELECT * FROM shipment WHERE id = $1", [shipmentId]);
+  const shipment = shipRes.rows[0];
+  if (!shipment) throw new Error('Shipment not found');
+
+  // Only allow if shipment.status is 'delivered' (by distributor)
+  if (shipment.status !== 'delivered') throw new Error('Shipment must be delivered by distributor first');
+
+  // Only allow pharmacist to set status to 'completed' or 'flagged'
+  if (status !== 'completed' && status !== 'flagged') throw new Error('Invalid pharmacist status');
+
+  // Update shipment: set status to pharmacist's confirmation
+  await query("UPDATE shipment SET status = $1, updated_at = NOW() WHERE id = $2", [status, shipmentId]);
+
+  // Update batch_request: set status to pharmacist's confirmation for matching batch and pharmacist
+  await query("UPDATE batch_request SET status = $1, delivered_date = NOW() WHERE batch_id = $2 AND pharmacist_id = $3", [status, shipment.batch_id, pharmacist.id]);
+
+  return { success: true };
+}
+export async function getPharmacistDrugBatchesByDrugId(drugId) {
+  const sql = `
+    SELECT db.*, dr.name as drug_name
+    FROM drugbatch db
+    LEFT JOIN drug dr ON db.drugid = dr.id
+    WHERE db.drugid = $1 AND db.is_deleted = false
+    ORDER BY db.expirydate ASC
+  `;
+  const { rows } = await query(sql, [drugId]);
+  return rows;
+}
 export async function deletePharmacistRequest(userId, requestId) {
   // Get pharmacist id
   const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
@@ -134,12 +171,12 @@ export async function dispenseDrug(prescriptionId, patientId, drugId, quantity) 
   const facilityId = pharmacist.companyid;
   // Find inventory for this drug in this facility
   const invRes = await query(
-    `SELECT * FROM inventory WHERE facility_id = $1 AND batch_id IN (SELECT id FROM drugbatch WHERE drugid = $2) AND quantity > 0 ORDER BY quantity DESC`,
+    `SELECT * FROM inventory WHERE facility_id = $1 AND batch_id IN (SELECT id FROM drugbatch WHERE drugid = $2) AND available_quantity > 0 ORDER BY available_quantity DESC`,
     [facilityId, drugId]
   );
   let totalAvailable = 0;
   for (const inv of invRes.rows) {
-    totalAvailable += Number(inv.quantity);
+    totalAvailable += Number(inv.available_quantity);
   }
   if (totalAvailable < quantity) {
     throw new Error("Insufficient inventory for this drug. Dispensing not allowed.");
@@ -148,9 +185,9 @@ export async function dispenseDrug(prescriptionId, patientId, drugId, quantity) 
   let qtyToDeduct = quantity;
   for (const inv of invRes.rows) {
     if (qtyToDeduct <= 0) break;
-    const deduct = Math.min(qtyToDeduct, Number(inv.quantity));
+    const deduct = Math.min(qtyToDeduct, Number(inv.available_quantity));
     await query(
-      `UPDATE inventory SET quantity = quantity - $1, last_updated = NOW() WHERE id = $2`,
+      `UPDATE inventory SET available_quantity = available_quantity - $1, last_updated = NOW() WHERE id = $2`,
       [deduct, inv.id]
     );
     qtyToDeduct -= deduct;
@@ -170,32 +207,38 @@ export async function getPharmacistInventory(userId) {
   // Get pharmacist's facility_id
   const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
   const pharmacist = pharmacistRes.rows[0];
-  if (!pharmacist) return [];
-
-  // Get facility_id for this pharmacist (via pharmacy_company or direct mapping)
-  let facilityId = null;
-  const companyRes = await query("SELECT * FROM pharmacy_company WHERE id = $1", [pharmacist.companyid]);
-  if (companyRes.rows.length > 0) {
-    facilityId = companyRes.rows[0].facility_id;
+  if (!pharmacist) {
+    console.log('[DEBUG] No pharmacist found for userId:', userId);
+    return [];
   }
-  if (!facilityId && pharmacist.companyid) facilityId = pharmacist.companyid;
-  if (!facilityId) return [];
 
-  // Query all drugs, join with inventory and batches for this facility
+  // Use pharmacist.companyid directly as facility_id for inventory query
+  const facilityId = pharmacist.companyid;
+  if (!facilityId) {
+    console.log('[DEBUG] No facilityId resolved for pharmacist:', pharmacist);
+    return [];
+  }
+  console.log('[DEBUG] pharmacist:', pharmacist);
+  console.log('[DEBUG] facilityId used for inventory query:', facilityId);
+
+  // Query all inventory for this facility, join with drug and batch
   const sql = `
-    SELECT dr.id as drug_id, dr.name as drug_name, dr.code as drug_code, dr.formulation, dr.dosageunit,
-      db.id as batch_id, db.batchnumber, db.expirydate, db.distributorcompanyid, db.quantity as batch_quantity,
-      inv.id as inventory_id, inv.quantity as inventory_quantity, inv.last_updated
-    FROM drug dr
-    LEFT JOIN drugbatch db ON db.drugid = dr.id
-    LEFT JOIN inventory inv ON inv.batch_id = db.id AND inv.facility_id = $1
-    WHERE dr.is_deleted = false
+    SELECT inv.id as inventory_id, inv.batch_id, inv.available_quantity, inv.total_batch_quantity, inv.minimum_stock_level, inv.expiry_date, inv.last_updated,
+      db.batchnumber, db.expirydate as batch_expiry, db.distributorcompanyid, db.quantity as batch_quantity,
+      CASE WHEN inv.drug_id IS NOT NULL THEN inv.drug_id ELSE db.drugid END as drug_id,
+      dr.name as drug_name, dr.code as drug_code, dr.formulation, dr.dosageunit
+    FROM inventory inv
+    LEFT JOIN drugbatch db ON inv.batch_id = db.id
+    LEFT JOIN drug dr ON (dr.id = inv.drug_id OR dr.id = db.drugid)
+    WHERE inv.facility_id = $1 AND inv.facility_type = 'pharmacy'
     ORDER BY dr.name ASC, db.expirydate ASC
   `;
   const { rows } = await query(sql, [facilityId]);
+  console.log('[DEBUG] Raw inventory SQL result:', rows);
   // Group by drug, collect batches per drug
   const drugMap = new Map();
   for (const row of rows) {
+    if (!row.drug_id) continue;
     if (!drugMap.has(row.drug_id)) {
       drugMap.set(row.drug_id, {
         drug_id: row.drug_id,
@@ -204,26 +247,69 @@ export async function getPharmacistInventory(userId) {
         formulation: row.formulation,
         dosageunit: row.dosageunit,
         batches: [],
-        quantity: 0 // will sum below
+        quantity: 0,
+        minimum_stock_level: row.minimum_stock_level || 20,
+        availableDrugBatches: []
       });
     }
-    // Always add batch if it exists
-    if (row.batch_id) {
-      drugMap.get(row.drug_id).batches.push({
-        batch_id: row.batch_id,
-        batch_number: row.batchnumber,
-        expiry_date: row.expirydate,
-        distributorcompanyid: row.distributorcompanyid,
-        batch_quantity: row.batch_quantity !== undefined && row.batch_quantity !== null ? Number(row.batch_quantity) : 0,
-        inventory_quantity: row.inventory_quantity !== undefined && row.inventory_quantity !== null ? Number(row.inventory_quantity) : 0,
-        inventory_id: row.inventory_id,
-        last_updated: row.last_updated
+    // Add batch from inventory
+    drugMap.get(row.drug_id).batches.push({
+      batch_id: row.batch_id,
+      batch_number: row.batchnumber,
+      expiry_date: row.expiry_date || row.batch_expiry,
+      distributorcompanyid: row.distributorcompanyid,
+      batch_quantity: row.batch_quantity !== undefined && row.batch_quantity !== null ? Number(row.batch_quantity) : 0,
+      available_quantity: row.available_quantity !== undefined && row.available_quantity !== null ? Number(row.available_quantity) : 0,
+      inventory_id: row.inventory_id,
+      last_updated: row.last_updated
+    });
+    // Sum up total available quantity for this drug
+    drugMap.get(row.drug_id).quantity += row.available_quantity !== undefined && row.available_quantity !== null ? Number(row.available_quantity) : 0;
+  }
+  // Fetch all drugs to ensure every drug is listed
+  const allDrugsRes = await query('SELECT id, name, code, formulation, dosageunit FROM drug WHERE is_deleted = false');
+  for (const drugRow of allDrugsRes.rows) {
+    // Fetch all batches from drugbatch for this drug
+    const batchRes = await query('SELECT * FROM drugbatch WHERE drugid = $1 AND is_deleted = false ORDER BY expirydate ASC', [drugRow.id]);
+    const availableDrugBatches = batchRes.rows.map(batch => ({
+      batch_id: batch.id,
+      batch_number: batch.batchnumber,
+      expiry_date: batch.expirydate,
+      distributorcompanyid: batch.distributorcompanyid,
+      batch_quantity: batch.quantity !== undefined && batch.quantity !== null ? Number(batch.quantity) : 0,
+      manufacturerid: batch.manufacturerid,
+      manufacturedate: batch.manufacturedate,
+      qrcode_path: batch.qrcode_path
+    }));
+    if (!drugMap.has(drugRow.id)) {
+      // Drug has no inventory batches, add placeholder
+      drugMap.set(drugRow.id, {
+        drug_id: drugRow.id,
+        drug_name: drugRow.name,
+        drug_code: drugRow.code,
+        formulation: drugRow.formulation,
+        dosageunit: drugRow.dosageunit,
+        batches: [
+          {
+            batch_id: null,
+            batch_number: '-',
+            expiry_date: '-',
+            distributorcompanyid: '-',
+            batch_quantity: 0,
+            available_quantity: 0,
+            inventory_id: null,
+            last_updated: null
+          }
+        ],
+        quantity: 0,
+        minimum_stock_level: 20,
+        availableDrugBatches
       });
-      // Sum up total inventory quantity for this drug
-      drugMap.get(row.drug_id).quantity += row.inventory_quantity !== undefined && row.inventory_quantity !== null ? Number(row.inventory_quantity) : 0;
+    } else {
+      // Drug has real batches, do NOT add placeholder
+      drugMap.get(drugRow.id).availableDrugBatches = availableDrugBatches;
     }
   }
-  // Return as array
   return Array.from(drugMap.values());
 }
 
@@ -236,7 +322,7 @@ export async function addPharmacistInventory(userId, data) {
   // Insert inventory
   const { batch_id, quantity } = data;
   const sql = `
-    INSERT INTO inventory (batch_id, facility_type, facility_id, quantity, last_updated)
+    INSERT INTO inventory (batch_id, facility_type, facility_id, available_quantity, last_updated)
     VALUES ($1, 'pharmacy', $2, $3, NOW())
     RETURNING *
   `;
@@ -268,7 +354,7 @@ export async function updatePharmacistInventory(userId, inventoryId, data) {
 
 export async function deletePharmacistInventory(userId, inventoryId) {
   // Soft delete inventory
-  const sql = `UPDATE inventory SET quantity = 0, last_updated = NOW() WHERE id = $1 RETURNING *`;
+  const sql = `UPDATE inventory SET available_quantity = 0, last_updated = NOW() WHERE id = $1 RETURNING *`;
   const { rows } = await query(sql, [inventoryId]);
   return rows[0] || {};
 }
@@ -318,88 +404,36 @@ export async function createPharmacistRequest(userId, data) {
   if (!batch_id) {
     // Find batch for this drug with available quantity
     const batchRes = await query(`SELECT id, distributorcompanyid FROM drugbatch WHERE drugid = $1 AND is_deleted = false AND quantity > 0 ORDER BY expirydate ASC LIMIT 1`, [drugId]);
-    if (batchRes.rows.length > 0) {
-      batch_id = batchRes.rows[0].id;
-      distributor_id = batchRes.rows[0].distributorcompanyid;
+        const batch = batchRes.rows[0];
+        if (batch) {
+          batch_id = batch.id;
+          distributor_id = batch.distributorcompanyid;
+        }
+      }
+      // Insert batch_request
+      const sql = `
+        INSERT INTO batch_request (pharmacist_id, drug_id, batch_id, distributor_id, quantity_requested, status, request_date)
+        VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+        RETURNING *
+      `;
+      const { rows } = await query(sql, [pharmacist.id, drugId, batch_id, distributor_id, quantity]);
+      return rows[0] || {};
     }
-  }
-  // If still missing distributor_id, try to get from batch_id
-  if (!distributor_id && batch_id) {
-    const batchRes = await query(`SELECT distributorcompanyid FROM drugbatch WHERE id = $1`, [batch_id]);
-    if (batchRes.rows.length > 0) distributor_id = batchRes.rows[0].distributorcompanyid;
-  }
-
-  const sql = `
-    INSERT INTO batch_request (pharmacist_id, drug_id, batch_id, distributor_id, quantity_requested, status, request_date)
-    VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
-    RETURNING id, drug_id, batch_id, distributor_id, quantity_requested, status, request_date
-  `;
-  const { rows } = await query(sql, [pharmacist.id, Number(drugId), batch_id, distributor_id, Number(quantity)]);
-  return rows[0] || {};
-}
-
-
-export async function getPharmacistDistributors() {
-  // Query distributor table
-  const sql = `SELECT d.id, d.licenseno, dc.name as company_name FROM distributor d LEFT JOIN distributor_company dc ON d.companyid = dc.id WHERE d.is_deleted = false`;
-  const { rows } = await query(sql);
-  return rows;
-}
-
 
 export async function getPharmacistShipments(userId) {
   // Get pharmacist id
   const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
   const pharmacist = pharmacistRes.rows[0];
   if (!pharmacist) return [];
-  // Query shipment table
+
+  // Query shipments for this pharmacist
   const sql = `
-    SELECT s.*, db.batchnumber, dr.name as drug_name
+    SELECT s.*, db.batchnumber, dr.name as drugname
     FROM shipment s
     LEFT JOIN drugbatch db ON s.batch_id = db.id
     LEFT JOIN drug dr ON s.drug_id = dr.id
     WHERE s.pharmacist_id = $1 AND (s.is_deleted IS NULL OR s.is_deleted = false)
-    ORDER BY s.departure_date DESC
-  `;
-  const { rows } = await query(sql, [pharmacist.id]);
-  return rows;
-}
-
-
-export async function getPharmacistBlockchain(userId) {
-  // Get pharmacist id
-  const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
-  const pharmacist = pharmacistRes.rows[0];
-  if (!pharmacist) return [];
-  // Query blockchaineventlog
-  const sql = `SELECT * FROM blockchaineventlog WHERE entityid = $1 AND entitytype = 'pharmacist' ORDER BY timestamp DESC`;
-  const { rows } = await query(sql, [pharmacist.id]);
-  return rows;
-}
-
-
-export async function getPharmacistAnalytics(userId) {
-  // Get pharmacist id
-  const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
-  const pharmacist = pharmacistRes.rows[0];
-  if (!pharmacist) return {};
-  // Query analytics table for pharmacist
-  const sql = `SELECT * FROM analytics WHERE actor_type = 'pharmacist' AND actor_id = $1 ORDER BY recorded_at DESC`;
-  const { rows } = await query(sql, [pharmacist.id]);
-  return rows;
-}
-export async function getPharmacistDrugBatches(userId) {
-  // Get pharmacist id
-  const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
-  const pharmacist = pharmacistRes.rows[0];
-  if (!pharmacist) return [];
-  // Query drug batches for this pharmacist
-  const sql = `
-    SELECT db.*, dr.name as drug_name
-    FROM drugbatch db
-    LEFT JOIN drug dr ON db.drug_id = dr.id
-    WHERE db.pharmacist_id = $1 AND (db.is_deleted IS NULL OR db.is_deleted = false)
-    ORDER BY db.created_at DESC
+    ORDER BY s.created_at DESC
   `;
   const { rows } = await query(sql, [pharmacist.id]);
   return rows;

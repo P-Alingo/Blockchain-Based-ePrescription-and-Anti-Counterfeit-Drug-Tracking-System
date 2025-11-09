@@ -1,3 +1,20 @@
+// Pharmacist confirms delivery of shipment
+export async function confirmPharmacistDelivery(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { shipmentId, status } = req.body;
+    // Call service to update both shipment and batch_request status
+    const result = await pharmacistService.confirmPharmacistDelivery(userId, shipmentId, status);
+    res.json(result);
+  } catch (error) { next(error); }
+}
+export async function getPharmacistDrugBatches(req, res, next) {
+  try {
+    const drugId = req.query.drugId;
+    const batches = await pharmacistService.getPharmacistDrugBatchesByDrugId(drugId);
+    res.json(batches);
+  } catch (error) { next(error); }
+}
 export async function deletePharmacistRequest(req, res, next) {
   try {
     const userId = req.user.id;

@@ -29,10 +29,18 @@ const sidebarItems = [
 ];
 
 export default function InventoryAndRequests() {
+  // Request Modal State
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [selectedDrugId, setSelectedDrugId] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [availableBatches, setAvailableBatches] = useState([]);
   // Edit Request Modal State
   const [editRequestModal, setEditRequestModal] = useState(false);
   const [editRequest, setEditRequest] = useState<Request | null>(null);
   const [editQuantity, setEditQuantity] = useState("");
+
+  // Inventory State (single declaration)
+  // (Removed duplicate declaration)
 
   const handleEditRequest = (request: Request) => {
     setEditRequest(request);
@@ -82,16 +90,29 @@ export default function InventoryAndRequests() {
 
   // Get all drugs that are expiring soon (e.g., within 30 days)
   const expiringSoonDrugs = inventoryData.filter((item: any) => {
-    if (!item.expiry_date) return false;
-    const expiry = new Date(item.expiry_date);
-    const now = new Date();
-    const diffDays = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays > 0 && diffDays <= 30;
+    // Check all batches for expiry
+    if (!item.batches || item.batches.length === 0) return false;
+    return item.batches.some((batch: any) => {
+      if (!batch.expiry_date) return false;
+      const expiry = new Date(batch.expiry_date);
+      const now = new Date();
+      const diffDays = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays > 0 && diffDays <= 30;
+    });
   });
-  // Modal state for requesting a drug
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [selectedDrugId, setSelectedDrugId] = useState("");
-  const [selectedBatchId, setSelectedBatchId] = useState("");
+
+  useEffect(() => {
+    if (inventoryData && inventoryData.length > 0) {
+      console.log('[DEBUG] inventoryData:', inventoryData);
+      inventoryData.forEach(drug => {
+        if (drug.batches) {
+          drug.batches.forEach(batch => {
+            console.log(`[DEBUG] Drug: ${drug.drug_name}, Batch: ${batch.batch_id}, Inventory Quantity: ${batch.inventory_quantity}`);
+          });
+        }
+      });
+    }
+  }, [inventoryData]);
   const [selectedDistributorId, setSelectedDistributorId] = useState("");
   const [modalQuantity, setModalQuantity] = useState("");
   // Get all drugs that are low/out of stock
@@ -112,13 +133,20 @@ export default function InventoryAndRequests() {
     setShowRequestModal(true);
     setTimeout(() => {
       setSelectedDrugId(String(drug.drug_id));
-      const batch = getFirstAvailableBatch(drug);
-      setSelectedBatchId(batch ? String(batch.batch_id) : "");
-      setSelectedDistributorId(batch ? String(batch.distributorcompanyid || "") : "");
+      // Use availableDrugBatches for batch selection
+      if (drug.availableDrugBatches && drug.availableDrugBatches.length > 0) {
+        setAvailableBatches(drug.availableDrugBatches);
+        setSelectedBatchId(String(drug.availableDrugBatches[0].batch_id));
+        setSelectedDistributorId(String(drug.availableDrugBatches[0].distributorcompanyid || ""));
+      } else {
+        setAvailableBatches([]);
+        setSelectedBatchId("");
+        setSelectedDistributorId("");
+      }
       setEditRequest({
         id: "new",
         drugId: String(drug.drug_id),
-        batchId: batch ? String(batch.batch_id) : "",
+        batchId: drug.availableDrugBatches && drug.availableDrugBatches.length > 0 ? String(drug.availableDrugBatches[0].batch_id) : "",
         quantity: "",
         status: "pending",
         drugName: drug.drug_name
@@ -173,6 +201,7 @@ export default function InventoryAndRequests() {
     setInventoryLoading(true);
     try {
       const res = await api.get("/api/pharmacist/inventory");
+      console.log('[DEBUG] Full inventory API response:', res.data);
       setInventoryData(res.data);
     } catch (err) {
       setInventoryError("Failed to fetch inventory");
@@ -303,24 +332,41 @@ export default function InventoryAndRequests() {
               {showRequestModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
                   <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-                    <h2 className="text-xl font-bold mb-2">Request Drug Batch</h2>
-                    <p className="mb-2">Drug: <span className="font-semibold">{editRequest?.drugName || editRequest?.drugId}</span></p>
-                    <div className="mb-2">Batch ID: <span className="font-semibold">{editRequest?.batchId || selectedBatchId || '-'}</span></div>
-                    <div className="mb-2">Distributor: <span className="font-semibold">{selectedDistributorId || '-'}</span></div>
+                    <h2 className="text-lg font-bold mb-2">Request Drug Batch</h2>
                     <div className="mb-4">
-                      <label className="block mb-1">Quantity</label>
+                      <label className="block text-sm font-medium">Drug</label>
+                      <div>{editRequest?.drugName}</div>
+                    </div>
+                    {/* If availableBatches is set, show batch selection */}
+                    {availableBatches.length > 0 && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium">Select Batch</label>
+                        <select
+                          value={selectedBatchId}
+                          onChange={e => setSelectedBatchId(e.target.value)}
+                          className="border rounded px-2 py-1 w-full"
+                        >
+                          {availableBatches.map(batch => (
+                            <option key={batch.batch_id} value={batch.batch_id}>
+                              {batch.batch_number} (Exp: {new Date(batch.expiry_date).toLocaleDateString()})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium">Quantity</label>
                       <input
                         type="number"
-                        min={1}
                         value={modalQuantity}
                         onChange={e => setModalQuantity(e.target.value)}
-                        className="border px-2 py-1 rounded w-full"
-                        placeholder="Enter quantity"
+                        className="border rounded px-2 py-1 w-full"
+                        min={1}
                       />
                     </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="outline" onClick={closeRequestModal}>Cancel</Button>
-                      <Button variant="default" onClick={handleModalRequest} disabled={!modalQuantity || isNaN(Number(modalQuantity)) || Number(modalQuantity) <= 0}>Submit</Button>
+                    <div className="flex justify-end gap-2">
+                      <button className="bg-gray-200 px-4 py-2 rounded" onClick={closeRequestModal}>Cancel</button>
+                      <button className="bg-primary text-white px-4 py-2 rounded" onClick={handleModalRequest}>Request</button>
                     </div>
                   </div>
                 </div>
@@ -353,7 +399,7 @@ export default function InventoryAndRequests() {
                         <th>Dosage</th>
                         <th>Batches Available</th>
                         <th>Total Batch Quantity</th>
-                        <th>Inventory Quantity</th>
+                        <th>Available Quantity</th>
                         <th>Expiry Date</th>
                         <th>Distributor</th>
                         <th>Status</th>
@@ -362,46 +408,65 @@ export default function InventoryAndRequests() {
                     </TableHeader>
                     <TableBody>
                       {inventoryData.filter((item: any) => item.drug_name.toLowerCase().includes(searchTerm.toLowerCase())).map((drug: any) => {
-                        // Find the first batch with inventory_quantity > 0, sorted by expiry date
-                        const availableBatches = drug.batches ? drug.batches.slice().sort((a: any, b: any) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()) : [];
-                        const firstAvailableBatch = availableBatches.length > 0 ? availableBatches[0] : null;
-                        const totalBatchQuantity = drug.batches ? drug.batches.reduce((sum: number, b: any) => sum + Number(b.batch_quantity || 0), 0) : 0;
-                        const totalInventoryQuantity = drug.batches ? drug.batches.reduce((sum: number, b: any) => sum + Number(b.inventory_quantity || 0), 0) : 0;
-                        return (
-                          <tr key={drug.drug_id}>
-                            <td>{drug.drug_name}</td>
-                            <td>{firstAvailableBatch ? firstAvailableBatch.batch_number : "-"}</td>
-                            <td>{drug.formulation}</td>
-                            <td>{drug.dosageunit}</td>
-                            <td>{drug.batches ? drug.batches.length : 0}</td>
-                            <td>{drug.batches ? drug.batches.reduce((sum: number, b: any) => sum + Number(b.batch_quantity || 0), 0) : 0}</td>
-                            <td>{totalInventoryQuantity}</td>
-                            <td>{firstAvailableBatch && firstAvailableBatch.expiry_date ? new Date(firstAvailableBatch.expiry_date).toLocaleDateString() : "-"}</td>
-                            <td>{firstAvailableBatch && firstAvailableBatch.distributorcompanyid ? firstAvailableBatch.distributorcompanyid : "-"}</td>
-                            <td>
-                              {getStatusBadge(
-                                drug.batches && drug.batches.length > 0 && drug.batches.some((b: any) => {
-                                  const expiry = b.expiry_date ? new Date(b.expiry_date) : null;
-                                  const now = new Date();
-                                  return expiry && (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) <= 30 && (expiry.getTime() - now.getTime()) > 0;
-                                }) ? "Expiring Soon" : "Low Stock",
-                                totalInventoryQuantity,
-                                1 // minStock
-                              )}
-                            </td>
-                            <td>
-                              {drug.batches && drug.batches.length > 0 ? (
-                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>
-                                  Request
-                                </Button>
-                              ) : (
-                                <Button size="sm" variant="outline" disabled>
-                                  No batch available
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        );
+                        // If drug has real batches (not just placeholder), show only those
+                        const realBatches = (drug.batches || []).filter((batch: any) => batch.batch_id);
+                        if (realBatches.length > 0) {
+                          return realBatches.map((batch: any, idx: number) => (
+                            <TableRow key={drug.drug_id + '-' + (batch.batch_id || idx)}>
+                              <TableCell>{drug.drug_name}</TableCell>
+                              <TableCell>{batch.batch_number}</TableCell>
+                              <TableCell>{drug.formulation}</TableCell>
+                              <TableCell>{drug.dosageunit}</TableCell>
+                              <TableCell>1</TableCell>
+                              <TableCell>{batch.batch_quantity}</TableCell>
+                              <TableCell>{batch.available_quantity}</TableCell>
+                              <TableCell>{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '-'}</TableCell>
+                              <TableCell>{batch.distributorcompanyid || '-'}</TableCell>
+                              <TableCell>In Stock</TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>Request</Button>
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        } else if (drug.availableDrugBatches && drug.availableDrugBatches.length > 0) {
+                          // Show available batches from drugbatch for drugs with no inventory
+                          return drug.availableDrugBatches.map((batch: any, idx: number) => (
+                            <TableRow key={drug.drug_id + '-available-' + (batch.batch_id || idx)}>
+                              <TableCell>{drug.drug_name}</TableCell>
+                              <TableCell>{batch.batch_number}</TableCell>
+                              <TableCell>{drug.formulation}</TableCell>
+                              <TableCell>{drug.dosageunit}</TableCell>
+                              <TableCell>0</TableCell>
+                              <TableCell>{batch.batch_quantity}</TableCell>
+                              <TableCell>0</TableCell>
+                              <TableCell>{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '-'}</TableCell>
+                              <TableCell>{batch.distributorcompanyid || '-'}</TableCell>
+                              <TableCell>Available for Request</TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>Request</Button>
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        } else {
+                          // Show placeholder row for drugs with no inventory or batches
+                          return (
+                            <TableRow key={drug.drug_id + '-placeholder'}>
+                              <TableCell>{drug.drug_name}</TableCell>
+                              <TableCell>-</TableCell>
+                              <TableCell>{drug.formulation}</TableCell>
+                              <TableCell>{drug.dosageunit}</TableCell>
+                              <TableCell>0</TableCell>
+                              <TableCell>0</TableCell>
+                              <TableCell>0</TableCell>
+                              <TableCell>-</TableCell>
+                              <TableCell>-</TableCell>
+                              <TableCell>Out of Stock</TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>Request</Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
                       })}
                     </TableBody>
                   </Table>

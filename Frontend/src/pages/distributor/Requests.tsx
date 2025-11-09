@@ -251,11 +251,10 @@ const DistributorRequests: React.FC = () => {
                                   {/* Show Accept button only if batch exists for the requested drug */}
                                   {/* Check if shipment exists for this request (by batch_id and pharmacist_id) */}
                                   {(() => {
-                                    const shipmentExists = shipments.some(s => s.batch_id === batch.batch_id && s.pharmacist_id === request.pharmacist_id);
-                                    if (shipmentExists) {
-                                      // Show cancelled if shipment status is cancelled
-                                      const shipment = shipments.find(s => s.batch_id === batch.batch_id && s.pharmacist_id === request.pharmacist_id);
-                                      if (shipment && shipment.status === 'cancelled') {
+                                    // Only disable Accept if a shipment exists for THIS request (by request_id)
+                                    const shipmentForRequest = shipments.find(s => s.request_id === request.request_id);
+                                    if (shipmentForRequest) {
+                                      if (shipmentForRequest.status === 'cancelled') {
                                         return (
                                           <Button variant="destructive" size="sm" disabled>
                                             Cancelled
@@ -269,7 +268,7 @@ const DistributorRequests: React.FC = () => {
                                       );
                                     }
                                     // Only show Accept if status is pending
-                                    if (request.status === 'pending' && batch.quantity > 0) {
+                                    if (request.status === 'pending') {
                                       return (
                                         <Button variant="default" size="sm" onClick={() => handleAcceptClick(request)}>
                                           Accept

@@ -48,6 +48,7 @@ interface Shipment {
   shipment_type?: 'assigned' | 'destination' | 'assigned_no_destination' | 'other';
   manufacturer_company_name?: string;
   pharmacy_facility_name?: string;
+  qrcode_path?: string;
 }
 
 // --------------------
@@ -130,6 +131,37 @@ const isOverdue = (shipment: Shipment) => {
 // Main Component
 // --------------------
 const DistributorShipments = () => {
+  // Placeholder handler functions
+  const handleClaimShipment = (id: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    // TODO: Implement claim shipment logic
+    toast.info(`Claim shipment ${id}`);
+  };
+
+  const handleCancelShipment = (id: number) => {
+    // TODO: Implement cancel shipment logic
+    toast.info(`Cancel shipment ${id}`);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedShipment(null);
+  };
+
+  const handleUpdateShipment = () => {
+    // TODO: Implement update shipment logic
+    toast.info('Update shipment');
+    setModalOpen(false);
+    setSelectedShipment(null);
+  };
+  // Placeholder values for missing variables
+  const sidebarItems = [];
+  const userName = "Distributor";
+  const userEmail = "distributor@example.com";
+  const openModal = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setModalOpen(true);
+  };
   // Removed manufacturer dropdown API call and related state
   const { shipments, loading, error, refresh } = useShipments();
   const [search, setSearch] = useState('');
@@ -139,6 +171,9 @@ const DistributorShipments = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [updateFields, setUpdateFields] = useState({ status: '', temperature: '', received_condition: '', arrival_date: '', destination_facility: '' });
+  // QR Code modal state
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrCodePath, setQrCodePath] = useState<string | null>(null);
 
   // Create shipment modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -151,130 +186,23 @@ const DistributorShipments = () => {
     vehicle_number: '',
     quantity: '',
   });
-  const [createLoading, setCreateLoading] = useState(false);
-
-  // Handle create shipment
-  const handleCreateShipment = async () => {
-    setCreateLoading(true);
-    try {
-      await api.post('/api/distributor/shipments', createFields);
-      toast.success('Shipment created');
-      setCreateModalOpen(false);
-      setCreateFields({ batch_id: '', drug_id: '', shipment_type: 'in_transit', departure_date: '', route: '', vehicle_number: '', quantity: '' });
-      refresh();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create shipment');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
-  // Sidebar
-  const sidebarItems = [
-    { icon: Truck, label: 'Dashboard', path: '/distributor/dashboard', active: false },
-    { icon: Package, label: 'Shipments', path: '/distributor/shipments', active: true },
-    { icon: RotateCcw, label: 'Requests', path: '/distributor/requests', active: false },
-    { icon: FileText, label: 'Blockchain', path: '/distributor/blockchain', active: false },
-    { icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
-  ];
-
-  // Tab logic
-  const getTabShipments = () => {
-    // Always show all shipments
-    return Array.isArray(shipments) ? shipments : [];
-  };
-
-  // Filter logic
-  const filteredShipments = getTabShipments().filter(s => {
-    // Defensive: handle missing/null fields
-    const shipmentNum = (s.shipmentnumber || `SH-${s.id}`).toString().toLowerCase();
-    const drugName = (s.drugname || '').toString().toLowerCase();
-    const status = (s.status || '').toString().toLowerCase();
-    const matchesSearch = shipmentNum.includes(search.toLowerCase()) || drugName.includes(search.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
-
-  // Modal logic
-  const openModal = (shipment: Shipment) => {
-    setSelectedShipment(shipment);
-    setUpdateFields({
-      status: shipment.status,
-      temperature: shipment.temperature || '',
-      received_condition: shipment.received_condition || '',
-      arrival_date: shipment.arrival_date || '',
-      destination_facility: shipment.destination_facility || '',
-    });
-    setModalOpen(true);
-  };
-  const closeModal = () => {
-    setModalOpen(false);
-    setSelectedShipment(null);
-  };
-  const handleUpdateShipment = async () => {
-    if (!selectedShipment) return;
-    try {
-  await api.put(`/api/distributor/shipments/${selectedShipment.id}/status`, updateFields);
-      toast.success('Shipment updated');
-      closeModal();
-      refresh();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update shipment');
-    }
-  };
-
-  // Claim shipment logic
-  const handleClaimShipment = async (shipmentId: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    try {
-      await api.post(`/api/distributor/shipments/${shipmentId}/claim`);
-      toast.success('Shipment claimed successfully');
-      refresh();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to claim shipment');
-    }
-  };
-
-  // Cancel shipment handler
-  const handleCancelShipment = async (shipmentId: number) => {
-    try {
-      await api.put(`/api/distributor/shipments/${shipmentId}/status`, { status: 'cancelled' });
-      toast.success('Shipment cancelled');
-      refresh();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to cancel shipment');
-    }
-  };
-
-  // Stats
+  // Calculate stats
   const stats = {
     total: shipments.length,
-    assigned: shipments.filter(s => !isUnassigned(s)).length,
-    unassigned: shipments.filter(isUnassigned).length,
-    inTransit: shipments.filter(s => s.status.toLowerCase() === 'in transit').length,
-    pending: shipments.filter(s => s.status.toLowerCase() === 'pending').length,
-    delivered: shipments.filter(s => s.status.toLowerCase() === 'delivered').length,
+    assigned: shipments.filter(s => !!s.distributor_id).length,
+    unassigned: shipments.filter(s => !s.distributor_id).length,
+    inTransit: shipments.filter(s => s.status && s.status.toLowerCase() === 'in transit').length,
   };
 
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const userName = userData.fullName || "Distributor";
-  const userEmail = userData.email || "distributor@logistics.co.ke";
-
-  // Loading/Error
-  if (loading) return (
-    <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName={userName} userEmail={userEmail}>
-      <div className="flex items-center justify-center h-64"><Loader2 className="h-12 w-12 animate-spin text-blue-600" /></div>
-    </DashboardLayout>
-  );
-  if (error) return (
-    <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName={userName} userEmail={userEmail}>
-      <div className="flex flex-col items-center justify-center h-64 gap-2">
-        <AlertCircle className="h-12 w-12 text-red-500" />
-        <p className="text-red-500">{error}</p>
-        <Button onClick={refresh} variant="outline">Try Again</Button>
-      </div>
-    </DashboardLayout>
-  );
+  // Filter shipments
+  const filteredShipments = shipments.filter(s => {
+    const matchesSearch =
+      s.shipmentnumber?.toLowerCase().includes(search.toLowerCase()) ||
+      s.drugname?.toLowerCase().includes(search.toLowerCase()) ||
+      s.batchnumber?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || (s.status && s.status.toLowerCase() === filterStatus.toLowerCase());
+    return matchesSearch && matchesStatus;
+  });
 
   // Render
   return (
@@ -297,104 +225,128 @@ const DistributorShipments = () => {
             value={search} onChange={e => setSearch(e.target.value)}
           />
           <Button onClick={refresh} variant="outline" className="ml-2"><RefreshCw className="h-4 w-4 mr-1" />Refresh</Button>
-          {/* Removed manual create shipment button. Shipments only appear if created via accepted requests. */}
         </div>
-
-  {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card><CardContent className="p-4 flex justify-between items-center">
-            <div><p className="text-sm text-muted-foreground">Total</p><p className="text-2xl font-bold text-blue-600">{stats.total}</p></div>
-            <Truck className="h-8 w-8 text-blue-600"/>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 flex justify-between items-center">
-            <div><p className="text-sm text-muted-foreground">Assigned</p><p className="text-2xl font-bold text-green-600">{stats.assigned}</p></div>
-            <Package className="h-8 w-8 text-green-600"/>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 flex justify-between items-center">
-            <div><p className="text-sm text-muted-foreground">Unassigned</p><p className="text-2xl font-bold text-orange-600">{stats.unassigned}</p></div>
-            <Clock className="h-8 w-8 text-orange-600"/>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 flex justify-between items-center">
-            <div><p className="text-sm text-muted-foreground">In Transit</p><p className="text-2xl font-bold text-purple-600">{stats.inTransit}</p></div>
-            <Activity className="h-8 w-8 text-purple-600"/>
-          </CardContent></Card>
-        </div>
-
-  {/* Shipments Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Shipments</CardTitle>
-            <CardDescription>{filteredShipments.length ? "Click a shipment to update or claim it" : "No shipments found"}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {filteredShipments.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground"/>
-                <p className="text-muted-foreground">No shipments found</p>
+        {/* Stats and Table Wrapper */}
+        <div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <Card><CardContent className="p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex flex-col">
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+                </div>
+                <Truck className="h-8 w-8 text-blue-600"/>
               </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Shipment #</TableHead>
-                    <TableHead>Drug & Batch</TableHead>
-                    <TableHead>Manufacturer Company</TableHead>
-                    <TableHead>Pharmacy Facility</TableHead>
-                    <TableHead>Qty</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Progress</TableHead>
-                    <TableHead>Departure</TableHead>
-                    <TableHead>Arrival</TableHead>
-                    <TableHead>Condition/Notes</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredShipments.map(s => (
-                    <TableRow key={s.id} className={`cursor-pointer hover:bg-gray-50 transition-colors ${isUnassigned(s) ? "bg-orange-50 hover:bg-orange-100" : ""} ${isOverdue(s) ? "bg-red-50" : ""}`}>
-                      <TableCell>{s.shipmentnumber || `SH-${s.id}`}{isUnassigned(s) && <Badge className="bg-yellow-100 text-yellow-800 text-xs ml-1">Unclaimed</Badge>}</TableCell>
-                      <TableCell>
-                        <p className="font-medium">{s.drugname}</p>
-                        <p className="text-xs text-muted-foreground">Batch: {s.batchnumber}</p>
-                      </TableCell>
-                      <TableCell>{s.manufacturer_company_name}</TableCell>
-                      <TableCell>{s.pharmacy_facility_name}</TableCell>
-                      <TableCell>{s.quantity_shipped}</TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusColor(s.status)}>{getStatusDisplay(s.status)}</Badge>
-                        {isOverdue(s) && <Badge className="bg-red-100 text-red-800 ml-1">Overdue</Badge>}
-                      </TableCell>
-                      <TableCell>{getShipmentTypeBadge(s)}</TableCell>
-                      <TableCell>
-                        <Progress value={getProgressValue(s)} className="h-2" />
-                      </TableCell>
-                      <TableCell>{formatDate(s.departure_date)}</TableCell>
-                      <TableCell>{formatDate(s.arrival_date || '')}</TableCell>
-                      <TableCell>{s.received_condition || '-'}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openModal(s)}>
-                            <Edit className="h-4 w-4 mr-1" />Update
-                          </Button>
-                          {isUnassigned(s) && (
-                            <Button size="sm" variant="default" onClick={e => handleClaimShipment(s.id, e)}>
-                              Claim
-                            </Button>
-                          )}
-                          <Button size="sm" variant="destructive" onClick={() => handleCancelShipment(s.id)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </TableCell>
+            </CardContent></Card>
+            <Card><CardContent className="p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex flex-col">
+                  <p className="text-sm text-muted-foreground">Assigned</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.assigned}</p>
+                </div>
+                <Package className="h-8 w-8 text-green-600"/>
+              </div>
+            </CardContent></Card>
+            <Card><CardContent className="p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex flex-col">
+                  <p className="text-sm text-muted-foreground">Unassigned</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.unassigned}</p>
+                </div>
+                <Clock className="h-8 w-8 text-orange-600"/>
+              </div>
+            </CardContent></Card>
+            <Card><CardContent className="p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex flex-col">
+                  <p className="text-sm text-muted-foreground">In Transit</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.inTransit}</p>
+                </div>
+                <Activity className="h-8 w-8 text-purple-600"/>
+              </div>
+            </CardContent></Card>
+          </div>
+          {/* Shipments Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Shipments</CardTitle>
+              <CardDescription>{filteredShipments.length ? "Click a shipment to update or claim it" : "No shipments found"}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {filteredShipments.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground"/>
+                  <p className="text-muted-foreground">No shipments found</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Shipment #</TableHead>
+                      <TableHead>Drug & Batch</TableHead>
+                      <TableHead>Manufacturer Company</TableHead>
+                      <TableHead>Pharmacy Facility</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead>Departure</TableHead>
+                      <TableHead>Arrival</TableHead>
+                      <TableHead>Condition/Notes</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
+                  </TableHeader>
+                  <TableBody>
+                    {filteredShipments.map(s => (
+                      <TableRow key={s.id} className={`cursor-pointer hover:bg-gray-50 transition-colors ${isUnassigned(s) ? "bg-orange-50 hover:bg-orange-100" : ""} ${isOverdue(s) ? "bg-red-50" : ""}`}>
+                        <TableCell>{s.shipmentnumber || `SH-${s.id}`}{isUnassigned(s) && <Badge className="bg-yellow-100 text-yellow-800 text-xs ml-1">Unclaimed</Badge>}</TableCell>
+                        <TableCell>
+                          <p className="font-medium">{s.drugname}</p>
+                          <p className="text-xs text-muted-foreground">Batch: {s.batchnumber}</p>
+                        </TableCell>
+                        <TableCell>{s.manufacturer_company_name}</TableCell>
+                        <TableCell>{s.pharmacy_facility_name || s.destination_facility}</TableCell>
+                        <TableCell>{s.quantity_shipped}</TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(s.status)}>{getStatusDisplay(s.status)}</Badge>
+                          {isOverdue(s) && <Badge className="bg-red-100 text-red-800 ml-1">Overdue</Badge>}
+                        </TableCell>
+                        <TableCell>{getShipmentTypeBadge(s)}</TableCell>
+                        <TableCell>
+                          <Progress value={getProgressValue(s)} className="h-2" />
+                        </TableCell>
+                        <TableCell>{formatDate(s.departure_date)}</TableCell>
+                        <TableCell>{formatDate(s.arrival_date || '')}</TableCell>
+                        <TableCell>{s.received_condition || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => openModal(s)}>
+                              <Edit className="h-4 w-4 mr-1" />Update
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => {
+                              setQrCodePath(s.qrcode_path || null);
+                              setQrModalOpen(true);
+                            }} disabled={!s.qrcode_path}>
+                              QR Code
+                            </Button>
+                            {isUnassigned(s) && (
+                              <Button size="sm" variant="default" onClick={e => handleClaimShipment(s.id, e)}>
+                                Claim
+                              </Button>
+                            )}
+                            <Button size="sm" variant="destructive" onClick={() => handleCancelShipment(s.id)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
         {/* Update Modal */}
         {modalOpen && selectedShipment && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -423,8 +375,19 @@ const DistributorShipments = () => {
             </div>
           </div>
         )}
-
-        {/* Removed Create Shipment Modal. Shipments are only created via accepted requests. */}
+        {/* QR Code Modal */}
+        {qrModalOpen && qrCodePath && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+              <button className="absolute top-2 right-2 text-gray-500" onClick={() => setQrModalOpen(false)}>&times;</button>
+              <h2 className="text-xl font-bold mb-4">Shipment QR Code</h2>
+              <div className="flex flex-col items-center gap-4">
+                <img src={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} alt="Shipment QR Code" className="w-64 h-64 object-contain border" />
+                <a href={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Open Full Size</a>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

@@ -73,12 +73,12 @@ async function getManufacturerShipments(manufacturerId) {
       s.qrcode, 
       s.shipment_type,
       ph.name AS destination_pharmacy,
-      s.destination_facility_id
+  -- Removed destination_facility_id
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
     JOIN drug d ON d.id = s.drug_id
     LEFT JOIN distributor_company dc ON dc.id = db.distributorcompanyid
-    LEFT JOIN pharmacy_company ph ON ph.id = s.destination_facility_id
+  -- Removed join on destination_facility_id
     WHERE s.manufacturer_id = $1
     ORDER BY s.id DESC
   `, [manufacturerId])).rows;
@@ -104,7 +104,7 @@ async function getManufacturerShipmentDetails(manufacturerId, shipmentId) {
     JOIN drug d ON d.id = s.drug_id
     LEFT JOIN distributor_company dc ON dc.id = db.distributorcompanyid
     LEFT JOIN manufacturer_company mc ON mc.id = s.manufacturer_id
-    LEFT JOIN pharmacy_company ph ON ph.id = s.destination_facility_id
+  -- Removed join on destination_facility_id
     WHERE s.manufacturer_id = $1 AND s.id = $2
     LIMIT 1
   `, [manufacturerId, shipmentId]);
@@ -114,7 +114,7 @@ async function getManufacturerShipmentDetails(manufacturerId, shipmentId) {
 
 async function createManufacturerShipment(manufacturerId, data) {
   // Validate required fields
-  const { batch_id, drug_id, distributor_id, shipment_type, departure_date, arrival_date, route, vehicle_number, temperature, destination_facility_id, quantity_shipped } = data;
+  const { batch_id, drug_id, distributor_id, shipment_type, departure_date, arrival_date, route, vehicle_number, temperature, quantity_shipped } = data;
   if (!batch_id || !drug_id || !distributor_id || !shipment_type || !departure_date || !route || !vehicle_number || !quantity_shipped) {
     throw new Error('Missing required shipment fields');
   }
@@ -136,9 +136,9 @@ async function createManufacturerShipment(manufacturerId, data) {
   // Insert shipment
   const insertResult = await query(`
     INSERT INTO shipment (
-      manufacturer_id, batch_id, drug_id, distributor_id, shipmentnumber, shipment_type, departure_date, arrival_date, route, vehicle_number, temperature, qrcode, destination_facility_id, quantity_shipped, status
+  manufacturer_id, batch_id, drug_id, distributor_id, shipmentnumber, shipment_type, departure_date, arrival_date, route, vehicle_number, temperature, qrcode, quantity_shipped, status
     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending')
-    RETURNING id, shipmentnumber, status, departure_date, arrival_date, route, vehicle_number, temperature, qrcode, shipment_type, destination_facility_id, quantity_shipped
+  RETURNING id, shipmentnumber, status, departure_date, arrival_date, route, vehicle_number, temperature, qrcode, shipment_type, quantity_shipped
   `, [
     manufacturerId,
     batch_id,
@@ -152,8 +152,7 @@ async function createManufacturerShipment(manufacturerId, data) {
     vehicle_number,
     temperature || null,
     qrcode,
-    destination_facility_id || null,
-    quantity_shipped
+  quantity_shipped
   ]);
 
   return insertResult.rows[0];
@@ -254,8 +253,7 @@ async function getManufacturerAnalytics(manufacturerId) {
         ) as facility_location,
         COUNT(s.id) as count
       FROM shipment s
-      LEFT JOIN facility f ON s.destination_facility_id = f.id
-      LEFT JOIN pharmacy_company pc ON s.destination_facility_id = pc.id
+  -- Removed joins on destination_facility_id
       LEFT JOIN distributor_company dc ON s.distributor_id = dc.id
       WHERE s.manufacturer_id = $1
       GROUP BY f.location, pc.name, dc.name
@@ -454,7 +452,6 @@ async function getManufacturerBatches(manufacturerId, filters = {}) {
       db.quantity,
       db.manufacturedate,
       db.expirydate,
-      db.status,
       db.blockchaintx,
       db.qrcode_path,
       db.storagetemperature,
