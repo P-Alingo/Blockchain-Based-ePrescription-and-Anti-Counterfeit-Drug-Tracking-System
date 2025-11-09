@@ -158,11 +158,23 @@ const DistributorShipments = () => {
     setSelectedShipment(null);
   };
 
-  const handleUpdateShipment = () => {
-    // TODO: Implement update shipment logic
-    toast.info('Update shipment');
-    setModalOpen(false);
-    setSelectedShipment(null);
+  const handleUpdateShipment = async () => {
+    if (!selectedShipment) return;
+    try {
+      // Prepare payload for backend
+      const payload = {
+        status: updateFields.status,
+        arrival_date: updateFields.arrival_date,
+        received_condition: updateFields.received_condition
+      };
+      await api.put(`/api/distributor/shipments/${selectedShipment.id}/status`, payload);
+      toast.success('Shipment updated successfully');
+      setModalOpen(false);
+      setSelectedShipment(null);
+      refresh();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update shipment');
+    }
   };
   // Use the correct sidebar items for distributor
   const sidebarItems = [

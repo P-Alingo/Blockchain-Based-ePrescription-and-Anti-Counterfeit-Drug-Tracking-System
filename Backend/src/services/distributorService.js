@@ -228,43 +228,36 @@ async function updateDistributorShipmentStatus(distributorId, shipmentId, status
   const batch_id = shipRes.rows[0]?.batch_id;
   const pharmacist_id = shipRes.rows[0]?.pharmacist_id;
   const quantity_shipped = shipRes.rows[0]?.quantity_shipped || 0;
-  if (batch_id && pharmacist_id) {
-    let requestStatus = null;
-    if (status === 'delivered') {
-      requestStatus = 'delivered';
-      // Update pharmacy inventory
-      const pharmRes = await query('SELECT companyid FROM pharmacist WHERE id = $1', [pharmacist_id]);
-      const pharmacyCompanyId = pharmRes.rows[0]?.companyid;
-      if (pharmacyCompanyId) {
-        const facilityRes = await query('SELECT facility_id FROM pharmacy_company WHERE id = $1', [pharmacyCompanyId]);
-        const pharmacyFacilityId = facilityRes.rows[0]?.facility_id;
-        if (pharmacyFacilityId) {
-          // Check if inventory row exists
-          const invRes = await query('SELECT id FROM inventory WHERE batch_id = $1 AND facility_type = $2 AND facility_id = $3', [batch_id, 'pharmacy', pharmacyFacilityId]);
-          if (invRes.rows.length > 0) {
-            // Update only available_quantity in the existing inventory row
-            await query('UPDATE inventory SET available_quantity = available_quantity + $1, last_updated = CURRENT_TIMESTAMP WHERE id = $2', [quantity_shipped, invRes.rows[0].id]);
-          } else {
-            // Insert new inventory row only if it does not exist, and include drug_id
-            const batchRes = await query('SELECT drugid FROM drugbatch WHERE id = $1', [batch_id]);
-            const drug_id = batchRes.rows[0]?.drugid;
-            await query('INSERT INTO inventory (batch_id, drug_id, available_quantity, facility_type, facility_id, last_updated) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)', [batch_id, drug_id, quantity_shipped, 'pharmacy', pharmacyFacilityId]);
+    if (batch_id && pharmacist_id) {
+      // Only update batch_request status for valid request_status enums
+      // If your request_status enum only allows 'pending', 'approved', 'rejected', skip updating to shipment status values
+      // If you want to update batch_request status, map shipment status to valid request_status
+      // Otherwise, skip this update to avoid enum errors
+      if (status === 'delivered') {
+        // Update pharmacy inventory only, do not update batch_request status
+        const pharmRes = await query('SELECT companyid FROM pharmacist WHERE id = $1', [pharmacist_id]);
+        const pharmacyCompanyId = pharmRes.rows[0]?.companyid;
+        if (pharmacyCompanyId) {
+          const facilityRes = await query('SELECT facility_id FROM pharmacy_company WHERE id = $1', [pharmacyCompanyId]);
+          const pharmacyFacilityId = facilityRes.rows[0]?.facility_id;
+          if (pharmacyFacilityId) {
+            // Check if inventory row exists
+            const invRes = await query('SELECT id FROM inventory WHERE batch_id = $1 AND facility_type = $2 AND facility_id = $3', [batch_id, 'pharmacy', pharmacyFacilityId]);
+            if (invRes.rows.length > 0) {
+              // Update only available_quantity in the existing inventory row
+              await query('UPDATE inventory SET available_quantity = available_quantity + $1, last_updated = CURRENT_TIMESTAMP WHERE id = $2', [quantity_shipped, invRes.rows[0].id]);
+            } else {
+              // Insert new inventory row only if it does not exist, and include drug_id
+              const batchRes = await query('SELECT drugid FROM drugbatch WHERE id = $1', [batch_id]);
+              const drug_id = batchRes.rows[0]?.drugid;
+              await query('INSERT INTO inventory (batch_id, drug_id, available_quantity, facility_type, facility_id, last_updated) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)', [batch_id, drug_id, quantity_shipped, 'pharmacy', pharmacyFacilityId]);
+            }
           }
         }
       }
-    } else if (status === 'failed') {
-      requestStatus = 'failed';
-    } else if (status === 'flagged') {
-      requestStatus = 'flagged';
-    } else if (status === 'cancelled') {
-      requestStatus = 'cancelled';
-    } else if (status === 'in_transit') {
-      requestStatus = 'in_transit';
+      // For 'failed' and 'flagged', only update batch_request if those are valid request_status enums
+      // Remove invalid enum updates to avoid errors
     }
-    if (requestStatus) {
-      await query('UPDATE batch_request SET status = $1 WHERE batch_id = $2 AND pharmacist_id = $3', [requestStatus, batch_id, pharmacist_id]);
-    }
-  }
   return true;
 }
 

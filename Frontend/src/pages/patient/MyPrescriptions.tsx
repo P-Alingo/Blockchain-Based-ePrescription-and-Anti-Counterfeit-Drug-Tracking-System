@@ -37,6 +37,7 @@ interface Prescription {
   instructions?: string;
   validUntil?: string;
   frequency?: string;
+  quantity?: number;
 }
 
 const MyPrescriptions = () => {
@@ -216,8 +217,9 @@ const MyPrescriptions = () => {
     <tr key={p.prescriptionNo} className="border-t hover:bg-gray-50">
       <td className="px-4 py-3 font-mono text-sm">{p.prescriptionNo}</td>
       <td className="px-4 py-3">{p.doctorName}</td>
-  <td className="px-4 py-3">{dayjs(p.date).isValid() ? dayjs(p.date).format("DD MMM YYYY") : "-"}</td>
+      <td className="px-4 py-3">{dayjs(p.date).isValid() ? dayjs(p.date).format("DD MMM YYYY") : "-"}</td>
       <td className="px-4 py-3">{p.drug}</td>
+      <td className="px-4 py-3">{typeof p.quantity !== 'undefined' ? p.quantity : '-'}</td>
       <td className="px-4 py-3">
         <Badge variant={
           p.status.toLowerCase() === "issued" ? "secondary" :
@@ -522,6 +524,8 @@ const MyPrescriptions = () => {
                   <div><strong>Duration:</strong> {modalPrescription.duration ? `${modalPrescription.duration} days` : "-"}</div>
                   <div><strong>Instructions:</strong> {modalPrescription.instructions}</div>
                   <div><strong>Hospital:</strong> {modalPrescription.hospital}</div>
+                  <div><strong>Quantity:</strong> {typeof modalPrescription.quantity !== 'undefined' ? modalPrescription.quantity : '-'}
+                  </div>
                 </div>
               ) : null}
               <div className="mt-4 flex justify-end">

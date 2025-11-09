@@ -76,8 +76,10 @@ export async function verifyPrescription(req, res, next) {
 
 export async function dispenseDrug(req, res, next) {
   try {
+    const userId = req.user.id;
     const { prescriptionId, patientId, drugId, quantity } = req.body;
-    const result = await pharmacistService.dispenseDrug(prescriptionId, patientId, drugId, quantity);
+    // Pass userId as pharmacistId to service
+    const result = await pharmacistService.dispenseDrug(prescriptionId, userId, drugId, quantity);
     res.json(result);
   } catch (error) { next(error); }
 }

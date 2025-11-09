@@ -35,9 +35,10 @@ export async function createPrescription({
   instructions,
   issueDate,
   validUntil,
+  quantity,
 }) {
   if (!doctorId || !patientId || !drugId) throw new Error("doctorId, patientId, and drugId are required");
-  if (!dosageAmount || !dosageUnit || !frequency || !duration || !issueDate || !validUntil) {
+  if (!dosageAmount || !dosageUnit || !frequency || !duration || !issueDate || !validUntil || !quantity) {
     throw new Error("Missing required fields for prescription");
   }
   dosageAmount = dosageAmount.trim();
@@ -45,7 +46,9 @@ export async function createPrescription({
   frequency = frequency.trim();
   instructions = instructions?.trim() || "";
   duration = Number(duration);
+  quantity = Number(quantity);
   if (isNaN(duration)) throw new Error("Duration must be a number");
+  if (isNaN(quantity)) throw new Error("Quantity must be a number");
   const today = new Date();
   const issueDateObj = new Date(issueDate);
   const validUntilObj = new Date(validUntil);
@@ -57,8 +60,8 @@ export async function createPrescription({
   const prescriptionCode = `PRESC-${Math.floor(100000 + Math.random() * 900000)}`;
   const insertText = `
     INSERT INTO prescription
-      (patient_id, doctor_id, drug_id, issue_date, valid_until, status, instructions, prescription_code, dosage_amount, dosage_unit, frequency, duration)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      (patient_id, doctor_id, drug_id, issue_date, valid_until, status, instructions, prescription_code, dosage_amount, dosage_unit, frequency, duration, quantity)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
     RETURNING *;
   `;
   const insertValues = [
@@ -74,6 +77,7 @@ export async function createPrescription({
     dosageUnit,
     frequency,
     duration,
+    quantity,
   ];
   const insertResult = await query(insertText, insertValues);
   const prescriptionId = insertResult.rows[0].id;
@@ -93,7 +97,8 @@ export async function createPrescription({
        p.issue_date, 
        p.valid_until, 
        p.status,
-       p.prescription_code
+       p.prescription_code,
+       p.quantity
      FROM prescription p
      JOIN patient pt ON pt.id = p.patient_id
      JOIN users u ON u.id = pt.userid

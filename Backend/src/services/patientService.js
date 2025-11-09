@@ -129,7 +129,8 @@ async function fetchPatientPrescriptions(userId, status) {
     hospital: p.hospital,
     dosage: p.dosage_amount ? `${p.dosage_amount} ${p.dosage_unit || p.drug_dosage_unit || 'mg'}` : 'N/A',
     duration: p.duration ? `${p.duration} days` : 'N/A',
-    instructions: p.instructions || 'Take as directed'
+    instructions: p.instructions || 'Take as directed',
+    quantity: p.quantity
   }));
 }
 // Get single prescription details
@@ -181,6 +182,7 @@ async function fetchPrescriptionDetailsByNo(prescriptionNo) {
     duration: p.duration || '',
     instructions: p.instructions || '',
     validUntil: p.valid_until,
+    quantity: p.quantity
   };
 }
 

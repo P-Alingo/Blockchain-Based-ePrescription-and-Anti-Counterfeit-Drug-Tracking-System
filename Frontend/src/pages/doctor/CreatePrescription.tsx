@@ -29,6 +29,7 @@ const CreatePrescription = () => {
     instructions: "",
     issueDate: "",
     validUntil: "",
+    quantity: "" // New field for quantity
   });
 
   const [patientSearch, setPatientSearch] = useState("");
@@ -139,6 +140,7 @@ const CreatePrescription = () => {
           instructions: formData.instructions.trim(),
           issueDate: formData.issueDate,
           validUntil: formData.validUntil,
+          quantity: Number(formData.quantity) // Pass quantity to backend
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -157,6 +159,7 @@ const CreatePrescription = () => {
         instructions: "",
         issueDate: "",
         validUntil: "",
+        quantity: ""
       });
       setPatientSearch("");
       setDrugSearch("");
@@ -250,7 +253,7 @@ const CreatePrescription = () => {
                   </div>
                 )}
 
-                <div className="grid md:grid-cols-4 gap-4">
+                <div className="grid md:grid-cols-5 gap-4">
                   <div>
                     <Label htmlFor="dosageAmount">Dosage Amount</Label>
                     <Input
@@ -291,6 +294,16 @@ const CreatePrescription = () => {
                       placeholder="e.g., 7"
                       value={formData.duration}
                       onChange={(e) => handleChange("duration", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      placeholder="e.g., 5"
+                      value={formData.quantity}
+                      onChange={(e) => handleChange("quantity", e.target.value)}
                     />
                   </div>
                 </div>

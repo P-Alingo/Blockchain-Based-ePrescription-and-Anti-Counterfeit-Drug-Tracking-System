@@ -40,18 +40,19 @@ const MyPrescriptions: React.FC = () => {
 	const [searchTerm, setSearchTerm] = useState("");
 	const navigate = useNavigate();
 
+	// Fetch prescriptions function for refresh and initial load
+	const fetchPrescriptions = async () => {
+		setLoading(true);
+		try {
+			const res = await api.get<any[]>("/api/pharmacist/prescriptions");
+			setPrescriptions(res.data as any[]);
+		} catch (err) {
+			setError(err?.response?.data?.message || err.message || "Failed to fetch prescriptions");
+		} finally {
+			setLoading(false);
+		}
+	};
 	useEffect(() => {
-		const fetchPrescriptions = async () => {
-			setLoading(true);
-			try {
-				const res = await api.get<any[]>("/api/pharmacist/prescriptions");
-				setPrescriptions(res.data as any[]);
-			} catch (err) {
-				setError(err?.response?.data?.message || err.message || "Failed to fetch prescriptions");
-			} finally {
-				setLoading(false);
-			}
-		};
 		fetchPrescriptions();
 	}, []);
 
@@ -106,11 +107,18 @@ const MyPrescriptions: React.FC = () => {
 	return (
 		<DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist">
 			<div className="p-6">
+				<div className="flex items-center mb-4 gap-2">
+					<Tabs value={activeTab} onValueChange={setActiveTab}>
+						<TabsList>
+							<TabsTrigger value="all">All Prescription</TabsTrigger>
+							<TabsTrigger value="dispensed">Dispensed Prescription</TabsTrigger>
+						</TabsList>
+					</Tabs>
+					<Button variant="outline" size="sm" onClick={fetchPrescriptions} disabled={loading}>
+						Refresh
+					</Button>
+				</div>
 				<Tabs value={activeTab} onValueChange={setActiveTab}>
-					<TabsList>
-						<TabsTrigger value="all">All Prescription</TabsTrigger>
-						<TabsTrigger value="dispensed">Dispensed Prescription</TabsTrigger>
-					</TabsList>
 					<TabsContent value="all">
 						<Card>
 							<CardHeader>
@@ -137,6 +145,7 @@ const MyPrescriptions: React.FC = () => {
 													<th>Doctor</th>
 													<th>Drug</th>
 													<th>Status</th>
+                                                <th>Quantity</th>
 													<th>Issue Date</th>
 													<th>Expiry Date</th>
 													<th>Action</th>
@@ -150,6 +159,7 @@ const MyPrescriptions: React.FC = () => {
 														<td>{p.doctor_name || p.doctorName}</td>
 														<td>{p.drug_name || p.drug}</td>
 														<td>{p.status}</td>
+                                                    <td>{p.quantity}</td>
 														<td>{formatDate(p.issue_date || p.issueDate)}</td>
 														<td>{formatDate(p.expiry_date || p.validUntil)}</td>
 														<td className="space-x-2">
@@ -198,6 +208,7 @@ const MyPrescriptions: React.FC = () => {
 											<th>Doctor</th>
 											<th>Drug</th>
 											<th>Status</th>
+                                        <th>Quantity</th>
 											<th>Issue Date</th>
 											<th>Expiry Date</th>
 										</tr>
@@ -215,6 +226,7 @@ const MyPrescriptions: React.FC = () => {
 												<td>{p.doctor_name || p.doctorName}</td>
 												<td>{p.drug_name || p.drug}</td>
 												<td>{p.status}</td>
+                                            <td>{p.quantity}</td>
 												<td>{formatDate(p.issue_date || p.issueDate)}</td>
 												<td>{formatDate(p.expiry_date || p.validUntil)}</td>
 											</tr>

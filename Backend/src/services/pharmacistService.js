@@ -12,7 +12,8 @@ export async function getPharmacistPrescriptions() {
     SELECT p.id, p.prescription_code, p.status, p.issue_date, p.valid_until, p.dosage_amount, p.dosage_unit, p.frequency, p.duration, p.instructions,
       pa.id as patient_id, u.full_name as patient_name,
       d.id as doctor_id, du.full_name as doctor_name,
-      dr.id as drug_id, dr.name as drug_name
+      dr.id as drug_id, dr.name as drug_name,
+      p.quantity
     FROM prescription p
     LEFT JOIN patient pa ON p.patient_id = pa.id
     LEFT JOIN users u ON pa.userid = u.id
@@ -40,7 +41,7 @@ export async function getPharmacistPrescriptions() {
     doctorName: p.doctor_name,
     drugId: p.drug_id,
     drug: p.drug_name,
-    quantity: 1 // Placeholder, update if you have quantity field
+    quantity: p.quantity // Use real quantity from prescription table
   }));
 }
 import { query } from "../config/database.js";
@@ -214,22 +215,19 @@ export async function verifyPrescription(qrCode) {
 };
 }
 
-export async function dispenseDrug(prescriptionId, patientId, drugId, quantity) {
+// Only export the correct dispenseDrug function
+export async function dispenseDrug(prescriptionId, pharmacistUserId, drugId, quantity) {
   // Get prescription details
   const presRes = await query("SELECT * FROM prescription WHERE id = $1", [prescriptionId]);
   const prescription = presRes.rows[0];
-  if (!prescription) throw new Error("Prescription not found");
+  if (!prescription) throw new Error('Prescription not found');
   // Check if prescription is expired
   const nowDate = new Date();
-  if (prescription.valid_until && new Date(prescription.valid_until) < nowDate) {
-    throw new Error("Prescription is expired. Dispensing not allowed.");
-  }
-  // Check inventory for the drug
-  // Find inventory record for this drug (by drugId and pharmacist's facility)
-  // First, get pharmacist by patientId (should be pharmacistId, but keeping signature)
-  const pharmacistRes = await query("SELECT * FROM pharmacist WHERE id = $1", [patientId]);
+  if (prescription.valid_until && new Date(prescription.valid_until) < nowDate) throw new Error('Prescription is expired');
+  // Get pharmacist by userId
+  const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [pharmacistUserId]);
   const pharmacist = pharmacistRes.rows[0];
-  if (!pharmacist) throw new Error("Pharmacist not found");
+  if (!pharmacist) throw new Error('Pharmacist not found');
   // Get facility id
   const facilityId = pharmacist.companyid;
   // Find inventory for this drug in this facility
@@ -239,14 +237,26 @@ export async function dispenseDrug(prescriptionId, patientId, drugId, quantity) 
   );
   let totalAvailable = 0;
   for (const inv of invRes.rows) {
-    qtyToDeduct -= deduct;
+    totalAvailable += inv.available_quantity;
   }
+  if (totalAvailable < quantity) throw new Error('Insufficient inventory for this drug');
   // Update prescription status to 'dispensed', set dispensed_by and dispensed_date
   const now = new Date();
   await query(
     `UPDATE prescription SET status = 'dispensed', dispensed_by = $1, dispensed_date = $2 WHERE id = $3 RETURNING *`,
-    [patientId, now, prescriptionId]
+    [pharmacist.id, now, prescriptionId]
   );
+  // Deduct quantity from inventory
+  let qtyToDeduct = quantity;
+  for (const inv of invRes.rows) {
+    if (qtyToDeduct <= 0) break;
+    const deduct = Math.min(inv.available_quantity, qtyToDeduct);
+    await query(
+      `UPDATE inventory SET available_quantity = available_quantity - $1 WHERE id = $2`,
+      [deduct, inv.id]
+    );
+    qtyToDeduct -= deduct;
+  }
   // Return updated prescription
   const { rows } = await query(`SELECT * FROM prescription WHERE id = $1`, [prescriptionId]);
   return rows[0] || {};
