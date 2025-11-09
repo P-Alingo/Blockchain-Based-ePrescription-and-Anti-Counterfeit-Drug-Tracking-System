@@ -21,7 +21,6 @@ const DistributorDashboard = () => {
     pendingRequests: 0
   });
   const [activeShipments, setActiveShipments] = useState([]);
-  const [deliveryRoutes, setDeliveryRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -41,18 +40,6 @@ const DistributorDashboard = () => {
         if (!shipmentsRes.ok) throw new Error('Failed to fetch shipments');
         const shipmentsData = await shipmentsRes.json();
         setActiveShipments(Array.isArray(shipmentsData) ? shipmentsData : shipmentsData.shipments || []);
-        // Fetch delivery routes (if endpoint exists)
-        try {
-          const routesRes = await fetch('http://localhost:4000/api/distributor/delivery-routes', { headers });
-          if (routesRes.ok) {
-            const routesData = await routesRes.json();
-            setDeliveryRoutes(Array.isArray(routesData) ? routesData : routesData.routes || []);
-          } else {
-            setDeliveryRoutes([]); // No route data
-          }
-        } catch {
-          setDeliveryRoutes([]); // No route data
-        }
         setError(null);
       } catch (err) {
         setError(err.message || 'Failed to load dashboard data');
@@ -140,30 +127,6 @@ const DistributorDashboard = () => {
                         {shipment.status}
                       </Badge>
                       <p className="text-xs text-muted-foreground">ETA: {shipment.eta || 'N/A'}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Delivery Routes</CardTitle>
-              <CardDescription>Route progress and fleet allocation</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {deliveryRoutes.length === 0 ? (
-                <div className="text-center py-8">No route data</div>
-              ) : (
-                deliveryRoutes.map((route) => (
-                  <div key={route.route} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>{route.route}</span>
-                      <span>{route.vehicles} vehicles</span>
-                    </div>
-                    <Progress value={route.progress} className="h-2" />
-                    <div className="text-xs text-muted-foreground">
-                      {route.progress}% complete
                     </div>
                   </div>
                 ))

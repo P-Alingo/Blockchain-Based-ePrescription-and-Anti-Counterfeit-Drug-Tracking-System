@@ -305,13 +305,15 @@ async function getDistributorBlockchain(distributorId) {
 
 // Analytics
 async function getDistributorAnalytics(distributorId) {
-  // Shipments per region
+  // Shipments per region (fix: join facility table via pharmacy_facility_id)
   const shipmentsPerRegion = await query(`
-    SELECT f.name AS region, COUNT(*) AS count
+    SELECT pf.name AS region, COUNT(*) AS count
     FROM shipment s
-  -- Removed join on destination_facility_id
+    LEFT JOIN pharmacist p ON s.pharmacist_id = p.id
+    LEFT JOIN pharmacy_company pc ON p.companyid = pc.id
+    LEFT JOIN facility pf ON pc.facility_id = pf.id
     WHERE s.distributor_id = $1
-    GROUP BY f.name
+    GROUP BY pf.name
     ORDER BY count DESC
   `, [distributorId]);
 
@@ -331,12 +333,14 @@ async function getDistributorAnalytics(distributorId) {
     ORDER BY shipment_count DESC
   `, [distributorId]);
 
-  // Downloadable logistics report (return raw data)
+  // Downloadable logistics report (fix: join facility table via pharmacy_facility_id)
   const logisticsReport = await query(`
-    SELECT s.*, db.batchnumber, db.drugid, f.name AS facility
+    SELECT s.*, db.batchnumber, db.drugid, pf.name AS facility
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
-  -- Removed join on destination_facility_id
+    LEFT JOIN pharmacist p ON s.pharmacist_id = p.id
+    LEFT JOIN pharmacy_company pc ON p.companyid = pc.id
+    LEFT JOIN facility pf ON pc.facility_id = pf.id
     WHERE s.distributor_id = $1
     ORDER BY s.departure_date DESC
   `, [distributorId]);

@@ -9,7 +9,6 @@ const PharmacistBlockchain = () => {
   { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
   { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: true },
   { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
-  { icon: PillBottle, label: "Dispense Drug", path: "/pharmacist/dispense", active: false },
   { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
   { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
   { icon: Package, label: "Shipments", path: "/pharmacist/shipments", active: false },

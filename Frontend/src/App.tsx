@@ -24,7 +24,6 @@ import PatientAnalytics from "./pages/patient/Analytics";
 
 // Pharmacist Dashboard Pages
 import PharmacistDashboard from "./pages/pharmacist/Dashboard";
-import DispenseDrug from "./pages/pharmacist/DispenseDrug";
 import InventoryAndRequests from "./pages/pharmacist/InventoryAndRequests";
 import PharmacistAnalytics from "./pages/pharmacist/Analytics";
 import PharmacistBlockchain from "./pages/pharmacist/Blockchain";
@@ -194,7 +193,6 @@ const App = () => {
             {/* Pharmacist Routes */}
             <Route path="/pharmacist/dashboard" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistDashboard /></ProtectedRoute>} />
             <Route path="/pharmacist/myprescriptions" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistPrescriptions /></ProtectedRoute>} />
-            <Route path="/pharmacist/dispense" element={<ProtectedRoute allowedRoles={["pharmacist"]}><DispenseDrug /></ProtectedRoute>} />
             <Route path="/pharmacist/inventory-requests" element={<ProtectedRoute allowedRoles={["pharmacist"]}><InventoryAndRequests /></ProtectedRoute>} />
             <Route path="/pharmacist/analytics" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistAnalytics /></ProtectedRoute>} />
             <Route path="/pharmacist/blockchain" element={<ProtectedRoute allowedRoles={["pharmacist"]}><PharmacistBlockchain /></ProtectedRoute>} />

@@ -1,6 +1,7 @@
-import { confirmPharmacistDelivery } from "../controllers/pharmacistController.js";
+
 import express from "express";
 import {
+	confirmPharmacistDelivery,
 	getPharmacistProfile,
 	updatePharmacistProfile,
 	getPharmacistDashboard,
@@ -18,7 +19,8 @@ import {
 	getPharmacistAnalytics,
 	getPharmacistPrescriptions,
 	deletePharmacistRequest,
-	getPharmacistDrugBatches
+	getPharmacistDrugBatches,
+	expirePharmacistPrescription
 } from "../controllers/pharmacistController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -26,7 +28,9 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = express.Router();
 router.use(authMiddleware);
 // Pharmacist confirms delivery of shipment
+
 router.post("/shipments/confirm-delivery", authMiddleware, confirmPharmacistDelivery);
+
 
 router.get("/profile", getPharmacistProfile);
 router.put("/profile", updatePharmacistProfile);
@@ -34,6 +38,9 @@ router.put("/profile", updatePharmacistProfile);
 router.get("/dashboard", getPharmacistDashboard);
 router.post("/verify", verifyPrescription);
 router.post("/dispense", dispenseDrug);
+
+// Expire prescription
+router.put("/prescriptions/:id/expire", expirePharmacistPrescription);
 
 router.get("/prescriptions", getPharmacistPrescriptions);
 

@@ -21,6 +21,8 @@ api.interceptors.request.use(config => {
   return config;
 });
 
+
+
 // --------------------
 // Types
 // --------------------
@@ -58,6 +60,14 @@ const useShipments = () => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const sidebarItems = [
+    { icon: List, label: 'Dashboard', path: '/distributor/dashboard', active: false },
+    { icon: Truck, label: 'Shipments', path: '/distributor/shipments', active: false },
+    { icon: Package, label: 'Requests', path: '/distributor/requests', active: true },
+    { icon: RotateCcw, label: 'Blockchain', path: '/distributor/blockchain', active: false },
+    { icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
+  ];
 
   const loadShipments = async () => {
     try {
@@ -154,8 +164,14 @@ const DistributorShipments = () => {
     setModalOpen(false);
     setSelectedShipment(null);
   };
-  // Placeholder values for missing variables
-  const sidebarItems = [];
+  // Use the correct sidebar items for distributor
+  const sidebarItems = [
+    { icon: List, label: 'Dashboard', path: '/distributor/dashboard', active: false },
+    { icon: Truck, label: 'Shipments', path: '/distributor/shipments', active: true },
+    { icon: Package, label: 'Requests', path: '/distributor/requests', active: false },
+    { icon: RotateCcw, label: 'Blockchain', path: '/distributor/blockchain', active: false },
+    { icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
+  ];
   const userName = "Distributor";
   const userEmail = "distributor@example.com";
   const openModal = (shipment: Shipment) => {

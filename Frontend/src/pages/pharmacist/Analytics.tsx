@@ -13,7 +13,6 @@ const sidebarItems = [
   { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
   { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
   { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: true },
-  { icon: PillBottle, label: "Dispense Drug", path: "/pharmacist/dispense", active: false },
   { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
   { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
   { icon: Package, label: "Shipments", path: "/pharmacist/shipments", active: false },
@@ -24,32 +23,40 @@ const sidebarItems = [
   const [timeFilter, setTimeFilter] = useState("today");
   const [analyticsLogs, setAnalyticsLogs] = useState([]);
   const [analyticsStats, setAnalyticsStats] = useState({
-    totalDispensed: 0,
-    totalVerified: 0,
-    inventoryUpdates: 0,
-    failedDispenses: 0
+  totalDispensed: 0,
+  totalPending: 0,
+  inventoryUpdates: 0,
+  failedDispenses: 0,
+    totalIssued: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/pharmacist/analytics")
+    const API_BASE = 'http://localhost:4000';
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    console.log('[Analytics] Fetching /api/pharmacist/analytics');
+    fetch(`${API_BASE}/api/pharmacist/analytics`, { headers })
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch analytics data");
+        console.log('[Analytics] Response:', res);
+        if (!res.ok) throw new Error('Failed to fetch analytics data');
         return res.json();
       })
       .then((data) => {
+        console.log('[Analytics] Data:', data);
         setAnalyticsLogs(data.logs || []);
         setAnalyticsStats(data.stats || {
           totalDispensed: 0,
-          totalVerified: 0,
           inventoryUpdates: 0,
-          failedDispenses: 0
+          failedDispenses: 0,
+          totalIssued: 0,
         });
         setLoading(false);
       })
       .catch((err) => {
+        console.error('[Analytics] Error:', err);
         setError(err.message);
         setLoading(false);
       });
@@ -69,6 +76,7 @@ const sidebarItems = [
     const icons = {
       prescription_dispensed: Pill,
       prescription_verified: Activity,
+      prescription_pending: Clock,
       inventory_updated: Package,
       dispense_failed: AlertTriangle
     };
@@ -120,11 +128,24 @@ const sidebarItems = [
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Verified</p>
-                <p className="text-3xl font-bold mt-2">{analyticsStats.totalVerified}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Issued</p>
+                <p className="text-3xl font-bold mt-2">{analyticsStats.totalIssued}</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
                 <Activity className="w-8 h-8 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="dashboard-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Pending</p>
+                <p className="text-3xl font-bold mt-2">{analyticsStats.totalPending}</p>
+              </div>
+              <div className="p-3 bg-yellow-100 rounded-full">
+                <Clock className="w-8 h-8 text-yellow-600" />
               </div>
             </div>
           </CardContent>
@@ -177,7 +198,8 @@ const sidebarItems = [
               <SelectContent>
                 <SelectItem value="all">All Actions</SelectItem>
                 <SelectItem value="dispensed">Dispensed</SelectItem>
-                <SelectItem value="verified">Verified</SelectItem>
+                {/* Removed Verified filter */}
+                <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="inventory">Inventory</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
               </SelectContent>
@@ -202,8 +224,37 @@ const sidebarItems = [
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">All Analytics</TabsTrigger>
           <TabsTrigger value="dispensed">Dispensed</TabsTrigger>
-          <TabsTrigger value="verified">Verified</TabsTrigger>
+    {/* Removed Verified tab */}
+          <TabsTrigger value="pending">Pending</TabsTrigger>
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
+        <TabsContent value="pending" className="space-y-4">
+          <div className="space-y-4">
+            {analyticsLogs.filter(log => log.action === 'prescription_pending').map((log) => {
+              const ActionIcon = getActionIcon(log.action);
+              return (
+                <Card key={log.id} className="healthcare-card border-l-4 border-l-yellow-600">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-yellow-100 rounded-full">
+                        <ActionIcon className="w-6 h-6 text-yellow-600" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-yellow-600">{log.description}</h3>
+                          <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div><strong>User:</strong> {log.user}</div>
+                          <div><strong>Target:</strong> {log.target}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
         </TabsList>
 
         <TabsContent value="all" className="space-y-4">
@@ -301,34 +352,7 @@ const sidebarItems = [
           </div>
         </TabsContent>
 
-        <TabsContent value="verified" className="space-y-4">
-          <div className="space-y-4">
-            {analyticsLogs.filter(log => log.action === 'prescription_verified').map((log) => {
-              const ActionIcon = getActionIcon(log.action);
-              return (
-                <Card key={log.id} className="healthcare-card border-l-4 border-l-blue-600">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-blue-100 rounded-full">
-                        <ActionIcon className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold text-blue-600">{log.description}</h3>
-                          <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div><strong>User:</strong> {log.user}</div>
-                          <div><strong>Target:</strong> {log.target}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
+        {/* Removed Verified tab content */}
 
         <TabsContent value="inventory" className="space-y-4">
           <div className="space-y-4">

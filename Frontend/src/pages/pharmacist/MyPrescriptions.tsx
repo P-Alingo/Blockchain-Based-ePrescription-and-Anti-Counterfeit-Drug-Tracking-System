@@ -20,13 +20,19 @@ const sidebarItems = [
 	{ icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
 	{ icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
 	{ icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
-	{ icon: PillBottle, label: "Dispense Drug", path: "/pharmacist/dispense", active: false },
 	{ icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
 	{ icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: true },
 	{ icon: Package, label: "Shipments", path: "/pharmacist/shipments", active: false },
 ];
 
 const MyPrescriptions: React.FC = () => {
+	// Format date helper
+	const formatDate = (dateStr) => {
+		if (!dateStr) return "";
+		const d = new Date(dateStr);
+		if (isNaN(d.getTime())) return dateStr;
+		return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+	};
 	const [prescriptions, setPrescriptions] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
@@ -49,8 +55,53 @@ const MyPrescriptions: React.FC = () => {
 		fetchPrescriptions();
 	}, []);
 
-	const allPrescriptions = prescriptions.filter(p => p.status !== "dispensed");
-	const dispensedPrescriptions = prescriptions.filter(p => p.status === "dispensed");
+	// Search and filter logic
+	const filteredPrescriptions = prescriptions.filter(p => {
+		const term = searchTerm.toLowerCase();
+		return (
+			(p.patient_name || p.patientName || "").toLowerCase().includes(term) ||
+			(p.doctor_name || p.doctorName || "").toLowerCase().includes(term) ||
+			(p.prescription_code || p.prescriptionCode || "").toLowerCase().includes(term) ||
+			(p.drug_name || p.drug || "").toLowerCase().includes(term)
+		);
+	});
+	const allPrescriptions = filteredPrescriptions.filter(p => p.status !== "dispensed");
+	const dispensedPrescriptions = filteredPrescriptions.filter(p => p.status === "dispensed");
+
+	// Helper to check if prescription is expired
+	const isPrescriptionExpired = (prescription) => {
+		if (!prescription || !prescription.validUntil) return false;
+		const now = new Date();
+		const validUntilDate = new Date(prescription.validUntil);
+		return validUntilDate < now || prescription.status === "expired";
+	};
+
+	// Dispense logic
+	const handleDispense = async (prescription) => {
+		if (isPrescriptionExpired(prescription) || prescription.status === "dispensed") return;
+		try {
+			await api.post("/api/pharmacist/dispense", {
+				prescriptionId: prescription.id,
+				patientId: prescription.patient_id || prescription.patientId,
+				drugId: prescription.drug_id || prescription.drugId,
+				quantity: prescription.quantity || 1
+			});
+			setPrescriptions(prev => prev.map(p => p.id === prescription.id ? { ...p, status: "dispensed" } : p));
+		} catch (err) {
+			setError(err?.response?.data?.message || err.message || "Failed to dispense");
+		}
+	};
+
+	// Expire logic
+	const handleExpire = async (prescription) => {
+		if (prescription.status === "expired") return;
+		try {
+			await api.put(`/api/pharmacist/prescriptions/${prescription.id}/expire`);
+			setPrescriptions(prev => prev.map(p => p.id === prescription.id ? { ...p, status: "expired" } : p));
+		} catch (err) {
+			setError(err?.response?.data?.message || err.message || "Failed to expire");
+		}
+	};
 
 	return (
 		<DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist">
@@ -71,42 +122,57 @@ const MyPrescriptions: React.FC = () => {
 								) : error ? (
 									<div className="text-red-500">{error}</div>
 								) : (
-									<table className="w-full">
-										<thead>
-											<tr>
-												<th>ID</th>
-												<th>Patient</th>
-												<th>Doctor</th>
-												<th>Drug</th>
-												<th>Status</th>
-												<th>Issue Date</th>
-												<th>Expiry Date</th>
-												<th>Action</th>
-											</tr>
-										</thead>
-										<tbody>
-											{allPrescriptions.map((p) => (
-												<tr key={p.id}>
-													<td>{p.id}</td>
-													<td>{p.patient_name || p.patientName}</td>
-													<td>{p.doctor_name || p.doctorName}</td>
-													<td>{p.drug_name || p.drug}</td>
-													<td>{p.status}</td>
-													<td>{p.issue_date || p.issueDate}</td>
-													<td>{p.expiry_date || p.validUntil}</td>
-													<td>
-														<Button
-															variant="default"
-															size="sm"
-															onClick={() => navigate(`/pharmacist/dispense?id=${p.id}`)}
-														>
-															Dispense
-														</Button>
-													</td>
+									<>
+										<Input
+											placeholder="Search by patient, doctor, prescription code, drug..."
+											value={searchTerm}
+											onChange={e => setSearchTerm(e.target.value)}
+											className="mb-4 w-64"
+										/>
+										<table className="w-full">
+											<thead>
+												<tr>
+													<th>ID</th>
+													<th>Patient</th>
+													<th>Doctor</th>
+													<th>Drug</th>
+													<th>Status</th>
+													<th>Issue Date</th>
+													<th>Expiry Date</th>
+													<th>Action</th>
 												</tr>
-											))}
-										</tbody>
-									</table>
+											</thead>
+											<tbody>
+												{allPrescriptions.map((p) => (
+													<tr key={p.id}>
+														<td>{p.id}</td>
+														<td>{p.patient_name || p.patientName}</td>
+														<td>{p.doctor_name || p.doctorName}</td>
+														<td>{p.drug_name || p.drug}</td>
+														<td>{p.status}</td>
+														<td>{formatDate(p.issue_date || p.issueDate)}</td>
+														<td>{formatDate(p.expiry_date || p.validUntil)}</td>
+														<td className="space-x-2">
+															{p.status === "expired" ? (
+																<Button variant="outline" size="sm" disabled>
+																	Expired
+																</Button>
+															) : (
+																<Button
+																	variant="default"
+																	size="sm"
+																	disabled={isPrescriptionExpired(p) || p.status === "dispensed"}
+																	onClick={() => handleDispense(p)}
+																>
+																	Dispense
+																</Button>
+															)}
+														</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</>
 								)}
 							</CardContent>
 						</Card>
@@ -149,8 +215,8 @@ const MyPrescriptions: React.FC = () => {
 												<td>{p.doctor_name || p.doctorName}</td>
 												<td>{p.drug_name || p.drug}</td>
 												<td>{p.status}</td>
-												<td>{p.issue_date || p.issueDate}</td>
-												<td>{p.expiry_date || p.validUntil}</td>
+												<td>{formatDate(p.issue_date || p.issueDate)}</td>
+												<td>{formatDate(p.expiry_date || p.validUntil)}</td>
 											</tr>
 										))}
 									</tbody>

@@ -1,3 +1,11 @@
+// Expire a prescription
+export async function expirePharmacistPrescription(req, res, next) {
+  try {
+    const prescriptionId = req.params.id;
+    const result = await pharmacistService.expirePharmacistPrescription(prescriptionId);
+    res.json(result);
+  } catch (error) { next(error); }
+}
 // Pharmacist confirms delivery of shipment
 export async function confirmPharmacistDelivery(req, res, next) {
   try {
