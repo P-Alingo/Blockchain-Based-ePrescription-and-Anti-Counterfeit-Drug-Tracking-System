@@ -56,7 +56,7 @@ import RegulatorBlockchain from "./pages/regulator/Blockchain";
 // Admin Dashboard Pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
-import AdminDatabase from "./pages/admin/System Logs"
+import SystemLogs from "./pages/admin/System Logs"
 import AdminBlockchain from "./pages/admin/Blockchain";
 import AdminAnalytics from "./pages/admin/Analytics";
 
@@ -223,7 +223,7 @@ const App = () => {
             {/* Admin Routes */}
             <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={["admin"]}><UserManagement /></ProtectedRoute>} />
-            <Route path="/admin/database" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDatabase /></ProtectedRoute>} />
+            <Route path="/admin/system-logs" element={<ProtectedRoute allowedRoles={["admin"]}><SystemLogs /></ProtectedRoute>} />
             <Route path="/admin/blockchain" element={<ProtectedRoute allowedRoles={["admin"]}><AdminBlockchain /></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={["admin"]}><AdminAnalytics /></ProtectedRoute>} />
 
