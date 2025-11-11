@@ -109,14 +109,13 @@ const SystemLogs = () => {
     const hasActiveFilter = filter.user || filter.entity || filter.action || filter.date || search;
     if (hasActiveFilter) {
       setLoading(true);
-      // Build query string
+      // Build query string only for non-empty filters
       const params = new URLSearchParams();
       if (filter.user) params.append('user', filter.user);
       if (filter.action) params.append('action_type', filter.action);
       if (filter.entity) params.append('entity_type', filter.entity);
       if (filter.date) params.append('date', filter.date);
       if (search) params.append('user', search);
-      // Fetch filtered logs
       fetch(`${API_BASE}/api/admin/audit-logs/search?${params.toString()}`, { headers })
         .then((res) => res.json())
         .then((logs) => {
@@ -128,10 +127,13 @@ const SystemLogs = () => {
           setLoading(false);
         });
     } else {
+      // Show latest 10 logs by default
       setFilteredAuditLogs(latestLogs.slice(0, 10));
     }
-  }, [filter, search, latestLogs]);
+  }, [filter.user, filter.entity, filter.action, filter.date, search, latestLogs]);
 
+  const [searchBlockchain, setSearchBlockchain] = useState('');
+  const [filterBlockchainDate, setFilterBlockchainDate] = useState('');
   const filteredBlockchainLogs = blockchainLogs.filter(log => {
     return (
       (search === '' ||
@@ -173,24 +175,6 @@ const SystemLogs = () => {
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     className="md:w-1/3"
-                  />
-                  <Input
-                    placeholder="Filter by user..."
-                    value={filter.user}
-                    onChange={e => setFilter(f => ({ ...f, user: e.target.value }))}
-                    className="md:w-1/6"
-                  />
-                  <Input
-                    placeholder="Filter by entity..."
-                    value={filter.entity}
-                    onChange={e => setFilter(f => ({ ...f, entity: e.target.value }))}
-                    className="md:w-1/6"
-                  />
-                  <Input
-                    placeholder="Filter by action..."
-                    value={filter.action}
-                    onChange={e => setFilter(f => ({ ...f, action: e.target.value }))}
-                    className="md:w-1/6"
                   />
                   <Input
                     type="date"
@@ -332,7 +316,25 @@ const SystemLogs = () => {
                 </div>
               </CardContent>
               {/* Blockchain Event Logs */}
+              {/* Blockchain Event Logs Search & Filter */}
               <Card className="healthcare-card mt-8">
+                <CardContent className="p-6">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <Input
+                      placeholder="Search blockchain events..."
+                      value={searchBlockchain}
+                      onChange={e => setSearchBlockchain(e.target.value)}
+                      className="md:w-1/3"
+                    />
+                    <Input
+                      type="date"
+                      placeholder="Filter by date..."
+                      value={filterBlockchainDate}
+                      onChange={e => setFilterBlockchainDate(e.target.value)}
+                      className="md:w-1/6"
+                    />
+                  </div>
+                </CardContent>
                 <CardHeader>
                   <CardTitle>Blockchain Event Logs</CardTitle>
                   <CardDescription>All blockchain events for system transparency</CardDescription>
@@ -357,19 +359,30 @@ const SystemLogs = () => {
                         ) : filteredBlockchainLogs.length === 0 ? (
                           <tr><td colSpan={5} className="p-8 text-center">No blockchain logs found</td></tr>
                         ) : (
-                          filteredBlockchainLogs.map((log, idx) => (
-                            <tr key={idx}>
-                              <td className="px-4 py-3">{log.eventname || '-'}</td>
-                              <td className="px-4 py-3">{log.contractname || '-'}</td>
-                              <td className="px-4 py-3">
-                                {log.transactionhash ? (
-                                  <a href={`https://etherscan.io/tx/${log.transactionhash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{log.transactionhash}</a>
-                                ) : '-'}
-                              </td>
-                              <td className="px-4 py-3">{log.status || 'processed'}</td>
-                              <td className="px-4 py-3">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
-                            </tr>
-                          ))
+                          filteredBlockchainLogs
+                            .filter(log => {
+                              // Filter by searchBlockchain and filterBlockchainDate
+                              const matchesSearch = searchBlockchain === '' ||
+                                (log.eventname && log.eventname.toLowerCase().includes(searchBlockchain.toLowerCase())) ||
+                                (log.contractname && log.contractname.toLowerCase().includes(searchBlockchain.toLowerCase())) ||
+                                (log.transactionhash && log.transactionhash.toLowerCase().includes(searchBlockchain.toLowerCase()));
+                              const matchesDate = filterBlockchainDate === '' ||
+                                (log.timestamp && log.timestamp.startsWith(filterBlockchainDate));
+                              return matchesSearch && matchesDate;
+                            })
+                            .map((log, idx) => (
+                              <tr key={idx}>
+                                <td className="px-4 py-3">{log.eventname || '-'}</td>
+                                <td className="px-4 py-3">{log.contractname || '-'}</td>
+                                <td className="px-4 py-3">
+                                  {log.transactionhash ? (
+                                    <a href={`https://etherscan.io/tx/${log.transactionhash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{log.transactionhash}</a>
+                                  ) : '-'}
+                                </td>
+                                <td className="px-4 py-3">{log.status || 'processed'}</td>
+                                <td className="px-4 py-3">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
+                              </tr>
+                            ))
                         )}
                       </tbody>
                     </table>
