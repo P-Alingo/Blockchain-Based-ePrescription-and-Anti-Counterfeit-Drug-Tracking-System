@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import DoctorDashboard from "./pages/doctor/Dashboard";
 import CreatePrescription from "./pages/doctor/CreatePrescription";
 import MyPrescriptions from "./pages/doctor/MyPrescriptions";
+import DoctorBlockchain from "./pages/doctor/Blockchain";
 import DoctorAnalytics from "./pages/doctor/Analytics";
 
 // Patient Dashboard Pages
@@ -48,17 +49,15 @@ import DistributorShipments from "./pages/distributor/Shipments";
 // Regulator Dashboard Pages
 import RegulatorDashboard from "./pages/regulator/Dashboard";
 import Audits from "./pages/regulator/Audits";
-import Reports from "./pages/regulator/Reports";
-import ComplianceActions from "./pages/regulator/ComplianceActions";
+import Traceability from "./pages/regulator/Traceability";
 import RegulatorAnalytics from "./pages/regulator/Analytics";
 import RegulatorBlockchain from "./pages/regulator/Blockchain";
 
 // Admin Dashboard Pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
-import AdminDatabase from "./pages/admin/Database"
+import AdminDatabase from "./pages/admin/System Logs"
 import AdminBlockchain from "./pages/admin/Blockchain";
-import AdminReports from "./pages/admin/Reports";
 import AdminAnalytics from "./pages/admin/Analytics";
 
 const queryClient = new QueryClient();
@@ -183,6 +182,7 @@ const App = () => {
             <Route path="/doctor/dashboard" element={<ProtectedRoute allowedRoles={["doctor"]}><DoctorDashboard /></ProtectedRoute>} />
             <Route path="/doctor/create-prescription" element={<ProtectedRoute allowedRoles={["doctor"]}><CreatePrescription /></ProtectedRoute>} />
             <Route path="/doctor/prescriptions" element={<ProtectedRoute allowedRoles={["doctor"]}><MyPrescriptions /></ProtectedRoute>} />
+            <Route path="/doctor/blockchain" element={<ProtectedRoute allowedRoles={["doctor"]}><DoctorBlockchain /></ProtectedRoute>} />
             <Route path="/doctor/analytics" element={<ProtectedRoute allowedRoles={["doctor"]}><DoctorAnalytics /></ProtectedRoute>} />
 
             {/* Patient Routes */}
@@ -216,8 +216,7 @@ const App = () => {
             {/* Regulator Routes */}
             <Route path="/regulator/dashboard" element={<ProtectedRoute allowedRoles={["regulator"]}><RegulatorDashboard /></ProtectedRoute>} />
             <Route path="/regulator/audits" element={<ProtectedRoute allowedRoles={["regulator"]}><Audits /></ProtectedRoute>} />
-            <Route path="/regulator/reports" element={<ProtectedRoute allowedRoles={["regulator"]}><Reports /></ProtectedRoute>} />
-            <Route path="/regulator/compliance" element={<ProtectedRoute allowedRoles={["regulator"]}><ComplianceActions /></ProtectedRoute>} />
+            <Route path="/regulator/traceability" element={<ProtectedRoute allowedRoles={["regulator"]}><Traceability /></ProtectedRoute>} />
             <Route path="/regulator/analytics" element={<ProtectedRoute allowedRoles={["regulator"]}><RegulatorAnalytics /></ProtectedRoute>} />
             <Route path="/regulator/blockchain" element={<ProtectedRoute allowedRoles={["regulator"]}><RegulatorBlockchain /></ProtectedRoute>} />
 
@@ -226,7 +225,6 @@ const App = () => {
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={["admin"]}><UserManagement /></ProtectedRoute>} />
             <Route path="/admin/database" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDatabase /></ProtectedRoute>} />
             <Route path="/admin/blockchain" element={<ProtectedRoute allowedRoles={["admin"]}><AdminBlockchain /></ProtectedRoute>} />
-            <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={["admin"]}><AdminReports /></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={["admin"]}><AdminAnalytics /></ProtectedRoute>} />
 
             {/* Catch-all route */}

@@ -44,19 +44,48 @@ export async function getAllReports(queryParams) {
 
 // Analytics
 export async function getSystemAnalytics() {
-  // Active users per month
-  const activeUsers = await query(`SELECT DATE_TRUNC('month', created_at) as month, COUNT(*) as count FROM users WHERE active = true GROUP BY month ORDER BY month DESC LIMIT 12`);
-  // Prescriptions per doctor
-  const prescriptionsPerDoctor = await query(`SELECT doctor_id, COUNT(*) as count FROM prescription GROUP BY doctor_id ORDER BY count DESC LIMIT 10`);
-  // Shipments per distributor
-  const shipmentsPerDistributor = await query(`SELECT distributor_id, COUNT(*) as count FROM shipment GROUP BY distributor_id ORDER BY count DESC LIMIT 10`);
-  // Drug batch success vs recall rates
-  const batchStats = await query(`SELECT status, COUNT(*) as count FROM drugbatch GROUP BY status`);
+  // Total registered users by role
+  const usersByRole = await query(`SELECT role, COUNT(*) as count FROM users WHERE is_deleted = false GROUP BY role`);
+  // Active prescriptions
+  const activePrescriptions = await query(`SELECT COUNT(*) FROM prescription WHERE status = 'issued' AND is_deleted = false`);
+  // Total shipments
+  const totalShipments = await query(`SELECT COUNT(*) FROM shipment WHERE is_deleted = false`);
+  // Flagged shipments
+  const flaggedShipments = await query(`SELECT COUNT(*) FROM shipment WHERE status = 'flagged' AND is_deleted = false`);
+  // Failed shipments
+  const failedShipments = await query(`SELECT COUNT(*) FROM shipment WHERE status = 'failed' AND is_deleted = false`);
+  // Counterfeit drugs detected
+  const counterfeitDrugs = await query(`SELECT COUNT(*) FROM drugbatch WHERE status = 'flagged' AND is_deleted = false`);
+  // Recent blockchain transactions
+  const recentBlockchainTx = await query(`SELECT id, eventname, contractname, transactionhash, timestamp FROM blockchaineventlog ORDER BY timestamp DESC LIMIT 10`);
+  // Drug distribution by region/facility
+  const drugDistribution = await query(`SELECT f.location, d.name AS drug_name, SUM(i.available_quantity) AS total_quantity FROM inventory i JOIN drug d ON i.drug_id = d.id JOIN facility f ON i.facility_id = f.id WHERE i.available_quantity > 0 GROUP BY f.location, d.name ORDER BY total_quantity DESC`);
+  // Prescription volume trend (daily for last 14 days)
+  const prescriptionTrend = await query(`SELECT DATE(issue_date) AS day, COUNT(*) AS count FROM prescription WHERE is_deleted = false GROUP BY day ORDER BY day DESC LIMIT 14`);
+  // Recent activity feed (latest actions by users)
+  const recentActivity = await query(`SELECT a.id, u.full_name AS user, a.action_type, a.entity_type, a.entity_id, a.timestamp, a.details FROM audit_log a LEFT JOIN users u ON a.user_id = u.id ORDER BY a.timestamp DESC LIMIT 10`);
+  // Alerts panel: pending approvals, flagged drugs, failed shipments
+  const pendingApprovals = await query(`SELECT id, pharmacist_id, distributor_id, batch_id, quantity_requested, request_date FROM batch_request WHERE status = 'pending' AND is_deleted = false ORDER BY request_date DESC LIMIT 5`);
+  const flaggedDrugs = await query(`SELECT db.id, db.batchnumber, d.name AS drug_name, db.expirydate FROM drugbatch db JOIN drug d ON db.drugid = d.id WHERE db.status = 'flagged' AND db.is_deleted = false ORDER BY db.expirydate DESC LIMIT 5`);
+  const failedShipmentsList = await query(`SELECT id, shipmentnumber, drug_id, quantity_shipped, departure_date FROM shipment WHERE status = 'failed' AND is_deleted = false ORDER BY departure_date DESC LIMIT 5`);
   return {
-    activeUsers: activeUsers.rows,
-    prescriptionsPerDoctor: prescriptionsPerDoctor.rows,
-    shipmentsPerDistributor: shipmentsPerDistributor.rows,
-    batchStats: batchStats.rows
+    stats: {
+      usersByRole: usersByRole.rows,
+      activePrescriptions: parseInt(activePrescriptions.rows[0].count, 10),
+      totalShipments: parseInt(totalShipments.rows[0].count, 10),
+      flaggedShipments: parseInt(flaggedShipments.rows[0].count, 10),
+      failedShipments: parseInt(failedShipments.rows[0].count, 10),
+      counterfeitDrugs: parseInt(counterfeitDrugs.rows[0].count, 10)
+    },
+    recentBlockchainTx: recentBlockchainTx.rows,
+    drugDistribution: drugDistribution.rows,
+    prescriptionTrend: prescriptionTrend.rows,
+    recentActivity: recentActivity.rows,
+    alerts: {
+      pendingApprovals: pendingApprovals.rows,
+      flaggedDrugs: flaggedDrugs.rows,
+      failedShipments: failedShipmentsList.rows
+    }
   };
 }
 

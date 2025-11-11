@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Settings, Users, Cog, FileText, Activity, TrendingUp, Server, Database, Shield } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,164 +9,233 @@ import { Button } from '@/components/ui/button';
 const AdminDashboard = () => {
   const sidebarItems = [
     { icon: Settings, label: 'Dashboard', path: '/admin/dashboard', active: true },
-    { icon: Users, label: 'User Management', path: '/admin/users', active: false },
-    { icon: Cog, label: 'Reports', path: '/admin/reports', active: false },
-    { icon: Database, label: 'Database', path: '/admin/database', active: false },
-    { icon: FileText, label: 'Blockchain', path: '/admin/blockchain', active: false },
-    { icon: Activity, label: 'Analytics', path: '/admin/analytics', active: false },
-  ];
+       { icon: Users, label: 'User Management', path: '/admin/users', active: false },
+       { icon: Cog, label: 'System Logs', path: '/admin/system-logs', active: false },
+       { icon: FileText, label: 'Blockchain', path: '/admin/blockchain', active: false },
+       { icon: Activity, label: 'Analytics', path: '/admin/analytics', active: false },
+     ];
 
-  const systemHealth = [
-    { component: 'Database', status: 'healthy', uptime: 99.9, response: '12ms' },
-    { component: 'API Gateway', status: 'healthy', uptime: 99.8, response: '45ms' },
-    { component: 'Blockchain Network', status: 'warning', uptime: 98.5, response: '120ms' },
-    { component: 'File Storage', status: 'healthy', uptime: 99.7, response: '8ms' },
-  ];
+  const [analyticsStats, setAnalyticsStats] = useState({
+    usersByRole: [],
+    activePrescriptions: 0,
+    totalShipments: 0,
+    flaggedShipments: 0,
+    failedShipments: 0,
+    counterfeitDrugs: 0
+  });
+  const [recentBlockchainTx, setRecentBlockchainTx] = useState([]);
+  const [drugDistribution, setDrugDistribution] = useState([]);
+  const [prescriptionTrend, setPrescriptionTrend] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [alerts, setAlerts] = useState({
+    pendingApprovals: [],
+    flaggedDrugs: [],
+    failedShipments: []
+  });
 
-  const userStats = [
-    { role: 'Patients', count: 12450, growth: '+8.2%' },
-    { role: 'Doctors', count: 890, growth: '+3.1%' },
-    { role: 'Pharmacists', count: 340, growth: '+5.7%' },
-    { role: 'Others', count: 180, growth: '+2.4%' },
-  ];
+  useEffect(() => {
+    fetch("/api/admin/analytics")
+      .then((res) => res.json())
+      .then((data) => {
+        setAnalyticsStats(data.stats || {});
+        setRecentBlockchainTx(data.recentBlockchainTx || []);
+        setDrugDistribution(data.drugDistribution || []);
+        setPrescriptionTrend(data.prescriptionTrend || []);
+        setRecentActivity(data.recentActivity || []);
+        setAlerts(data.alerts || { pendingApprovals: [], flaggedDrugs: [], failedShipments: [] });
+      });
+  }, []);
 
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="admin" userName="System Admin" userEmail="admin@eprescribe.go.ke">
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
-            System Administration
+            System Analytics Control Center
           </h1>
-          <p className="text-muted-foreground">Monitor system health, manage users, and oversee platform operations</p>
+          <p className="text-muted-foreground">Overview of operations and key metrics across all stakeholders</p>
         </div>
 
-        {/* System Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 border-gray-200 dark:border-gray-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">13,860</div>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                <TrendingUp className="inline h-3 w-3 mr-1" />
-                +6.8% this month
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">System Uptime</CardTitle>
-              <Server className="h-4 w-4 text-green-600 dark:text-green-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-700 dark:text-green-300">99.8%</div>
-              <p className="text-xs text-green-600 dark:text-green-400">Last 30 days</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Data Storage</CardTitle>
-              <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">2.1TB</div>
-              <p className="text-xs text-blue-600 dark:text-blue-400">68% capacity used</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Security Alerts</CardTitle>
-              <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">2</div>
-              <p className="text-xs text-purple-600 dark:text-purple-400">Resolved today</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* System Health and User Distribution */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>System Health</CardTitle>
-              <CardDescription>Component status and performance metrics</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {systemHealth.map((component) => (
-                <div key={component.component} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{component.component}</p>
-                    <p className="text-xs text-muted-foreground">Uptime: {component.uptime}%</p>
-                    <p className="text-xs text-muted-foreground">Response: {component.response}</p>
+        {/* Quick Stats Cards */}
+        <div className="medical-grid">
+          {analyticsStats.usersByRole.map((role) => (
+            <Card key={role.role} className="dashboard-card">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">{role.role} Users</p>
+                    <p className="text-3xl font-bold mt-2">{role.count}</p>
                   </div>
-                  <Badge
-                    variant={
-                      component.status === 'healthy' ? 'default' :
-                      component.status === 'warning' ? 'secondary' : 'destructive'
-                    }
-                  >
-                    {component.status}
-                  </Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>User Distribution</CardTitle>
-              <CardDescription>Active users by role category</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {userStats.map((stat) => (
-                <div key={stat.role} className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>{stat.role}</span>
-                    <span>{stat.count.toLocaleString()} ({stat.growth})</span>
-                  </div>
-                  <Progress 
-                    value={(stat.count / 13860) * 100} 
-                    className="h-2" 
-                  />
-                  <div className="text-xs text-muted-foreground">
-                    {((stat.count / 13860) * 100).toFixed(1)}% of total users
+                  <div className="p-3 bg-blue-100 rounded-full">
+                    <Users className="w-8 h-8 text-blue-600" />
                   </div>
                 </div>
-              ))}
+              </CardContent>
+            </Card>
+          ))}
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Active Prescriptions</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.activePrescriptions}</p>
+                </div>
+                <div className="p-3 bg-green-100 rounded-full">
+                  <FileText className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Shipments</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.totalShipments}</p>
+                </div>
+                <div className="p-3 bg-orange-100 rounded-full">
+                  <Settings className="w-8 h-8 text-orange-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Flagged Shipments</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.flaggedShipments}</p>
+                </div>
+                <div className="p-3 bg-red-100 rounded-full">
+                  <Activity className="w-8 h-8 text-red-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="dashboard-card">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Counterfeit Drugs</p>
+                  <p className="text-3xl font-bold mt-2">{analyticsStats.counterfeitDrugs}</p>
+                </div>
+                <div className="p-3 bg-destructive/10 rounded-full">
+                  <Shield className="w-8 h-8 text-destructive" />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Quick Actions */}
-        <Card>
+        {/* System Overview Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="healthcare-card">
+            <CardHeader>
+              <CardTitle>Drug Distribution by Region/Facility</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {drugDistribution.map((dist, idx) => (
+                  <li key={idx} className="flex justify-between">
+                    <span>{dist.location} - {dist.drug_name}</span>
+                    <span className="font-bold">{dist.total_quantity}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+          <Card className="healthcare-card">
+            <CardHeader>
+              <CardTitle>Prescription Volume Trend (Last 14 Days)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {prescriptionTrend.map((trend, idx) => (
+                  <li key={idx} className="flex justify-between">
+                    <span>{trend.day}</span>
+                    <span className="font-bold">{trend.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Blockchain Transactions */}
+        <Card className="healthcare-card">
           <CardHeader>
-            <CardTitle>System Administration</CardTitle>
-            <CardDescription>Quick access to administrative functions</CardDescription>
+            <CardTitle>Recent Blockchain Transactions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button className="h-20 flex-col gap-2" variant="outline">
-                <Users className="h-6 w-6" />
-                Manage Users
-              </Button>
-              <Button className="h-20 flex-col gap-2" variant="outline">
-                <Cog className="h-6 w-6" />
-                System Settings
-              </Button>
-              <Button className="h-20 flex-col gap-2" variant="outline">
-                <FileText className="h-6 w-6" />
-                Generate Reports
-              </Button>
-              <Button className="h-20 flex-col gap-2" variant="outline">
-                <Activity className="h-6 w-6" />
-                View Activity
-              </Button>
+            <ul className="space-y-2">
+              {recentBlockchainTx.map((tx) => (
+                <li key={tx.id} className="flex justify-between">
+                  <span>{tx.eventname} ({tx.contractname})</span>
+                  <span className="font-mono text-xs">{tx.transactionhash}</span>
+                  <span>{new Date(tx.timestamp).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        {/* Recent Activity Feed */}
+        <Card className="healthcare-card">
+          <CardHeader>
+            <CardTitle>Recent Activity Feed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {recentActivity.map((act) => (
+                <li key={act.id} className="flex justify-between">
+                  <span>{act.user || 'System'}: {act.action_type} {act.entity_type} #{act.entity_id}</span>
+                  <span>{new Date(act.timestamp).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        {/* Alerts Panel */}
+        <Card className="healthcare-card">
+          <CardHeader>
+            <CardTitle>Alerts Panel</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <h3 className="font-semibold mb-2">Pending Approvals</h3>
+                <ul className="space-y-1">
+                  {alerts.pendingApprovals.map((req) => (
+                    <li key={req.id} className="flex justify-between text-yellow-700">
+                      <span>Batch #{req.batch_id} requested by Pharmacist #{req.pharmacist_id}</span>
+                      <span>{new Date(req.request_date).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Flagged Drugs</h3>
+                <ul className="space-y-1">
+                  {alerts.flaggedDrugs.map((drug) => (
+                    <li key={drug.id} className="flex justify-between text-red-700">
+                      <span>{drug.drug_name} (Batch #{drug.batchnumber})</span>
+                      <span>Expires: {new Date(drug.expirydate).toLocaleDateString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Failed Shipments</h3>
+                <ul className="space-y-1">
+                  {alerts.failedShipments.map((ship) => (
+                    <li key={ship.id} className="flex justify-between text-orange-700">
+                      <span>Shipment #{ship.shipmentnumber} (Drug #{ship.drug_id})</span>
+                      <span>{new Date(ship.departure_date).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>

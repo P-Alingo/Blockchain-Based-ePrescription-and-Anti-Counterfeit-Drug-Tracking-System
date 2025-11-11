@@ -16,6 +16,7 @@ import {
   Copy,
   Edit,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Select,
@@ -71,7 +72,9 @@ const MyPrescriptions: React.FC = () => {
     { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: false },
     { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: true },
     { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: false },
-  ];
+    { icon: AlertTriangle, label: 'Blockchain', path: '/doctor/blockchain', active: false },
+       
+];
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [filteredPrescriptions, setFilteredPrescriptions] = useState<Prescription[]>([]);

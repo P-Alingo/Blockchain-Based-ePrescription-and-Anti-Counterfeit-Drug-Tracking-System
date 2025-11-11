@@ -47,8 +47,7 @@ const AdminBlockchain = () => {
   const sidebarItems = [
     { icon: Settings, label: 'Dashboard', path: '/admin/dashboard', active: false },
     { icon: Users, label: 'User Management', path: '/admin/users', active: false },
-    { icon: Cog, label: 'Reports', path: '/admin/reports', active: false },
-    { icon: Database, label: 'Database', path: '/admin/database', active: false },
+    { icon: Cog, label: 'System Logs', path: '/admin/system-logs', active: false },
     { icon: FileText, label: 'Blockchain', path: '/admin/blockchain', active: true },
     { icon: Activity, label: 'Analytics', path: '/admin/analytics', active: false },
   ];

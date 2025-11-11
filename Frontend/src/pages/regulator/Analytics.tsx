@@ -1,51 +1,67 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Activity, User, Shield, Eye, Download, Filter, Clock, AlertTriangle, CheckCircle, CheckSquare, FileText } from "lucide-react";
+import { Download, Shield, AlertTriangle, CheckSquare, BarChart3, Search, FileText, Activity, CheckCircle, Filter } from "lucide-react";
+import { Line, Bar } from 'react-chartjs-2';
+import { Chart, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend } from 'chart.js';
+Chart.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend);
 
 const RegulatorAnalytics = () => {
     const sidebarItems = [
       { icon: Shield, label: 'Dashboard', path: '/regulator/dashboard', active: false },
       { icon: Search, label: 'Audits', path: '/regulator/audits', active: false },
-      { icon: FileText, label: 'Reports', path: '/regulator/reports', active: false },
+      { icon: FileText, label: 'Traceability', path: '/regulator/traceability', active: false },
       { icon: AlertTriangle, label: 'Blockchain', path: '/regulator/blockchain', active: false },
-      { icon: CheckSquare, label: 'Compliance Actions', path: '/regulator/compliance', active: false },
       { icon: Activity, label: 'Analytics', path: '/regulator/analytics', active: true },
     ];
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [actionFilter, setActionFilter] = useState("all");
-  const [timeFilter, setTimeFilter] = useState("today");
-  const [analyticsLogs, setAnalyticsLogs] = useState([]);
-  const [analyticsStats, setAnalyticsStats] = useState({
-    totalActivities: 0,
-    criticalActions: 0,
-    successfulActions: 0,
-    failedAttempts: 0
-  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [analytics, setAnalytics] = useState({
+    totalShipments: 0,
+    flaggedBatches: 0,
+    counterfeitIncidents: 0,
+    flaggedDrugsOverTime: [],
+    topManufacturers: [],
+    totalPrescriptions: []
+  });
+
+  // Export logic (CSV/PDF)
+  function exportAnalytics(type: 'csv' | 'pdf', data: typeof analytics) {
+    if (type === 'csv') {
+      const rows = [
+        ['Total Shipments Monitored', data.totalShipments],
+        ['Flagged Batches Detected', data.flaggedBatches],
+        ['Counterfeit Incidents Confirmed', data.counterfeitIncidents]
+      ];
+      let csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', 'regulator_analytics.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (type === 'pdf') {
+      alert('PDF export is not implemented in this demo.');
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/regulator/analytics")
+    const API_BASE = 'http://localhost:4000';
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    console.log('[RegulatorAnalytics] Fetching /api/regulator/analytics');
+    fetch(`${API_BASE}/api/regulator/analytics`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch analytics data");
         return res.json();
       })
       .then((data) => {
-        setAnalyticsLogs(data.logs || []);
-        setAnalyticsStats(data.stats || {
-          totalActivities: 0,
-          criticalActions: 0,
-          successfulActions: 0,
-          failedAttempts: 0
-        });
+        console.log('[RegulatorAnalytics] API response:', data);
+        setAnalytics(data);
         setLoading(false);
       })
       .catch((err) => {
@@ -102,17 +118,17 @@ const RegulatorAnalytics = () => {
         </div>
       </div>
 
-      {/* Analytics Statistics - fetched from backend */}
+      {/* Analytics Summary Cards */}
       <div className="medical-grid">
         <Card className="dashboard-card">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Activities</p>
-                <p className="text-3xl font-bold mt-2">{analyticsStats.totalActivities}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Shipments Monitored</p>
+                <p className="text-3xl font-bold mt-2">{analytics.totalShipments}</p>
               </div>
               <div className="p-3 bg-primary/10 rounded-full">
-                <Activity className="w-8 h-8 text-primary" />
+                <BarChart3 className="w-8 h-8 text-primary" />
               </div>
             </div>
           </CardContent>
@@ -121,8 +137,8 @@ const RegulatorAnalytics = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Critical Actions</p>
-                <p className="text-3xl font-bold mt-2">{analyticsStats.criticalActions}</p>
+                <p className="text-sm font-medium text-muted-foreground">Flagged Batches Detected</p>
+                <p className="text-3xl font-bold mt-2">{analytics.flaggedBatches}</p>
               </div>
               <div className="p-3 bg-destructive/10 rounded-full">
                 <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -130,261 +146,87 @@ const RegulatorAnalytics = () => {
             </div>
           </CardContent>
         </Card>
-        <Card className="dashboard-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Successful Actions</p>
-                <p className="text-3xl font-bold mt-2">{analyticsStats.successfulActions}</p>
-              </div>
-              <div className="p-3 bg-success/10 rounded-full">
-                <CheckCircle className="w-8 h-8 text-success" />
-              </div>
-            </div>
+      </div>
+
+      {/* Export Button */}
+      <div className="flex gap-3 mb-6">
+        <Button variant="outline" className="gap-2" onClick={() => exportAnalytics('csv', analytics)}>
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
+        <Button variant="outline" className="gap-2" onClick={() => exportAnalytics('pdf', analytics)}>
+          <Download className="w-4 h-4" />
+          Export PDF
+        </Button>
+      </div>
+
+      {/* Analytics Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+        <Card className="healthcare-card">
+          <CardHeader>
+            <CardTitle>Flagged Drugs Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Line
+              data={{
+                labels: analytics.flaggedDrugsOverTime.map((d) => d.month ? new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''),
+                datasets: [
+                  {
+                    label: 'Flagged Drugs',
+                    data: analytics.flaggedDrugsOverTime.map((d) => d.count),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239,68,68,0.1)',
+                    fill: true,
+                  },
+                ],
+              }}
+              options={{ responsive: true, plugins: { legend: { display: true } } }}
+            />
           </CardContent>
         </Card>
-        <Card className="dashboard-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Failed Attempts</p>
-                <p className="text-3xl font-bold mt-2">{analyticsStats.failedAttempts}</p>
-              </div>
-              <div className="p-3 bg-warning/10 rounded-full">
-                <Shield className="w-8 h-8 text-warning" />
-              </div>
-            </div>
+        <Card className="healthcare-card">
+          <CardHeader>
+            <CardTitle>Top Manufacturers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Bar
+              data={{
+                labels: analytics.topManufacturers.map((m) => `Manufacturer ${m.manufacturer_id}`),
+                datasets: [
+                  {
+                    label: 'Batches',
+                    data: analytics.topManufacturers.map((m) => m.count),
+                    backgroundColor: '#3b82f6',
+                  },
+                ],
+              }}
+              options={{ responsive: true, plugins: { legend: { display: true } } }}
+            />
+          </CardContent>
+        </Card>
+        <Card className="healthcare-card col-span-2">
+          <CardHeader>
+            <CardTitle>Total Prescriptions Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Line
+              data={{
+                labels: analytics.totalPrescriptions.map((d) => d.month ? new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''),
+                datasets: [
+                  {
+                    label: 'Prescriptions',
+                    data: analytics.totalPrescriptions.map((d) => d.count),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16,185,129,0.1)',
+                    fill: true,
+                  },
+                ],
+              }}
+              options={{ responsive: true, plugins: { legend: { display: true } } }}
+            />
           </CardContent>
         </Card>
       </div>
-
-      {/* Filters */}
-      <Card className="healthcare-card">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search logs by user, action, or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={actionFilter} onValueChange={setActionFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                <SelectItem value="audit">Audit Actions</SelectItem>
-                <SelectItem value="alert">Alert Actions</SelectItem>
-                <SelectItem value="access">Access Events</SelectItem>
-                <SelectItem value="system">System Events</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Time range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-                <SelectItem value="quarter">This Quarter</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Analytics Logs */}
-      <Tabs defaultValue="all" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="all">All Analytics</TabsTrigger>
-          <TabsTrigger value="critical">Critical</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
-          <TabsTrigger value="user">User Actions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="space-y-4">
-          <Card className="healthcare-card">
-            <CardHeader>
-              <CardTitle>Recent Analytics</CardTitle>
-              <CardDescription>
-                Chronological view of all regulatory analytics events
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {analyticsLogs.map((log) => {
-                  const ActionIcon = getActionIcon(log.action);
-                  return (
-                    <div key={log.id} className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors">
-                      <div className={`p-2 rounded-full ${log.success ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                        <ActionIcon className={`w-5 h-5 ${log.success ? 'text-success' : 'text-destructive'}`} />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-semibold">{log.description}</h3>
-                            <Badge className={getSeverityBadge(log.severity)}>
-                              {log.severity}
-                            </Badge>
-                            {!log.success && (
-                              <Badge variant="destructive">Failed</Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Clock className="w-4 h-4" />
-                            {formatTime(log.timestamp)}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
-                          <div>
-                            <span className="font-medium">User:</span> {log.user}
-                          </div>
-                          <div>
-                            <span className="font-medium">Role:</span> {log.role}
-                          </div>
-                          <div>
-                            <span className="font-medium">Target:</span> {log.target}
-                          </div>
-                          <div>
-                            <span className="font-medium">IP:</span> {log.ipAddress}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          <span className="font-medium">User Agent:</span> {log.userAgent}
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Eye className="w-4 h-4" />
-                        Details
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="critical" className="space-y-4">
-          <div className="space-y-4">
-            {analyticsLogs.filter(log => log.severity === 'critical').map((log) => {
-              const ActionIcon = getActionIcon(log.action);
-              return (
-                <Card key={log.id} className="healthcare-card border-l-4 border-l-destructive">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-destructive/10 rounded-full">
-                        <ActionIcon className="w-6 h-6 text-destructive" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold text-destructive">{log.description}</h3>
-                          <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div><strong>User:</strong> {log.user}</div>
-                          <div><strong>Target:</strong> {log.target}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="security" className="space-y-4">
-          <div className="space-y-4">
-            {analyticsLogs.filter(log => log.action.includes('access') || log.action.includes('login') || !log.success).map((log) => {
-              const ActionIcon = getActionIcon(log.action);
-              return (
-                <Card key={log.id} className="healthcare-card border-l-4 border-l-warning">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-warning/10 rounded-full">
-                        <ActionIcon className="w-6 h-6 text-warning" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold">{log.description}</h3>
-                          <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
-                        </div>
-                        <div className="text-sm text-destructive">
-                          <strong>Security Event:</strong> IP {log.ipAddress} - {log.userAgent}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="system" className="space-y-4">
-          <div className="space-y-4">
-            {analyticsLogs.filter(log => log.user === 'Automated System' || log.user === 'System Administrator').map((log) => {
-              const ActionIcon = getActionIcon(log.action);
-              return (
-                <Card key={log.id} className="healthcare-card">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-primary/10 rounded-full">
-                        <ActionIcon className="w-6 h-6 text-primary" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold">{log.description}</h3>
-                          <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          <strong>System Process:</strong> {log.target}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="user" className="space-y-4">
-          <div className="space-y-4">
-            {analyticsLogs.filter(log => log.user !== 'Automated System' && log.user !== 'System Administrator').map((log) => {
-              const ActionIcon = getActionIcon(log.action);
-              return (
-                <Card key={log.id} className="healthcare-card">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-secondary/10 rounded-full">
-                        <User className="w-6 h-6 text-secondary" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold">{log.description}</h3>
-                          <span className="text-sm text-muted-foreground">{formatTime(log.timestamp)}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
-                          <div><strong>User:</strong> {log.user} ({log.role})</div>
-                          <div><strong>IP Address:</strong> {log.ipAddress}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-      </Tabs>
     </DashboardLayout>
   );
 };

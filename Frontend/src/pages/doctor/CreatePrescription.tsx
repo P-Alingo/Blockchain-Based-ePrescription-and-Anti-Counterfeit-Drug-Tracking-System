@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Clock, Shield, Activity } from "lucide-react";
+import { FileText, Clock, Shield, Activity, AlertTriangle } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -15,8 +15,9 @@ const CreatePrescription = () => {
     { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: true },
     { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
     { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: false },
-  ];
-
+    { icon: AlertTriangle, label: 'Blockchain', path: '/doctor/blockchain', active: false },
+       
+];
   const [formData, setFormData] = useState({
     patientId: "",
     patientName: "",

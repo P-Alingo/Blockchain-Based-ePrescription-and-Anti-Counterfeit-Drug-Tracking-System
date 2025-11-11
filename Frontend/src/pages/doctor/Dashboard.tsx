@@ -87,11 +87,13 @@ const DoctorDashboard = () => {
   const userEmail = userData?.email || "";
 
   const sidebarItems = [
-    { icon: Shield, label: "Dashboard", path: "/doctor/dashboard" },
-    { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription" },
-    { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions" },
-    { icon: Activity, label: "Analytics", path: "/doctor/analytics" },
-  ];
+    { icon: Shield, label: "Dashboard", path: "/doctor/dashboard", active: true },
+    { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: false },
+    { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
+    { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: false },
+    { icon: AlertTriangle, label: 'Blockchain', path: '/doctor/blockchain', active: false },
+       
+];
 
   // ---------------------------
   // Fetch Dashboard Data

@@ -19,7 +19,16 @@ import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Activity, BarChart2, PieChart, Users, FileText, Clock, Shield } from 'lucide-react';
+import { Activity, BarChart2, PieChart, Users, FileText, Clock, Shield, AlertTriangle } from 'lucide-react';
+
+// Sidebar items for doctor
+const sidebarItems = [
+  { icon: Shield, label: "Dashboard", path: "/doctor/dashboard", active: false },
+  { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: false },
+  { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
+  { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: true },
+  { icon: AlertTriangle, label: 'Blockchain', path: '/doctor/blockchain', active: false },
+];
 
 // Define AnalyticsData type
 type AnalyticsData = {
@@ -130,28 +139,11 @@ export default function Analytics() {
     fetchAnalytics();
   }, [token, userRole]);
 
-  // Define sidebar items based on user role
-  const getSidebarItems = () => {
-    if (userRole === 'patient') {
-      return [
-        { icon: Shield, label: "Dashboard", path: "/patient/dashboard", active: location.pathname === "/patient/dashboard" },
-        { icon: FileText, label: "My Prescriptions", path: "/patient/prescriptions", active: location.pathname === "/patient/prescriptions" },
-        { icon: Activity, label: "Analytics", path: "/patient/analytics", active: location.pathname === "/patient/analytics" },
-      ];
-    } else {
-      return [
-        { icon: Shield, label: "Dashboard", path: "/doctor/dashboard", active: location.pathname === "/doctor/dashboard" },
-        { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: location.pathname === "/doctor/create-prescription" },
-        { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: location.pathname === "/doctor/prescriptions" },
-        { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: location.pathname === "/doctor/analytics" },
-      ];
-    }
-  };
 
   if (loading) {
     return (
       <DashboardLayout
-        sidebarItems={getSidebarItems()}
+        sidebarItems={sidebarItems}
         userRole={userRole}
         userName={userName}
         userEmail={userEmail}
@@ -166,7 +158,7 @@ export default function Analytics() {
   if (error) {
     return (
       <DashboardLayout
-        sidebarItems={getSidebarItems()}
+        sidebarItems={sidebarItems}
         userRole={userRole}
         userName={userName}
         userEmail={userEmail}
@@ -191,7 +183,7 @@ export default function Analytics() {
   if (!data) {
     return (
       <DashboardLayout
-        sidebarItems={getSidebarItems()}
+        sidebarItems={sidebarItems}
         userRole={userRole}
         userName={userName}
         userEmail={userEmail}
@@ -272,7 +264,7 @@ export default function Analytics() {
 
   return (
     <DashboardLayout
-      sidebarItems={getSidebarItems()}
+      sidebarItems={sidebarItems}
       userRole={userRole}
       userName={userName}
       userEmail={userEmail}
