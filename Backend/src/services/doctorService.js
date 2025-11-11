@@ -53,9 +53,8 @@ export async function createPrescription({
   const issueDateObj = new Date(issueDate);
   const validUntilObj = new Date(validUntil);
   if (isNaN(issueDateObj) || isNaN(validUntilObj)) throw new Error("Invalid dates provided");
-    let status = "pending";
-    if (today >= issueDateObj && today <= validUntilObj) status = "issued";
-    else if (today > validUntilObj) status = "expired";
+  let status = "issued";
+  if (today > validUntilObj) status = "expired";
   // Generate unique prescription code
   const prescriptionCode = `PRESC-${Math.floor(100000 + Math.random() * 900000)}`;
   const insertText = `

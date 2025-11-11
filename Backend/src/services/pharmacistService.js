@@ -61,6 +61,32 @@ export async function confirmPharmacistDelivery(userId, shipmentId, status) {
   await query("UPDATE shipment SET status = $1, updated_at = NOW() WHERE id = $2", [status, shipmentId]);
   await query("UPDATE batch_request SET status = $1, delivered_date = NOW() WHERE batch_id = $2 AND pharmacist_id = $3", [status, shipment.batch_id, pharmacist.id]);
 
+  // Only add to inventory if status is 'completed'
+  if (status === 'completed') {
+    const facilityId = pharmacist.companyid;
+    const drugId = shipment.drug_id;
+    const batchId = shipment.batch_id;
+    const quantity = shipment.quantity_shipped;
+    // Check if inventory record exists for this batch and facility
+    const invRes = await query(
+      `SELECT * FROM inventory WHERE batch_id = $1 AND facility_id = $2 AND facility_type = 'pharmacy'`,
+      [batchId, facilityId]
+    );
+    if (invRes.rows.length > 0) {
+      // Update available_quantity
+      await query(
+        `UPDATE inventory SET available_quantity = available_quantity + $1, last_updated = NOW() WHERE batch_id = $2 AND facility_id = $3 AND facility_type = 'pharmacy'`,
+        [quantity, batchId, facilityId]
+      );
+    } else {
+      // Insert new inventory record
+      await query(
+        `INSERT INTO inventory (batch_id, drug_id, facility_id, facility_type, available_quantity, last_updated) VALUES ($1, $2, $3, 'pharmacy', $4, NOW())`,
+        [batchId, drugId, facilityId, quantity]
+      );
+    }
+  }
+  // If flagged, do NOT add to inventory
   return { success: true };
 }
 
@@ -79,71 +105,103 @@ export async function getPharmacistAnalytics(userId) {
   const pharmacistRes = await query("SELECT * FROM pharmacist WHERE userid = $1", [userId]);
   const pharmacist = pharmacistRes.rows[0];
   if (!pharmacist) {
-    return { logs: [], stats: { totalDispensed: 0, totalVerified: 0, totalPending: 0, inventoryUpdates: 0, failedDispenses: 0 } };
+    return { error: "Pharmacist not found" };
   }
 
-  const dispensedRes = await query(
-    "SELECT COUNT(*) FROM prescription WHERE is_deleted = false AND dispensed_by = $1",
-    [pharmacist.id]
-  );
-  const totalDispensed = parseInt(dispensedRes.rows[0].count, 10);
+  // Prescriptions: issued, expired, dispensed
+  const prescriptionsRes = await query(`
+    SELECT p.*, pa.id as patient_id, u.full_name as patient_name, d.id as doctor_id, du.full_name as doctor_name, dr.id as drug_id, dr.name as drug_name
+    FROM prescription p
+    LEFT JOIN patient pa ON p.patient_id = pa.id
+    LEFT JOIN users u ON pa.userid = u.id
+    LEFT JOIN doctor d ON p.doctor_id = d.id
+    LEFT JOIN users du ON d.userid = du.id
+    LEFT JOIN drug dr ON p.drug_id = dr.id
+    WHERE p.is_deleted = false AND (p.status = 'issued' OR p.status = 'expired' OR p.status = 'dispensed')
+    ORDER BY p.issue_date DESC
+  `);
 
-    const issuedRes = await query(
-      "SELECT COUNT(*) FROM prescription WHERE is_deleted = false AND status = 'issued' AND dispensed_by = $1",
-      [pharmacist.id]
-    );
-    const totalIssued = parseInt(issuedRes.rows[0].count, 10);
+  // Shipments: delivered, completed
+  const shipmentsRes = await query(`
+    SELECT s.*, db.batchnumber, dr.name as drug_name
+    FROM shipment s
+    LEFT JOIN drugbatch db ON s.batch_id = db.id
+    LEFT JOIN drug dr ON db.drugid = dr.id
+    WHERE s.pharmacist_id = $1 AND (s.status = 'delivered' OR s.status = 'completed') AND (s.is_deleted IS NULL OR s.is_deleted = false)
+    ORDER BY s.created_at DESC
+  `, [pharmacist.id]);
 
-  // Removed pending status, only use issued and dispensed
+  // Batch requests: pending, flagged, completed
+  const batchRequestsRes = await query(`
+    SELECT br.*, db.batchnumber, dr.name as drug_name
+    FROM batch_request br
+    LEFT JOIN drugbatch db ON br.batch_id = db.id
+    LEFT JOIN drug dr ON br.drug_id = dr.id
+    WHERE br.pharmacist_id = $1 AND (br.status = 'pending' OR br.status = 'flagged' OR br.status = 'completed') AND (br.is_deleted IS NULL OR br.is_deleted = false)
+    ORDER BY br.request_date DESC
+  `, [pharmacist.id]);
 
-  const inventoryRes = await query(
-    "SELECT COUNT(*) FROM inventory WHERE facility_id = $1 AND facility_type = 'pharmacy'",
-    [pharmacist.companyid]
-  );
-  const inventoryUpdates = parseInt(inventoryRes.rows[0].count, 10);
+  // Inventory: all drugs in pharmacy
+  const inventoryRes = await query(`
+    SELECT inv.*, db.batchnumber, dr.name as drug_name
+    FROM inventory inv
+    LEFT JOIN drugbatch db ON inv.batch_id = db.id
+    LEFT JOIN drug dr ON (dr.id = inv.drug_id OR dr.id = db.drugid)
+    WHERE inv.facility_id = $1 AND inv.facility_type = 'pharmacy'
+    ORDER BY inv.last_updated DESC
+  `, [pharmacist.companyid]);
 
+  // Build analytics arrays for tabs
+  const dispensed = prescriptionsRes.rows.filter(p => p.status === 'dispensed');
+  const issued = prescriptionsRes.rows.filter(p => p.status === 'issued');
+  const expired = prescriptionsRes.rows.filter(p => p.status === 'expired');
+  const deliveredShipments = shipmentsRes.rows.filter(s => s.status === 'delivered' || s.status === 'completed');
+  const pending = batchRequestsRes.rows.filter(br => br.status === 'pending');
+  const completedBatchRequests = batchRequestsRes.rows.filter(br => br.status === 'completed');
+  const inventory = inventoryRes.rows;
+
+  // All logs: combine all relevant records
+  const allLogs = [
+    ...issued.map(p => ({ type: 'prescription_issued', ...p })),
+    ...expired.map(p => ({ type: 'prescription_expired', ...p })),
+    ...dispensed.map(p => ({ type: 'prescription_dispensed', ...p })),
+    ...deliveredShipments.map(s => ({ type: 'shipment_delivered', ...s })),
+    ...pending.map(br => ({ type: 'batch_request_pending', ...br })),
+    ...completedBatchRequests.map(br => ({ type: 'batch_request_completed', ...br })),
+    ...inventory.map(inv => ({ type: 'inventory_drug', ...inv }))
+  ];
+
+  // Stats
+  const totalDispensed = dispensed.length;
+  const totalIssued = issued.length;
+  const totalExpired = expired.length;
+  const totalDeliveredShipments = deliveredShipments.length;
+  const totalPendingBatchRequests = pending.length;
+  const totalCompletedBatchRequests = completedBatchRequests.length;
+  const inventoryUpdates = inventory.length;
   const failedDispenses = 0;
 
-  const logsRes = await query(`
-    SELECT p.id, 'prescription_dispensed' AS action, p.dispensed_date AS timestamp, u.full_name AS user, p.prescription_code AS code, p.status, TRUE AS success,
-      CONCAT('Prescription dispensed: ', p.prescription_code) AS description
-    FROM prescription p
-    LEFT JOIN pharmacist ph ON p.dispensed_by = ph.id
-    LEFT JOIN users u ON ph.userid = u.id
-    WHERE p.is_deleted = false AND p.dispensed_by = $1 AND p.status = 'dispensed'
-    UNION ALL
-    SELECT p.id, 'prescription_issued' AS action, p.updated_at AS timestamp, u.full_name AS user, p.prescription_code AS code, p.status, TRUE AS success,
-      CONCAT('Prescription issued: ', p.prescription_code) AS description
-    FROM prescription p
-    LEFT JOIN pharmacist ph ON p.dispensed_by = ph.id
-    LEFT JOIN users u ON ph.userid = u.id
-    WHERE p.is_deleted = false AND p.dispensed_by = $1 AND p.status = 'issued'
-    UNION ALL
-    SELECT inv.id, 'inventory_updated' AS action, inv.last_updated AS timestamp, u.full_name AS user, NULL AS code, NULL AS status, TRUE AS success,
-      CONCAT('Inventory updated: batch ', inv.batch_id) AS description
-    FROM inventory inv
-    LEFT JOIN pharmacist ph ON inv.facility_id = ph.companyid
-    LEFT JOIN users u ON ph.userid = u.id
-    WHERE inv.facility_id = $2 AND inv.facility_type = 'pharmacy'
-    ORDER BY timestamp DESC
-    LIMIT 50
-  `, [pharmacist.id, pharmacist.companyid]);
-
-  const logs = logsRes.rows.map(row => ({
-    id: row.id,
-    action: row.action,
-    timestamp: row.timestamp,
-    user: row.user,
-    code: row.code,
-    status: row.status,
-    success: row.success,
-    description: row.description
-  }));
   return {
-    logs,
+    dispensed,
+    issued,
+    expired,
+    deliveredShipments,
+    pending,
+    completedBatchRequests,
+    inventory,
+    all: allLogs.sort((a, b) => {
+      // Sort by created_at, request_date, or last_updated
+      const aTime = a.created_at || a.request_date || a.last_updated || 0;
+      const bTime = b.created_at || b.request_date || b.last_updated || 0;
+      return new Date(bTime) - new Date(aTime);
+    }),
     stats: {
       totalDispensed,
       totalIssued,
+      totalExpired,
+      totalDeliveredShipments,
+      totalPendingBatchRequests,
+      totalCompletedBatchRequests,
       inventoryUpdates,
       failedDispenses
     }

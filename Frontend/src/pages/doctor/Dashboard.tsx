@@ -166,15 +166,11 @@ const DoctorDashboard = () => {
 
   // Helper function to determine prescription status with expiration check
   const getPrescriptionStatus = (prescription: Prescription) => {
+    if (prescription.status?.toLowerCase() === "dispensed") return "Dispensed";
+    if (prescription.status?.toLowerCase() === "expired") return "Expired";
     const now = new Date();
     const validUntil = prescription.valid_until ? new Date(prescription.valid_until) : null;
-    
-    // Check if prescription is expired
-    if (validUntil && now > validUntil) {
-      return "Expired";
-    }
-    
-    // Return the actual status from database
+    if (validUntil && now > validUntil) return "Expired";
     return prescription.status || "Pending";
   };
 

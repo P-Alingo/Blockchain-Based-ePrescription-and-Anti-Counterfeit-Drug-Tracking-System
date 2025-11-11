@@ -89,16 +89,17 @@ const PharmacistDashboard = () => {
         if (!invRes.ok) throw new Error('Failed to fetch inventory');
         const invData = await invRes.json();
         console.log('[Dashboard] Data:', invData);
-        setInventoryStatus(invData.map(drug => {
-          const total = drug.batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-          const available = drug.batches.reduce((sum, b) => sum + (b.available_quantity || b.quantity || 0), 0);
-          const percentage = total > 0 ? Math.round((available / total) * 100) : 0;
-          return {
-            id: drug.id,
-            name: drug.name,
-            percentage
-          };
-        }));
+        setInventoryStatus(invData
+          .filter(drug => {
+            // Only show drugs where total available quantity > 0 for the logged-in pharmacist's facility
+            const available = drug.batches.reduce((sum, b) => sum + (b.available_quantity || 0), 0);
+            return available > 0;
+          })
+          .map(drug => ({
+            id: drug.drug_id || drug.id,
+            name: drug.drug_name || drug.name
+          }))
+        );
       } catch (err) {
         console.error('[Dashboard] Error:', err);
         setInventoryError('Failed to fetch inventory');
@@ -204,26 +205,58 @@ const PharmacistDashboard = () => {
               <CardTitle>Inventory Status</CardTitle>
               <CardDescription>Current stock levels</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {inventoryLoading ? (
-                <div className="p-4 text-center">Loading...</div>
-              ) : inventoryError ? (
-                <div className="p-4 text-center text-red-500">{inventoryError}</div>
-              ) : inventoryStatus.length === 0 ? (
-                <div className="p-4 text-center">No inventory data</div>
-              ) : (
-                inventoryStatus.map((item) => (
-                  <div key={item.id ? `inventory-${item.id}` : `inventory-idx-${inventoryStatus.indexOf(item)}`} className="space-y-2">
-                    {/* If you map batches or other arrays inside, ensure those also have unique keys, e.g. batch.id */}
-                    <div className="flex justify-between text-sm">
-                      <span>{item.name}</span>
-                      <span className={item.percentage < 20 ? "text-red-600" : item.percentage < 40 ? "text-orange-600" : ""}>{item.percentage}%</span>
+              <CardContent className="space-y-4">
+                {inventoryLoading ? (
+                  <div className="p-4 text-center">Loading...</div>
+                ) : inventoryError ? (
+                  <div className="p-4 text-center text-red-500">{inventoryError}</div>
+                ) : inventoryStatus.length === 0 ? (
+                  <div className="p-4 text-center">No inventory data</div>
+                ) : (
+                  inventoryStatus.map((item) => (
+                    <div
+                      key={item.id ? `inventory-${item.id}` : `inventory-idx-${inventoryStatus.indexOf(item)}`}
+                      className="rounded-lg border bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-blue-950 p-4 shadow-sm flex flex-col gap-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <PillBottle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          <span className="font-semibold text-base text-green-800 dark:text-green-200">{item.name}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                          In Stock
+                        </Badge>
+                      </div>
+                      {/* Show batch details if available */}
+                      {item.batches && item.batches.length > 0 && (
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {item.batches.map((batch) => (
+                            <div
+                              key={batch.batch_id || batch.id}
+                              className="flex flex-col border rounded-md p-2 bg-white dark:bg-gray-900"
+                            >
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Batch #{batch.batchnumber || batch.batch_id}</span>
+                                <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                  Qty: {batch.available_quantity}
+                                </Badge>
+                              </div>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Exp: {batch.expirydate ? new Date(batch.expirydate).toLocaleDateString() : 'N/A'}</span>
+                                {batch.available_quantity > 0 ? (
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <Progress value={item.percentage} className={item.percentage < 20 ? "h-2 bg-red-100" : item.percentage < 40 ? "h-2 bg-orange-100" : "h-2"} />
-                  </div>
-                ))
-              )}
-            </CardContent>
+                  ))
+                )}
+              </CardContent>
           </Card>
         </div>
 

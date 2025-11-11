@@ -67,6 +67,7 @@ async function getManufacturerShipments(manufacturerId) {
       s.status, 
       s.departure_date, 
       s.arrival_date, 
+      s.quantity_shipped,
       s.route, 
       s.vehicle_number, 
       s.temperature, 

@@ -50,18 +50,43 @@ const Shipments = () => {
 
   const [showDetails, setShowDetails] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<ShipmentDetails | null>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const API_BASE_URL = 'http://localhost:4000';
   const [showCreate, setShowCreate] = useState(false);
   const [createData, setCreateData] = useState({ batch_id: '', distributor_company_id: '', destination_facility_id: '', pharmacy_company_id: '', pharmacy_facility_id: '', quantity_shipped: '', vehicle_number: '', route: '', temperature: '', shipment_type: 'Manufacturer→Distributor→Pharmacist' });
   const [statusUpdate, setStatusUpdate] = useState('');
 
-  // Fetch shipments
-  const { data: shipments = [], refetch } = useQuery<any[]>({
-    queryKey: ['manufacturer-shipments'],
-    queryFn: async (): Promise<any[]> => {
-      const res = await axios.get('/api/manufacturer/shipments');
-      return Array.isArray(res.data) ? res.data : [];
+  // Manual fetch for shipments with token and error/loading state
+  const [shipments, setShipments] = useState<any[]>([]);
+  const [shipmentsLoading, setShipmentsLoading] = useState(true);
+  const [shipmentsError, setShipmentsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setShipments([]);
+      setShipmentsError('Not authenticated');
+      setShipmentsLoading(false);
+      return;
     }
-  });
+    const fetchShipments = async () => {
+      setShipmentsLoading(true);
+      setShipmentsError(null);
+      try {
+        const res = await axios.get('http://localhost:4000/api/manufacturer/shipments', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setShipments(Array.isArray(res.data) ? res.data : []);
+      } catch (err: any) {
+        setShipmentsError(err?.response?.data?.message || 'Failed to load shipments. Please try again.');
+        setShipments([]);
+      } finally {
+        setShipmentsLoading(false);
+      }
+    };
+    fetchShipments();
+  }, []);
 
   // Shipment details
   const { data: shipmentDetails } = useQuery<ShipmentDetails | null>({
@@ -150,7 +175,7 @@ const Shipments = () => {
       });
       return res.data;
     },
-    onSuccess: () => { setShowCreate(false); refetch(); },
+    onSuccess: () => { setShowCreate(false); },
     onError: (error: any) => {
       if (window.toast) {
         const msg = error?.response?.data?.message || error?.message || 'Failed to create shipment';
@@ -162,10 +187,10 @@ const Shipments = () => {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => (await axios.put(`/api/manufacturer/shipment/${id}/status`, { status })).data,
-    onSuccess: () => { setShowDetails(false); refetch(); }
+    onSuccess: () => { setShowDetails(false); }
   });
 
-  // Table columns: Shipment No | Batch | Drug | Distributor | Status | Departure Date | Arrival Date | Actions
+  // Table columns: Show all shipments for manufacturer's drug batches
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
       <div className="flex items-center justify-between mb-6">
@@ -186,32 +211,85 @@ const Shipments = () => {
                 <TableHead>Status</TableHead>
                 <TableHead>Departure Date</TableHead>
                 <TableHead>Arrival Date</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Temperature</TableHead>
+                <TableHead>Route</TableHead>
+                <TableHead>Vehicle No</TableHead>
+                <TableHead>QR Code</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-                {shipments.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      No shipments found.
+              {shipmentsLoading ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-8">Loading shipments...</TableCell>
+                </TableRow>
+              ) : shipmentsError ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center text-red-500 py-8">{shipmentsError}</TableCell>
+                </TableRow>
+              ) : shipments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center text-muted-foreground py-8">No shipments found.</TableCell>
+                </TableRow>
+              ) : (
+                shipments.map(s => (
+                  <TableRow key={s.id}>
+                    <TableCell>{s.shipmentnumber}</TableCell>
+                    <TableCell>{s.batchnumber}</TableCell>
+                    <TableCell>{s.drug}</TableCell>
+                    <TableCell>{s.distributor}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === 'completed' ? 'secondary' : s.status === 'in_transit' ? 'outline' : s.status === 'flagged' ? 'destructive' : 'default'}>
+                        {s.status}
+                      </Badge>
                     </TableCell>
+                    <TableCell>{s.departure_date ? new Date(s.departure_date).toLocaleString() : '-'}</TableCell>
+                    <TableCell>{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</TableCell>
+                    <TableCell>{(s.quantity_shipped !== undefined && s.quantity_shipped !== null) ? String(s.quantity_shipped) : '-'}</TableCell>
+                    <TableCell>{s.temperature}</TableCell>
+                    <TableCell>{s.route}</TableCell>
+                    <TableCell>{s.vehicle_number}</TableCell>
+                    <TableCell>
+                      {s.qrcode_path ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            let url = s.qrcode_path;
+                            if (url.startsWith('/')) {
+                              setQrImageUrl(`${API_BASE_URL}${url}`);
+                            } else {
+                              setQrImageUrl(url);
+                            }
+                            setShowQrModal(true);
+                          }}
+                        >
+                          Show QR
+                        </Button>
+                      ) : '-'}
+                    </TableCell>
+      {/* QR Code Modal */}
+      <Dialog open={showQrModal} onOpenChange={setShowQrModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Shipment QR Code</DialogTitle>
+          </DialogHeader>
+          {qrImageUrl ? (
+            <div className="flex flex-col items-center justify-center py-4">
+              <img src={qrImageUrl} alt="QR Code" style={{ width: 200, height: 200 }} />
+              <a href={qrImageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mt-2">Open Full Size</a>
+            </div>
+          ) : (
+            <div className="text-center py-8">No QR code available.</div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQrModal(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
                   </TableRow>
-                ) : (
-                  shipments.map(s => (
-                    <TableRow key={s.id}>
-                      <TableCell>{s.shipmentnumber}</TableCell>
-                      <TableCell>{s.batchnumber}</TableCell>
-                      <TableCell>{s.drug}</TableCell>
-                      <TableCell>{s.distributor}</TableCell>
-                      <TableCell><Badge variant={s.status === 'Delivered' ? 'secondary' : s.status === 'In Transit' ? 'outline' : 'default'}>{s.status}</Badge></TableCell>
-                      <TableCell>{s.departure_date ? new Date(s.departure_date).toLocaleString() : '-'}</TableCell>
-                      <TableCell>{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedShipment(s); setShowDetails(true); }}><Eye className="h-4 w-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
