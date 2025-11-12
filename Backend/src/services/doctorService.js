@@ -121,6 +121,7 @@ export async function getPrescriptionsByDoctor(doctorId) {
         p.issue_date,
         p.valid_until,
         p.status,
+        p.quantity,
         pat.id AS patient_id,
         u.full_name AS patient_name,
         u.dob AS patient_dob,
@@ -153,7 +154,8 @@ export async function getPrescriptionById(id, doctorId) {
        p.instructions, 
        p.issue_date, 
        p.valid_until, 
-       p.status
+       p.status,
+       p.quantity
      FROM prescription p
      JOIN patient pt ON pt.id = p.patient_id
      JOIN users u ON u.id = pt.userid

@@ -371,6 +371,9 @@ const CreatePrescription = () => {
                     Duration: <span className="text-muted-foreground">{formData.duration || "-"}</span> days
                   </p>
                   <p className="text-sm font-medium">
+                    Quantity: <span className="text-muted-foreground">{formData.quantity || "-"}</span>
+                  </p>
+                  <p className="text-sm font-medium">
                     Instructions: <span className="text-muted-foreground">{formData.instructions || "-"}</span>
                   </p>
                   <p className="text-sm font-medium">

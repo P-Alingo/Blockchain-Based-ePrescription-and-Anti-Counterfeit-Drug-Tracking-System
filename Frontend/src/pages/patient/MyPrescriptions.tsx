@@ -153,6 +153,7 @@ const MyPrescriptions = () => {
       "Doctor",
       "Date Issued",
       "Drug",
+      "Quantity",
       "Status",
       "Dosage",
       "Duration",
@@ -164,6 +165,7 @@ const MyPrescriptions = () => {
       p.doctorName,
       new Date(p.date).toLocaleDateString(),
       p.drug,
+      typeof p.quantity !== 'undefined' ? p.quantity : '-',
       p.status,
       p.dosage || 'N/A',
       p.duration || 'N/A',
@@ -384,6 +386,7 @@ const MyPrescriptions = () => {
                         <th className="px-4 py-3 text-left font-semibold">Doctor</th>
                         <th className="px-4 py-3 text-left font-semibold">Date Issued</th>
                         <th className="px-4 py-3 text-left font-semibold">Drug</th>
+                        <th className="px-4 py-3 text-left font-semibold">Quantity</th>
                         <th className="px-4 py-3 text-left font-semibold">Status</th>
                         <th className="px-4 py-3 text-left font-semibold">Details</th>
                       </tr>

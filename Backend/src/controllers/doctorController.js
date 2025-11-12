@@ -97,6 +97,7 @@ export async function createPrescription(req, res) {
       instructions,
       issueDate,
       validUntil,
+      quantity,
     } = req.body;
     const patientResult = await query("SELECT id FROM patient WHERE id = $1", [patientId]);
     if (patientResult.rowCount === 0) {
@@ -111,7 +112,7 @@ export async function createPrescription(req, res) {
     frequency = frequency.trim();
     instructions = instructions ? instructions.trim() : "";
     duration = Number(duration);
-    // Create prescription without QR code logic
+    // Create prescription with quantity
     const prescription = await createPrescriptionService({
       doctorId,
       patientId: patientTableId,
@@ -123,6 +124,7 @@ export async function createPrescription(req, res) {
       instructions,
       issueDate,
       validUntil,
+      quantity,
     });
     return res.status(201).json({
       message: "Prescription created successfully",

@@ -563,29 +563,28 @@ async function getManufacturerBlockchainTx(manufacturerId, txHash) {
 
 // Create Drug Batch service - IMPLEMENTED
 async function createDrugBatch(manufacturerId, batchData) {
-  const {
-    drugid,
-    quantity,
-    manufacturedate,
-    expirydate,
-    storagetemperature,
-    distributorcompanyid,
-    qualitycontrolofficerid
-  } = batchData;
-  
-  // Get manufacturer company info
-  const companyResult = await query(`
-    SELECT mc.name, f.name as facility_name
-    FROM manufacturer m
-    JOIN manufacturer_company mc ON mc.id = m.companyid
-    JOIN facility f ON f.id = mc.facility_id
-    WHERE m.id = $1
-  `, [manufacturerId]);
-  
-  if (companyResult.rowCount === 0) {
-    throw new Error('Manufacturer company not found');
-  }
-  
+  const sql = `
+    SELECT 
+      db.id,
+      db.batchnumber,
+      d.name AS drug_name,
+      db.quantity,
+      db.manufacturedate,
+      db.expirydate,
+      db.blockchaintx,
+      db.qrcode_path,
+      db.storagetemperature,
+      db.manufacturingfacility,
+      dc.name AS distributor_name,
+      s.shipmentnumber,
+      s.status AS shipment_status
+    FROM drugbatch db
+    JOIN drug d ON d.id = db.drugid
+    LEFT JOIN distributor_company dc ON dc.id = db.distributorcompanyid
+    LEFT JOIN shipment s ON s.batch_id = db.id
+    ${whereClause}
+    ORDER BY db.manufacturedate DESC, db.id DESC
+  `;
   const manufacturerCompany = companyResult.rows[0];
   
   // Generate batch number and blockchain transaction

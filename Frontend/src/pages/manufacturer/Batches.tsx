@@ -97,6 +97,7 @@ interface EditBatchForm {
   manufacturedate: string;
   expirydate: string;
   quantity: number;
+  // remaining_quantity?: number; // Removed as per requirement
   storagetemperature?: number;
   manufacturingfacility?: string;
   qualitycontrolofficerid?: number;

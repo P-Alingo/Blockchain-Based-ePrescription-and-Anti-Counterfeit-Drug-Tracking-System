@@ -61,7 +61,7 @@ export async function confirmPharmacistDelivery(userId, shipmentId, status) {
   await query("UPDATE shipment SET status = $1, updated_at = NOW() WHERE id = $2", [status, shipmentId]);
   await query("UPDATE batch_request SET status = $1, delivered_date = NOW() WHERE batch_id = $2 AND pharmacist_id = $3", [status, shipment.batch_id, pharmacist.id]);
 
-  // Only add to inventory if status is 'completed'
+  // Only add to inventory if status is 'completed'. If flagged, do NOT add to inventory.
   if (status === 'completed') {
     const facilityId = pharmacist.companyid;
     const drugId = shipment.drug_id;
@@ -86,7 +86,7 @@ export async function confirmPharmacistDelivery(userId, shipmentId, status) {
       );
     }
   }
-  // If flagged, do NOT add to inventory
+  // If status is flagged, do NOT add to inventory (no code runs here)
   return { success: true };
 }
 

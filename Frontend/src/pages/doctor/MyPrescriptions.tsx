@@ -47,6 +47,7 @@ interface Prescription {
   dosage: string;
   dosage_amount?: string;
   dosage_unit?: string;
+  quantity?: number;
   frequency?: string;
   duration: number;
   instructions?: string;
@@ -114,6 +115,7 @@ const MyPrescriptions: React.FC = () => {
         valid: p.valid_until || "",
         dispensed: p.status.toLowerCase() === "dispensed",
         qrcode: p.qrcode_path || p.qrcode || "",
+        quantity: p.quantity || 0,
       }));
 
       setPrescriptions(data);
@@ -291,13 +293,14 @@ const MyPrescriptions: React.FC = () => {
   };
 
   const exportCSV = () => {
-    const headers = ["Prescription ID", "Patient", "Age", "Drug", "Dosage", "Duration", "Status", "Issued", "Valid Until"];
+    const headers = ["Prescription ID", "Patient", "Age", "Drug", "Dosage", "Quantity", "Duration", "Status", "Issued", "Valid Until"];
     const rows = filteredPrescriptions.map((p) => [
       p.id,
       p.patient_name,
       calculateAge(p.dob),
       p.drug_name,
       `${p.dosage_amount} ${p.dosage_unit}`,
+      p.quantity ?? "-",
       p.duration,
       p.status,
       formatDate(p.issued),
@@ -416,6 +419,7 @@ const MyPrescriptions: React.FC = () => {
                           <p>
                             <span className="font-medium">Dosage:</span> {p.dosage_amount || "-"} {p.dosage_unit || ""}
                           </p>
+                          <p><span className="font-medium">Quantity:</span> {p.quantity ?? "-"}</p>
                           <p><span className="font-medium">Frequency:</span> {p.frequency || "-"}</p>
                           <p><span className="font-medium">Duration:</span> {p.duration} days</p>
                           <p><span className="font-medium">Instructions:</span> {p.instructions || "None"}</p>
@@ -545,6 +549,7 @@ const MyPrescriptions: React.FC = () => {
                   <div className="space-y-2">
                     <p><span className="font-medium">Drug:</span> {selectedPrescription.drug_name}</p>
                     <p><span className="font-medium">Dosage:</span> {selectedPrescription.dosage_amount} {selectedPrescription.dosage_unit}</p>
+                    <p><span className="font-medium">Quantity:</span> {selectedPrescription.quantity ?? "-"}</p>
                     <p><span className="font-medium">Frequency:</span> {selectedPrescription.frequency || "Not specified"}</p>
                     <p><span className="font-medium">Duration:</span> {selectedPrescription.duration} days</p>
                     <p><span className="font-medium">Instructions:</span> {selectedPrescription.instructions || "None"}</p>
