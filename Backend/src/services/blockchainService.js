@@ -280,10 +280,26 @@ export const updateUserStatusOnChain = async (walletAddress, statusEnum) => {
       throw new Error(`Cannot update status: User ${walletAddress} not registered on blockchain`);
     }
 
-    const tx = await contract.updateUserStatus(walletAddress, statusEnum, {
-      gasLimit: 300000
-    });
-    const receipt = await tx.wait();
+    let tx, receipt;
+    // Map statusEnum to contract function
+    // 0: Pending, 1: Active, 2: Suspended, 3: Inactive
+    switch (statusEnum) {
+      case 1: // Active
+        tx = await contract.approveUser(walletAddress, { gasLimit: 300000 });
+        break;
+      case 2: // Suspended
+        tx = await contract.suspendUser(walletAddress, { gasLimit: 300000 });
+        break;
+      case 3: // Inactive
+        tx = await contract.deactivateUser(walletAddress, { gasLimit: 300000 });
+        break;
+      case 4: // Reactivate (if you use 4 for reactivation)
+        tx = await contract.reactivateUser(walletAddress, { gasLimit: 300000 });
+        break;
+      default:
+        throw new Error(`Unsupported statusEnum: ${statusEnum}`);
+    }
+    receipt = await tx.wait();
     console.log(`✅ Status updated in block ${receipt.blockNumber}`);
     return { success: true, blockNumber: receipt.blockNumber };
   } catch (error) {
@@ -325,22 +341,51 @@ export async function syncUserOnChain(user) {
     const roleId = await getOrCreateRoleId(user.role);
     console.log(`✅ Using role ID ${roleId} for ${user.role}`);
 
-    // Send transaction
-    const tx = await contract.registerUser(user.wallet_address, roleId);
+    // Check if user is already registered on-chain
+    const userExists = await checkUserExistsOnChain(user.wallet_address);
+    let receipt, transactionHash, blockNumber;
 
-    // Wait for mining and get receipt
-    const receipt = await tx.wait();
+    if (!userExists) {
+      // Register user on-chain
+      const tx = await contract.registerUser(user.wallet_address, roleId);
+      receipt = await tx.wait();
+      transactionHash = receipt.transactionHash;
+      blockNumber = receipt.blockNumber;
+      console.log(`✅ User ${user.full_name} registered on-chain`);
+      console.log(`📌 Transaction hash: ${transactionHash}`);
+      console.log(`📌 Block number: ${blockNumber}`);
+    } else {
+      console.log(`✅ User ${user.full_name} already registered on-chain, skipping registration.`);
+    }
 
-    console.log(`✅ User ${user.full_name} registered on-chain`);
-    console.log(`📌 Transaction hash: ${receipt.transactionHash}`);
-    console.log(`📌 Block number: ${receipt.blockNumber}`);
+    // Update status on-chain (approve or change status)
+    let statusTx, statusReceipt;
+    try {
+      // Use updateUserStatusOnChain for status changes
+      const statusEnum = statusToEnum(user.status || 'active');
+      // Only update status if not 'pending' (enum 0)
+      if (statusEnum !== 0) {
+        const statusResult = await updateUserStatusOnChain(user.wallet_address, statusEnum);
+        console.log(`✅ User ${user.full_name} status updated on-chain (${user.status})`);
+        if (statusResult && statusResult.blockNumber) {
+          console.log(`📌 Status block number: ${statusResult.blockNumber}`);
+        }
+        statusReceipt = { transactionHash: statusResult.transactionHash, blockNumber: statusResult.blockNumber };
+      } else {
+        console.log(`ℹ️ Skipping status update to 'pending' for user ${user.wallet_address}`);
+        statusReceipt = { transactionHash: null, blockNumber: null };
+      }
+    } catch (statusErr) {
+      console.error(`❌ Failed to update user status on-chain:`, statusErr.message || statusErr);
+      return { success: false, error: statusErr };
+    }
 
-    // You can optionally update your DB here with receipt.transactionHash & receipt.blockNumber
-
-    return { 
-      success: true, 
-      transactionHash: receipt.transactionHash, 
-      blockNumber: receipt.blockNumber 
+    return {
+      success: true,
+      transactionHash: transactionHash || null,
+      blockNumber: blockNumber || null,
+      statusTxHash: statusReceipt.transactionHash,
+      statusBlockNumber: statusReceipt.blockNumber
     };
   } catch (err) {
     console.error("❌ syncUserOnChain failed:", err.message || err);
@@ -359,6 +404,7 @@ export const statusToEnum = (status) => {
     case 'pending': return 0;
     case 'active': return 1;
     case 'suspended': return 2;
+    case 'inactive': return 3;
     default: throw new Error('Invalid status string');
   }
 };
@@ -420,46 +466,39 @@ export const listenForUserEvents = (options = {}) => {
     } = options;
 
     // User Registered Event
-    contract.on('UserRegistered', (userAddress, roleId, event) => {
-      if (logEvents) {
-        console.log(`🎯 New user registered: ${userAddress} with role ID: ${roleId}`);
-        console.log(`📝 Transaction: ${event.transactionHash}`);
-        console.log(`🕒 Block: ${event.blockNumber}`);
-      }
-      
-      if (onUserRegistered) {
-        onUserRegistered({
-          userAddress,
-          roleId: roleId.toString(),
-          transactionHash: event.transactionHash,
-          blockNumber: event.blockNumber,
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
-
-    // User Status Updated Event
-    contract.on('UserStatusUpdated', (userAddress, newStatus, event) => {
-      const statusMap = { '0': 'pending', '1': 'active', '2': 'suspended' };
-      const statusName = statusMap[newStatus.toString()] || 'unknown';
-      
-      if (logEvents) {
-        console.log(`🔄 User status updated: ${userAddress} to status: ${statusName} (${newStatus})`);
-        console.log(`📝 Transaction: ${event.transactionHash}`);
-        console.log(`🕒 Block: ${event.blockNumber}`);
-      }
-      
-      if (onUserStatusUpdated) {
-        onUserStatusUpdated({
-          userAddress,
-          newStatus: newStatus.toString(),
-          statusName,
-          transactionHash: event.transactionHash,
-          blockNumber: event.blockNumber,
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
+      contract.on('UserRegistered', async (userAddress, roleId, event) => {
+        let transactionHash = event?.transactionHash;
+        let blockNumber = event?.blockNumber;
+        // Fallback: If event is missing, fetch from recent logs
+        if (!transactionHash || !blockNumber) {
+          try {
+            // Get latest block and search for UserRegistered logs
+            const filter = contract.filters.UserRegistered(userAddress);
+            const logs = await contract.queryFilter(filter, 'latest');
+            if (logs && logs.length > 0) {
+              transactionHash = logs[0].transactionHash;
+              blockNumber = logs[0].blockNumber;
+            }
+          } catch (err) {
+            console.error('❌ Could not fetch event log for UserRegistered:', err);
+          }
+        }
+        if (logEvents) {
+          console.log(`🎯 New user registered: ${userAddress} with role ID: ${roleId}`);
+          console.log(`📝 Transaction: ${transactionHash}`);
+          console.log(`🕒 Block: ${blockNumber}`);
+        }
+        if (onUserRegistered) {
+          onUserRegistered({
+            userAddress,
+            roleId: roleId.toString(),
+            transactionHash,
+            blockNumber,
+            timestamp: new Date().toISOString()
+          });
+        }
+        // Removed onUserStatusUpdated call from UserRegistered event listener
+      });
 
     // Role Created Event
     contract.on('RoleCreated', (roleId, roleName, event) => {
@@ -643,16 +682,22 @@ export const initializeEventListeners = (options = {}) => {
 // Helper function to save events to database
 const saveEventToDatabase = async (eventType, data) => {
   try {
-    // This would integrate with your database
-    // For now, just log it
-    console.log(`💾 Saving ${eventType} event to database:`, data);
-    
-    // Example database integration:
-    // await query(
-    //   'INSERT INTO blockchain_events (event_type, user_address, details, transaction_hash, block_number) VALUES ($1, $2, $3, $4, $5)',
-    //   [eventType, data.userAddress, JSON.stringify(data), data.transactionHash, data.blockNumber]
-    // );
-    
+    // Import query from database config
+    const { query } = await import('../config/database.js');
+    // Prepare event log fields
+    const eventname = eventType;
+    const contractname = 'UserManagement';
+    const entityid = data.userAddress || data.roleId || data.entityId || null;
+    const entitytype = data.roleId ? 'user' : (data.entityType || null);
+    const transactionhash = data.transactionHash || data.txHash || null;
+    const timestamp = data.timestamp || new Date().toISOString();
+    const details = JSON.stringify(data);
+    // Insert into blockchaineventlog
+    const sql = `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, timestamp, details, processed)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
+    const params = [eventname, contractname, entityid, entitytype, transactionhash, timestamp, details, false];
+    await query(sql, params);
+    console.log(`💾 Blockchain event saved:`, { eventname, entityid, transactionhash, timestamp });
     return { success: true };
   } catch (error) {
     console.error('❌ Failed to save event to database:', error);

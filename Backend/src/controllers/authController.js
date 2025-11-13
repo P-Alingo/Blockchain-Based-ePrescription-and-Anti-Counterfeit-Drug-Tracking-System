@@ -137,7 +137,7 @@ export async function loginRequestOtp(req, res) {
   
   try {
     const { walletAddress, email } = req.body;
-    
+
     // Validate input
     if (!walletAddress || !email) {
       console.error("❌ Missing required fields");
@@ -147,14 +147,47 @@ export async function loginRequestOtp(req, res) {
       });
     }
 
+    // Fetch user from DB to check role
+    const { rows: users } = await query(
+      "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND LOWER(email)=$2 AND isverified=true AND is_deleted = false",
+      [walletAddress.toLowerCase(), email.toLowerCase()]
+    );
+    if (!users.length) {
+      return res.status(404).json({ success: false, error: 'User not found or not verified' });
+    }
+    const user = users[0];
+    // If admin, bypass on-chain status check
+    if (user.role && user.role.toLowerCase() === 'admin') {
+      console.log('🔓 Admin login: bypassing on-chain status check');
+    } else {
+      // Check on-chain status before sending OTP
+      const { getUserOnChain } = await import('../services/blockchainService.js');
+      let onChainUser;
+      try {
+        onChainUser = await getUserOnChain(walletAddress);
+      } catch (err) {
+        console.error('Blockchain status check failed:', err);
+        return res.status(500).json({ success: false, error: 'Blockchain status check failed' });
+      }
+      // Status: 0=Pending, 1=Active, 2=Suspended, 3=Inactive
+      if (!onChainUser || onChainUser.status !== 1) {
+        let statusMsg = 'Your account status is not active.';
+        switch (onChainUser?.status) {
+          case 0: statusMsg = 'Your account is pending approval.'; break;
+          case 2: statusMsg = 'Your account is suspended.'; break;
+          case 3: statusMsg = 'Your account is inactive.'; break;
+        }
+        return res.status(403).json({ success: false, error: statusMsg });
+      }
+    }
     console.log("✅ Input validation passed");
     console.log("🔄 Calling loginRequestOtpService...");
-    
+
     const result = await loginRequestOtpService(req.body);
-    
+
     console.log("✅ Service returned:", result);
     console.log("🟢 ========== REQUEST OTP SUCCESS ==========\n");
-    
+
     res.json({ success: true, ...result });
   } catch (err) {
     console.error("\n❌ ========== LOGIN REQUEST OTP ERROR ==========");
@@ -164,7 +197,7 @@ export async function loginRequestOtp(req, res) {
     console.error("Full Error:", err);
     console.error("Stack Trace:", err.stack);
     console.error("❌ ========================================\n");
-    
+
     res.status(err.status || 500).json({
       success: false,
       error: err.message || "Failed to send login OTP",
@@ -181,7 +214,6 @@ export async function loginVerifyOtp(req, res) {
   
   try {
     const result = await loginVerifyOtpService(req.body);
-    
     console.log('✅ loginVerifyOtpService returned:', result);
 
     // CRITICAL: Check if userId exists in the result
@@ -190,8 +222,36 @@ export async function loginVerifyOtp(req, res) {
       throw { status: 500, message: "Missing userId from login verification" };
     }
 
-    console.log(`✅ User ID verified: ${result.userId}`);
-
+    // Fetch user from DB to check role
+    const { rows: users } = await query(
+      "SELECT * FROM users WHERE LOWER(wallet_address)=$1 AND is_deleted = false",
+      [result.walletAddress.toLowerCase()]
+    );
+    const user = users[0];
+    // If admin, bypass on-chain status check
+    if (user && user.role && user.role.toLowerCase() === 'admin') {
+      console.log('🔓 Admin login: bypassing on-chain status check');
+    } else {
+      // Check on-chain status before allowing login
+      const { getUserOnChain } = await import('../services/blockchainService.js');
+      let onChainUser;
+      try {
+        onChainUser = await getUserOnChain(result.walletAddress);
+      } catch (err) {
+        console.error('Blockchain status check failed:', err);
+        return res.status(500).json({ success: false, error: 'Blockchain status check failed' });
+      }
+      // Status: 0=Pending, 1=Active, 2=Suspended, 3=Inactive
+      if (!onChainUser || onChainUser.status !== 1) {
+        let statusMsg = 'Your account status is not active.';
+        switch (onChainUser?.status) {
+          case 0: statusMsg = 'Your account is pending approval.'; break;
+          case 2: statusMsg = 'Your account is suspended.'; break;
+          case 3: statusMsg = 'Your account is inactive.'; break;
+        }
+        return res.status(403).json({ success: false, error: statusMsg });
+      }
+    }
     // ✅ Generate JWT using the userId from the service result
     const token = generateJwt({
       userId: result.userId,
@@ -199,8 +259,6 @@ export async function loginVerifyOtp(req, res) {
       walletAddress: result.walletAddress,
       email: result.email
     });
-
-    console.log(`✅ JWT generated successfully for user: ${result.userId}`);
 
     // Return the complete response
     const responseData = {
@@ -215,9 +273,6 @@ export async function loginVerifyOtp(req, res) {
       userCode: result.userCode
     };
 
-    console.log('✅ Sending successful response to frontend');
-    console.log('🟢 ========== VERIFY OTP SUCCESS ==========\n');
-    
     res.json(responseData);
 
   } catch (err) {
@@ -227,8 +282,7 @@ export async function loginVerifyOtp(req, res) {
       status: err.status,
       stack: err.stack
     });
-    console.error("❌ ==========================================\n");
-    
+    console.error("❌ ==========================================");
     res.status(err.status || 500).json({
       success: false,
       error: err.message || "Failed to verify login OTP",

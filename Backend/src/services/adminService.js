@@ -5,6 +5,18 @@ import { ethers } from 'ethers';
 // ===========================
 // USER MANAGEMENT SERVICES
 // ===========================
+// Approve user (admin action: pending -> active)
+export const approveUser = async (userId) => {
+  const user = await getUserById(userId);
+  if (!user.wallet_address) throw new Error("User has no wallet address");
+  if (user.status !== 'pending') throw new Error("User is not pending");
+  // Call contract method to approve user
+  const { contract } = require("./blockchainService.js");
+  const tx = await contract.approveUser(user.wallet_address);
+  const receipt = await tx.wait();
+  // The event listener will update the DB when the event is received
+  return { txHash: receipt.transactionHash, blockNumber: receipt.blockNumber };
+};
 
 // Get all users (exclude deleted by default)
 export const getAllUsers = async (includeDeleted = false) => {
@@ -113,13 +125,20 @@ export const updateUser = async (id, updates) => {
   // Sync to blockchain if wallet exists and role/status changed
   if (user.wallet_address && (updates.role || updates.status)) {
     try {
-      await blockchainService.syncUserOnChain(user);
+      const syncResult = await blockchainService.syncUserOnChain(user);
+      if (syncResult.success) {
+        const { statusTxHash, statusBlockNumber } = syncResult;
+        const { rows: updatedRows } = await query(
+          `UPDATE users SET transaction_hash=$1, block_number=$2, updatedat=NOW() WHERE id=$3 RETURNING *`,
+          [statusTxHash || null, statusBlockNumber || null, id]
+        );
+        return updatedRows[0];
+      }
     } catch (error) {
       console.warn('Blockchain sync failed during update:', error.message);
       // Don't throw - database update succeeded
     }
   }
-  
   return user;
 };
 
@@ -150,7 +169,14 @@ export const deleteUser = async (id) => {
     try {
       const userExists = await blockchainService.checkUserExistsOnChain(user.wallet_address);
       if (userExists) {
-        await blockchainService.updateUserStatusOnChain(user.wallet_address, 2); // suspended
+          const statusResult = await blockchainService.updateUserStatusOnChain(user.wallet_address, 2); // suspended
+          if (statusResult && statusResult.blockNumber) {
+            const { rows: updatedRows } = await query(
+              `UPDATE users SET transaction_hash=$1, block_number=$2, updatedat=NOW() WHERE id=$3 RETURNING *`,
+              [statusResult.transactionHash || null, statusResult.blockNumber || null, id]
+            );
+            return updatedRows[0];
+          }
       }
     } catch (blockchainError) {
       console.warn('Blockchain suspension failed:', blockchainError.message);
@@ -182,7 +208,14 @@ export const restoreUser = async (id) => {
     try {
       const userExists = await blockchainService.checkUserExistsOnChain(user.wallet_address);
       if (userExists) {
-        await blockchainService.updateUserStatusOnChain(user.wallet_address, 1); // active
+          const statusResult = await blockchainService.updateUserStatusOnChain(user.wallet_address, 1); // active
+          if (statusResult && statusResult.blockNumber) {
+            const { rows: updatedRows } = await query(
+              `UPDATE users SET transaction_hash=$1, block_number=$2, updatedat=NOW() WHERE id=$3 RETURNING *`,
+              [statusResult.transactionHash || null, statusResult.blockNumber || null, id]
+            );
+            return updatedRows[0];
+          }
       }
     } catch (blockchainError) {
       console.warn('Blockchain reactivation failed:', blockchainError.message);
@@ -218,7 +251,6 @@ export const getDeletedUsers = async () => {
 // Sync user to blockchain manually
 export const syncUserToBlockchain = async (id) => {
   const user = await getUserById(id);
-  
   if (!user.wallet_address || user.is_deleted) {
     throw new Error('User has no wallet address or is deleted');
   }
@@ -229,17 +261,59 @@ export const syncUserToBlockchain = async (id) => {
     throw new Error('Blockchain connection unavailable');
   }
 
-    // Try blockchain sync first
-    const syncResult = await blockchainService.syncUserOnChain(user);
-    if (!syncResult.success) {
-      // Do NOT update status, return error
-      throw new Error('Blockchain sync failed: ' + (syncResult.error?.message || syncResult.error));
+  // Sync user on-chain and get tx details
+  const syncResult = await blockchainService.syncUserOnChain(user);
+  if (!syncResult.success) {
+    throw new Error('Blockchain sync failed: ' + (syncResult.error?.message || syncResult.error));
+  }
+
+  // If user.status is 'pending', keep as 'pending', else set to current status
+  const newStatus = user.status === 'pending' ? 'pending' : user.status;
+    // Get on-chain status
+    let onChainStatus;
+    try {
+      onChainStatus = await blockchainService.getUserStatusFromChain(user.wallet_address);
+    } catch (err) {
+      throw new Error('Failed to fetch on-chain status: ' + err.message);
     }
 
-    // Only update status to active if blockchain sync succeeded
+    // Map DB status to enum
+    const desiredStatus = user.status;
+    const statusEnum = blockchainService.statusToEnum(desiredStatus);
+
+    // If on-chain status matches desired status, skip blockchain tx and just update DB
+    if (statusEnum === onChainStatus) {
+      const { rows: updatedRows } = await query(
+        'UPDATE users SET status=$1, updatedat=NOW() WHERE id=$2 RETURNING *',
+        [desiredStatus, id]
+      );
+      return updatedRows[0];
+    }
+
+    // Only call approveUser if on-chain status is pending and desired status is active
+    let statusTxHash = null;
+    let statusBlockNumber = null;
+    if (desiredStatus === 'active' && onChainStatus === 0) { // 0 = pending
+      try {
+        const { contract } = require("./blockchainService.js");
+        const tx = await contract.approveUser(user.wallet_address);
+        const receipt = await tx.wait();
+        statusTxHash = receipt.transactionHash;
+        statusBlockNumber = receipt.blockNumber;
+      } catch (err) {
+        throw new Error('Failed to approve user on-chain: ' + err.message);
+      }
+    } else {
+      // If other status change is needed, handle accordingly (future extension)
+      // For now, just update DB with current status
+      statusTxHash = user.transaction_hash;
+      statusBlockNumber = user.block_number;
+    }
+
+    // Update user in DB with status, transaction_hash, block_number
     const { rows: updatedRows } = await query(
-      'UPDATE users SET status=$1, updatedat=NOW() WHERE id=$2 RETURNING *',
-      ['active', id]
+      'UPDATE users SET status=$1, transaction_hash=$2, block_number=$3, updatedat=NOW() WHERE id=$4 RETURNING *',
+      [desiredStatus, statusTxHash || null, statusBlockNumber || null, id]
     );
     const updatedUser = updatedRows[0];
     return updatedUser;
@@ -263,13 +337,52 @@ export const getUserBlockchainStatus = async (id) => {
   }
 
   const userExists = await blockchainService.checkUserExistsOnChain(user.wallet_address);
-  const blockchainStatus = userExists ? await blockchainService.getUserStatusFromChain(user.wallet_address) : 'not_registered';
+  let blockchainStatus = 'not_registered';
+  let blockchainStatusString = 'not_registered';
+  let txHash = null;
+  let blockNumber = null;
+  if (userExists) {
+    const statusEnum = await blockchainService.getUserStatusFromChain(user.wallet_address);
+    // Map enum to string
+    switch (statusEnum?.toString()) {
+      case '0': blockchainStatusString = 'pending'; break;
+      case '1': blockchainStatusString = 'active'; break;
+      case '2': blockchainStatusString = 'suspended'; break;
+      case '3': blockchainStatusString = 'inactive'; break;
+      default: blockchainStatusString = 'unknown';
+    }
+    blockchainStatus = blockchainStatusString;
 
+    // Get latest UserRegistered event for this wallet
+    const regEvents = await blockchainService.getPastEvents('UserRegistered', 0, 'latest');
+    const regEvent = regEvents.success && regEvents.events
+      ? regEvents.events.filter(e => e.userAddress?.toLowerCase() === user.wallet_address.toLowerCase()).pop()
+      : null;
+    if (regEvent) {
+      txHash = regEvent.transactionHash;
+      blockNumber = regEvent.blockNumber;
+    }
+
+    // Get latest UserStatusUpdated event for this wallet
+    const statusEvents = await blockchainService.getPastEvents('UserStatusUpdated', 0, 'latest');
+    const statusEvent = statusEvents.success && statusEvents.events
+      ? statusEvents.events.filter(e => e.userAddress?.toLowerCase() === user.wallet_address.toLowerCase()).pop()
+      : null;
+    if (statusEvent && statusEvent.transactionHash && statusEvent.blockNumber) {
+      // Prefer status update tx/block if more recent
+      if (!blockNumber || statusEvent.blockNumber > blockNumber) {
+        txHash = statusEvent.transactionHash;
+        blockNumber = statusEvent.blockNumber;
+      }
+    }
+  }
   return {
     wallet_address: user.wallet_address,
     blockchain_status: blockchainStatus,
     database_status: user.status,
-    is_synced: userExists && blockchainStatus === user.status.toLowerCase(),
+    is_synced: userExists && blockchainStatus === user.status?.toLowerCase(),
+    transaction_hash: txHash,
+    block_number: blockNumber,
     message: userExists ? 
       `User found on blockchain with status: ${blockchainStatus}` :
       'User not registered on blockchain'

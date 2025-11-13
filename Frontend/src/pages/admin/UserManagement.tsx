@@ -32,6 +32,8 @@ interface User {
     status?: string;
     error?: string;
     is_synced?: boolean;
+    transaction_hash?: string;
+    block_number?: number;
   };
 }
 
@@ -70,7 +72,30 @@ const UserManagement = () => {
       });
       if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
-      setUsers(data.users || []);
+      let usersWithBlockchain = data.users || [];
+      // Fetch blockchain status for each user with wallet address
+      const updatedUsers = await Promise.all(usersWithBlockchain.map(async (user: User) => {
+        if (user.wallet_address) {
+          try {
+            const blockchainStatus = await fetchBlockchainStatus(user.id);
+            if (blockchainStatus) {
+              user.blockchain = {
+                exists: blockchainStatus.blockchain_status !== 'not_registered',
+                status: blockchainStatus.blockchain_status,
+                role: blockchainStatus.blockchain_role,
+                is_synced: blockchainStatus.is_synced,
+                error: blockchainStatus.error,
+                transaction_hash: blockchainStatus.transaction_hash,
+                block_number: blockchainStatus.block_number
+              };
+            }
+          } catch (err) {
+            user.blockchain = { error: 'Failed to fetch blockchain status' };
+          }
+        }
+        return user;
+      }));
+      setUsers(updatedUsers);
     } catch (err) {
       console.error(err);
     } finally {
@@ -273,6 +298,13 @@ const UserManagement = () => {
     (statusFilter === "all" || statusFilter === (user.status || "pending"))
   );
 
+
+  // Refresh handler
+  const handleRefresh = () => {
+    fetchUsers();
+    fetchDeletedUsers();
+  };
+
   useEffect(() => { 
     fetchUsers(); 
     fetchDeletedUsers();
@@ -421,6 +453,10 @@ const UserManagement = () => {
             <h1 className="text-3xl font-bold">User Management</h1>
             <p className="text-muted-foreground">Manage system users, roles, and blockchain synchronization</p>
           </div>
+          <Button variant="outline" onClick={handleRefresh} className="ml-4 flex gap-2 items-center">
+            <RotateCcw className="h-4 w-4" />
+            Refresh
+          </Button>
         </div>
 
         {/* Tabs for Active/Deleted Users */}

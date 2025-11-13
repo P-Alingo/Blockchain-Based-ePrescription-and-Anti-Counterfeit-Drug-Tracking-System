@@ -4,6 +4,17 @@ import * as blockchainService from "../services/blockchainService.js";
 // ===========================
 // USER MANAGEMENT CONTROLLERS
 // ===========================
+// Approve user (admin action: pending -> active)
+export const approveUser = async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const result = await adminService.approveUser(userId);
+    res.json({ success: true, ...result, message: "User approved and status updated on-chain" });
+  } catch (error) {
+    console.error('❌ approveUser error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 // Get all users (exclude deleted by default)
 export const getAllUsers = async (req, res) => {

@@ -5,7 +5,7 @@
   "PRESCRIPTION_MANAGEMENT_ADDRESS": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
   "ADMIN_WALLET": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "DEPLOYMENT_NETWORK": "localhost",
-  "DEPLOYMENT_TIMESTAMP": "2025-11-13T00:18:56.159Z",
+  "DEPLOYMENT_TIMESTAMP": "2025-11-13T08:56:23.195Z",
   "ABI_PATHS": {
     "BACKEND": {
       "USER_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\UserManagementABI.json",
