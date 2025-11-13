@@ -1,463 +1,1244 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("DrugSupplyChain", function () {
-  let UserManagement;
-  let userManagement;
-  let DrugSupplyChain;
-  let drugSupplyChain;
-  let owner;
-  let manufacturer;
-  let distributor;
-  let pharmacist;
-  let pharmacist2;
-  let otherUser;
+describe("DrugSupplyChain Contract", function () {
+  let UserManagement, userManagement;
+  let DrugSupplyChain, drugSupplyChain;
+  let deployer, manufacturer, distributor, pharmacist, regulator, admin, addr1, addr2;
+
+  // Test data
+  const batchNumber1 = "BATCH-001";
+  const batchNumber2 = "BATCH-002";
+  const shipmentNumber1 = "SHIP-001";
+  const shipmentNumber2 = "SHIP-002";
 
   beforeEach(async function () {
-    [owner, manufacturer, distributor, pharmacist, pharmacist2, otherUser] = await ethers.getSigners();
+    [deployer, manufacturer, distributor, pharmacist, regulator, admin, addr1, addr2] = await ethers.getSigners();
 
     // Deploy UserManagement first
     UserManagement = await ethers.getContractFactory("UserManagement");
     userManagement = await UserManagement.deploy();
     await userManagement.waitForDeployment();
 
-    // Create roles and users
-    await userManagement.createRole("manufacturer");
-    await userManagement.createRole("distributor");
-    await userManagement.createRole("pharmacist");
-
-    // Register users
-    await userManagement.registerUser(manufacturer.address, "manufacturer@test.com", "hash1", 2); // manufacturer role
-    await userManagement.registerUser(distributor.address, "distributor@test.com", "hash2", 3); // distributor role
-    await userManagement.registerUser(pharmacist.address, "pharmacist@test.com", "hash3", 4); // pharmacist role
-    await userManagement.registerUser(pharmacist2.address, "pharmacist2@test.com", "hash4", 4); // another pharmacist
-
-    // Deploy DrugSupplyChain contract
+    // Deploy DrugSupplyChain with UserManagement address
     DrugSupplyChain = await ethers.getContractFactory("DrugSupplyChain");
     drugSupplyChain = await DrugSupplyChain.deploy(userManagement.target);
     await drugSupplyChain.waitForDeployment();
+
+    // Setup roles in UserManagement
+    const manufacturerId = await userManagement.getRoleIdByName("manufacturer");
+    const distributorId = await userManagement.getRoleIdByName("distributor");
+    const pharmacistId = await userManagement.getRoleIdByName("pharmacist");
+    const regulatorId = await userManagement.getRoleIdByName("regulator");
+    const adminId = await userManagement.getRoleIdByName("admin");
+
+    // Register and approve users
+    await userManagement.registerUser(manufacturer.address, manufacturerId, "Manufacturer Co");
+    await userManagement.registerUser(distributor.address, distributorId, "Distributor Inc");
+    await userManagement.registerUser(pharmacist.address, pharmacistId, "Pharmacy Ltd");
+    await userManagement.registerUser(regulator.address, regulatorId, "Regulator Agency");
+    await userManagement.registerUser(admin.address, adminId, "Admin User");
+
+    await userManagement.approveUser(manufacturer.address);
+    await userManagement.approveUser(distributor.address);
+    await userManagement.approveUser(pharmacist.address);
+    await userManagement.approveUser(regulator.address);
+    await userManagement.approveUser(admin.address);
   });
 
-  describe("Deployment", function () {
-    it("Should set the correct UserManagement address", async function () {
-      expect(await drugSupplyChain.userManagement()).to.equal(userManagement.target);
-    });
+  // Helper function to get current block timestamp
+  async function getCurrentTimestamp() {
+    const block = await ethers.provider.getBlock("latest");
+    return block.timestamp;
+  }
 
-    it("Should initialize counters to 0", async function () {
-      expect(await drugSupplyChain.batchCounter()).to.equal(0);
-      expect(await drugSupplyChain.dispenseCounter()).to.equal(0);
-    });
+  // ---------------- Deployment ----------------
+  it("Should deploy with correct UserManagement address", async function () {
+    expect(await drugSupplyChain.userManagement()).to.equal(userManagement.target);
   });
 
-  describe("Register Batch", function () {
-    const drugId = 123;
-    const ipfsHash = "QmExampleIPFSHash123";
-    const manufactureDate = Math.floor(Date.now() / 1000);
+  // ---------------- Batch Creation ----------------
+  it("Manufacturer can create batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60; // 7 days ago
+    const expiryDate = currentTime + 365 * 24 * 60 * 60; // 1 year from now
 
-    it("Should allow manufacturer to register batch", async function () {
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
+    await expect(
+      drugSupplyChain.connect(manufacturer).createBatch(
+        1, // databaseId
+        batchNumber1,
+        101, // drugId
+        "Amoxicillin 500mg",
+        201, // manufacturerId
+        1000, // quantity
+        manufactureDate,
+        expiryDate,
+        "15-25°C",
+        "Manufacturing Facility A",
+        301, // qualityControlOfficerId
+        currentTime,
+        shipmentNumber1,
+        401, // distributorCompanyId
+        501, // distributorFacilityId
+        "/qr/codes/batch-001"
+      )
+    )
+      .to.emit(drugSupplyChain, "BatchCreated")
+      .withArgs(
+        1n, // batchId
+        1n, // databaseId
+        manufacturer.address,
+        batchNumber1,
+        "Amoxicillin 500mg",
+        1000n, // quantity
+        BigInt(expiryDate)
+      );
 
-      const batch = await drugSupplyChain.getBatch(1);
-      
-      expect(batch.id).to.equal(1);
-      expect(batch.manufacturerUserId).to.equal(2); // Manufacturer user ID
-      expect(batch.drugId).to.equal(drugId);
-      expect(batch.currentOwnerUserId).to.equal(2); // Initially owned by manufacturer
-      expect(batch.status).to.equal("Manufactured");
-      expect(batch.ipfsHash).to.equal(ipfsHash);
-      expect(batch.manufactureDate).to.equal(manufactureDate);
-      expect(batch.timestamp).to.be.gt(0);
-    });
-
-    it("Should emit BatchRegistered event", async function () {
-      await expect(drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate))
-        .to.emit(drugSupplyChain, "BatchRegistered")
-        .withArgs(1, 2, drugId);
-    });
-
-    it("Should increment batchCounter", async function () {
-      expect(await drugSupplyChain.batchCounter()).to.equal(0);
-
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
-      expect(await drugSupplyChain.batchCounter()).to.equal(1);
-
-      await drugSupplyChain.connect(manufacturer).registerBatch(124, "QmAnotherHash", manufactureDate);
-      expect(await drugSupplyChain.batchCounter()).to.equal(2);
-    });
-
-    it("Should initialize ownership history", async function () {
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
-
-      const trackResult = await drugSupplyChain.trackBatch(1);
-      expect(trackResult.ownershipHistory.length).to.equal(1);
-      expect(trackResult.ownershipHistory[0]).to.equal(2); // Manufacturer user ID
-    });
-
-    it("Should not allow non-manufacturer to register batch", async function () {
-      await expect(
-        drugSupplyChain.connect(distributor).registerBatch(drugId, ipfsHash, manufactureDate)
-      ).to.be.revertedWith("Only manufacturers can perform this action");
-    });
-
-    it("Should not allow unregistered user to register batch", async function () {
-      await expect(
-        drugSupplyChain.connect(otherUser).registerBatch(drugId, ipfsHash, manufactureDate)
-      ).to.be.revertedWith("User not registered");
-    });
-
-    it("Should not register batch with invalid drug ID", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).registerBatch(0, ipfsHash, manufactureDate)
-      ).to.be.revertedWith("Invalid drug ID");
-    });
-
-    it("Should not register batch with empty IPFS hash", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).registerBatch(drugId, "", manufactureDate)
-      ).to.be.revertedWith("IPFS hash cannot be empty");
-    });
+    // Verify batch was created
+    const batch = await drugSupplyChain.getBatch(1);
+    expect(batch.details.databaseId).to.equal(1);
+    expect(batch.details.batchNumber).to.equal(batchNumber1);
+    expect(batch.details.drugName).to.equal("Amoxicillin 500mg");
+    expect(batch.currentOwner).to.equal(manufacturer.address);
+    expect(batch.manufacturer).to.equal(manufacturer.address);
+    expect(batch.isCounterfeit).to.be.false;
   });
 
-  describe("Transfer Batch", function () {
-    const drugId = 123;
-    const ipfsHash = "QmExampleIPFSHash123";
-    const manufactureDate = Math.floor(Date.now() / 1000);
-    let batchId;
+  it("Cannot create batch with duplicate batch number", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-    beforeEach(async function () {
-      // Register a batch first
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
-      batchId = 1;
-    });
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
 
-    it("Should allow current owner to transfer batch to distributor", async function () {
-      await drugSupplyChain.connect(manufacturer).transferBatch(batchId, distributor.address);
-
-      const batch = await drugSupplyChain.getBatch(batchId);
-      expect(batch.currentOwnerUserId).to.equal(3); // Distributor user ID
-      expect(batch.status).to.equal("In Transit");
-    });
-
-    it("Should allow current owner to transfer batch to pharmacist", async function () {
-      await drugSupplyChain.connect(manufacturer).transferBatch(batchId, pharmacist.address);
-
-      const batch = await drugSupplyChain.getBatch(batchId);
-      expect(batch.currentOwnerUserId).to.equal(4); // Pharmacist user ID
-      expect(batch.status).to.equal("At Pharmacy");
-    });
-
-    it("Should emit BatchTransferred event", async function () {
-      await expect(drugSupplyChain.connect(manufacturer).transferBatch(batchId, distributor.address))
-        .to.emit(drugSupplyChain, "BatchTransferred")
-        .withArgs(batchId, 2, 3, "In Transit");
-    });
-
-    it("Should update ownership history", async function () {
-      await drugSupplyChain.connect(manufacturer).transferBatch(batchId, distributor.address);
-      await drugSupplyChain.connect(distributor).transferBatch(batchId, pharmacist.address);
-
-      const trackResult = await drugSupplyChain.trackBatch(batchId);
-      expect(trackResult.ownershipHistory.length).to.equal(3);
-      expect(trackResult.ownershipHistory[0]).to.equal(2); // Manufacturer
-      expect(trackResult.ownershipHistory[1]).to.equal(3); // Distributor
-      expect(trackResult.ownershipHistory[2]).to.equal(4); // Pharmacist
-    });
-
-    it("Should not allow non-owner to transfer batch", async function () {
-      await expect(
-        drugSupplyChain.connect(distributor).transferBatch(batchId, pharmacist.address)
-      ).to.be.revertedWith("Only current owner can transfer batch");
-    });
-
-    it("Should not transfer invalid batch", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).transferBatch(999, distributor.address)
-      ).to.be.revertedWith("Invalid batch ID");
-    });
-
-    it("Should not transfer to invalid address", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).transferBatch(batchId, ethers.ZeroAddress) // FIXED: Changed from ethers.constants.AddressZero
-      ).to.be.revertedWith("Invalid new owner address");
-    });
-
-    it("Should not transfer to current owner", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).transferBatch(batchId, manufacturer.address)
-      ).to.be.revertedWith("Cannot transfer to current owner");
-    });
-
-    it("Should not transfer to unregistered user", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).transferBatch(batchId, otherUser.address)
-      ).to.be.reverted; // Will revert in userManagement.walletToUserId
-    });
-
-    it("Should set status to 'Transferred' for unknown roles", async function () {
-      // Create a patient role and user
-      await userManagement.createRole("patient");
-      await userManagement.registerUser(otherUser.address, "patient@test.com", "hash5", 5);
-      
-      await drugSupplyChain.connect(manufacturer).transferBatch(batchId, otherUser.address);
-
-      const batch = await drugSupplyChain.getBatch(batchId);
-      expect(batch.status).to.equal("Transferred");
-    });
-
-    describe("Transfer Chain", function () {
-      it("Should handle complete supply chain transfer", async function () {
-        // Manufacturer → Distributor
-        await drugSupplyChain.connect(manufacturer).transferBatch(batchId, distributor.address);
-        let batch = await drugSupplyChain.getBatch(batchId);
-        expect(batch.currentOwnerUserId).to.equal(3);
-        expect(batch.status).to.equal("In Transit");
-
-        // Distributor → Pharmacist
-        await drugSupplyChain.connect(distributor).transferBatch(batchId, pharmacist.address);
-        batch = await drugSupplyChain.getBatch(batchId);
-        expect(batch.currentOwnerUserId).to.equal(4);
-        expect(batch.status).to.equal("At Pharmacy");
-
-        // Pharmacist → Another Pharmacist
-        await drugSupplyChain.connect(pharmacist).transferBatch(batchId, pharmacist2.address);
-        batch = await drugSupplyChain.getBatch(batchId);
-        expect(batch.currentOwnerUserId).to.equal(5);
-        expect(batch.status).to.equal("At Pharmacy");
-      });
-    });
+    await expect(
+      drugSupplyChain.connect(manufacturer).createBatch(
+        2,
+        batchNumber1, // Same batch number
+        102,
+        "Paracetamol 500mg",
+        202,
+        500,
+        manufactureDate,
+        expiryDate,
+        "15-25°C",
+        "Manufacturing Facility B",
+        302,
+        currentTime,
+        shipmentNumber2,
+        402,
+        502,
+        "/qr/codes/batch-002"
+      )
+    ).to.be.revertedWith("Duplicate batch number");
   });
 
-  describe("Track Batch", function () {
-    const drugId = 123;
-    const ipfsHash = "QmExampleIPFSHash123";
-    const manufactureDate = Math.floor(Date.now() / 1000);
-    let batchId;
+  it("Non-manufacturer cannot create batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-    beforeEach(async function () {
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
-      batchId = 1;
-      
-      // Create transfer history
-      await drugSupplyChain.connect(manufacturer).transferBatch(batchId, distributor.address);
-      await drugSupplyChain.connect(distributor).transferBatch(batchId, pharmacist.address);
-    });
-
-    it("Should return complete batch tracking information", async function () {
-      const trackResult = await drugSupplyChain.trackBatch(batchId);
-
-      expect(trackResult.id).to.equal(batchId);
-      expect(trackResult.manufacturerUserId).to.equal(2);
-      expect(trackResult.drugId).to.equal(drugId);
-      expect(trackResult.currentOwnerUserId).to.equal(4); // Pharmacist
-      expect(trackResult.status).to.equal("At Pharmacy");
-      expect(trackResult.ipfsHash).to.equal(ipfsHash);
-      expect(trackResult.manufactureDate).to.equal(manufactureDate);
-      expect(trackResult.timestamp).to.be.gt(0);
-      
-      // Check ownership history
-      expect(trackResult.ownershipHistory.length).to.equal(3);
-      expect(trackResult.ownershipHistory[0]).to.equal(2); // Manufacturer
-      expect(trackResult.ownershipHistory[1]).to.equal(3); // Distributor
-      expect(trackResult.ownershipHistory[2]).to.equal(4); // Pharmacist
-    });
-
-    it("Should revert for invalid batch ID", async function () {
-      await expect(drugSupplyChain.trackBatch(999)).to.be.revertedWith("Invalid batch ID");
-    });
+    await expect(
+      drugSupplyChain.connect(distributor).createBatch(
+        1,
+        batchNumber1,
+        101,
+        "Amoxicillin 500mg",
+        201,
+        1000,
+        manufactureDate,
+        expiryDate,
+        "15-25°C",
+        "Manufacturing Facility A",
+        301,
+        currentTime,
+        shipmentNumber1,
+        401,
+        501,
+        "/qr/codes/batch-001"
+      )
+    ).to.be.revertedWith("Only manufacturers can perform this action");
   });
 
-  describe("Dispense Prescription", function () {
-    const drugId = 123;
-    const ipfsHash = "QmExampleIPFSHash123";
-    const manufactureDate = Math.floor(Date.now() / 1000);
-    const prescriptionId = 456;
-    const quantity = 10;
-    const blockchainTx = "0x1234567890abcdef";
-    let batchId;
+  it("Cannot create batch with future manufacture date", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime + 24 * 60 * 60; // Tomorrow
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-    beforeEach(async function () {
-      // Register batch and transfer to pharmacist
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
-      batchId = 1;
-      await drugSupplyChain.connect(manufacturer).transferBatch(batchId, pharmacist.address);
-    });
-
-    it("Should allow pharmacist to dispense prescription", async function () {
-      await drugSupplyChain.connect(pharmacist).dispensePrescription(prescriptionId, batchId, quantity, blockchainTx);
-
-      const dispenseRecord = await drugSupplyChain.getDispenseRecord(1);
-      
-      expect(dispenseRecord.id).to.equal(1);
-      expect(dispenseRecord.prescriptionId).to.equal(prescriptionId);
-      expect(dispenseRecord.pharmacistUserId).to.equal(4); // Pharmacist user ID
-      expect(dispenseRecord.batchId).to.equal(batchId);
-      expect(dispenseRecord.quantity).to.equal(quantity);
-      expect(dispenseRecord.dispensedAt).to.be.gt(0);
-      expect(dispenseRecord.blockchainTx).to.equal(blockchainTx);
-    });
-
-    it("Should emit PrescriptionDispensed event", async function () {
-      await expect(drugSupplyChain.connect(pharmacist).dispensePrescription(prescriptionId, batchId, quantity, blockchainTx))
-        .to.emit(drugSupplyChain, "PrescriptionDispensed")
-        .withArgs(1, prescriptionId, 4, batchId, quantity);
-    });
-
-    it("Should increment dispenseCounter", async function () {
-      expect(await drugSupplyChain.dispenseCounter()).to.equal(0);
-
-      await drugSupplyChain.connect(pharmacist).dispensePrescription(prescriptionId, batchId, quantity, blockchainTx);
-      expect(await drugSupplyChain.dispenseCounter()).to.equal(1);
-
-      await drugSupplyChain.connect(pharmacist).dispensePrescription(457, batchId, 5, "0xanothertx");
-      expect(await drugSupplyChain.dispenseCounter()).to.equal(2);
-    });
-
-    it("Should not allow non-pharmacist to dispense", async function () {
-      await expect(
-        drugSupplyChain.connect(manufacturer).dispensePrescription(prescriptionId, batchId, quantity, blockchainTx)
-      ).to.be.revertedWith("Only pharmacists can perform this action");
-    });
-
-    it("Should not allow unregistered user to dispense", async function () {
-      await expect(
-        drugSupplyChain.connect(otherUser).dispensePrescription(prescriptionId, batchId, quantity, blockchainTx)
-      ).to.be.revertedWith("User not registered");
-    });
-
-    it("Should not dispense with invalid batch ID", async function () {
-      await expect(
-        drugSupplyChain.connect(pharmacist).dispensePrescription(prescriptionId, 999, quantity, blockchainTx)
-      ).to.be.revertedWith("Invalid batch ID");
-    });
-
-    it("Should not dispense with zero quantity", async function () {
-      await expect(
-        drugSupplyChain.connect(pharmacist).dispensePrescription(prescriptionId, batchId, 0, blockchainTx)
-      ).to.be.revertedWith("Quantity must be positive");
-    });
+    await expect(
+      drugSupplyChain.connect(manufacturer).createBatch(
+        1,
+        batchNumber1,
+        101,
+        "Amoxicillin 500mg",
+        201,
+        1000,
+        manufactureDate,
+        expiryDate,
+        "15-25°C",
+        "Manufacturing Facility A",
+        301,
+        currentTime,
+        shipmentNumber1,
+        401,
+        501,
+        "/qr/codes/batch-001"
+      )
+    ).to.be.revertedWith("Manufacture date cannot be in the future");
   });
 
-  describe("Getter Functions", function () {
-    const drugId = 123;
-    const ipfsHash = "QmExampleIPFSHash123";
-    const manufactureDate = Math.floor(Date.now() / 1000);
+  it("Cannot create batch with expired expiry date", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime - 24 * 60 * 60; // Yesterday
 
-    beforeEach(async function () {
-      await drugSupplyChain.connect(manufacturer).registerBatch(drugId, ipfsHash, manufactureDate);
-      await drugSupplyChain.connect(manufacturer).transferBatch(1, pharmacist.address);
-      await drugSupplyChain.connect(pharmacist).dispensePrescription(456, 1, 10, "0xtx123");
-    });
-
-    describe("getBatch", function () {
-      it("Should return batch details", async function () {
-        const batch = await drugSupplyChain.getBatch(1);
-
-        expect(batch.id).to.equal(1);
-        expect(batch.manufacturerUserId).to.equal(2);
-        expect(batch.drugId).to.equal(drugId);
-        expect(batch.currentOwnerUserId).to.equal(4);
-        expect(batch.status).to.equal("At Pharmacy");
-        expect(batch.ipfsHash).to.equal(ipfsHash);
-        expect(batch.manufactureDate).to.equal(manufactureDate);
-      });
-
-      it("Should revert for invalid batch ID", async function () {
-        await expect(drugSupplyChain.getBatch(999)).to.be.revertedWith("Invalid batch ID");
-      });
-    });
-
-    describe("getDispenseRecord", function () {
-      it("Should return dispense record details", async function () {
-        const dispenseRecord = await drugSupplyChain.getDispenseRecord(1);
-
-        expect(dispenseRecord.id).to.equal(1);
-        expect(dispenseRecord.prescriptionId).to.equal(456);
-        expect(dispenseRecord.pharmacistUserId).to.equal(4);
-        expect(dispenseRecord.batchId).to.equal(1);
-        expect(dispenseRecord.quantity).to.equal(10);
-        expect(dispenseRecord.blockchainTx).to.equal("0xtx123");
-      });
-
-      it("Should return empty record for invalid dispense ID", async function () {
-        // This doesn't revert, just returns default struct
-        const dispenseRecord = await drugSupplyChain.getDispenseRecord(999);
-        expect(dispenseRecord.id).to.equal(0);
-        expect(dispenseRecord.prescriptionId).to.equal(0);
-        expect(dispenseRecord.quantity).to.equal(0);
-      });
-    });
+    await expect(
+      drugSupplyChain.connect(manufacturer).createBatch(
+        1,
+        batchNumber1,
+        101,
+        "Amoxicillin 500mg",
+        201,
+        1000,
+        manufactureDate,
+        expiryDate,
+        "15-25°C",
+        "Manufacturing Facility A",
+        301,
+        currentTime,
+        shipmentNumber1,
+        401,
+        501,
+        "/qr/codes/batch-001"
+      )
+    ).to.be.revertedWith("Expiry date must be in the future");
   });
 
-  describe("Multiple Batches", function () {
-    it("Should handle multiple batches independently", async function () {
-      const manufactureDate = Math.floor(Date.now() / 1000);
+  // ---------------- Batch Transfer ----------------
+  it("Manufacturer can transfer batch to distributor", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-      // Register multiple batches
-      await drugSupplyChain.connect(manufacturer).registerBatch(111, "QmHash1", manufactureDate);
-      await drugSupplyChain.connect(manufacturer).registerBatch(222, "QmHash2", manufactureDate);
-      await drugSupplyChain.connect(manufacturer).registerBatch(333, "QmHash3", manufactureDate);
+    // Create batch
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
 
-      // Transfer batches differently
-      await drugSupplyChain.connect(manufacturer).transferBatch(1, distributor.address);
-      await drugSupplyChain.connect(manufacturer).transferBatch(2, pharmacist.address);
-      // Batch 3 stays with manufacturer
+    // Transfer batch to distributor - don't check exact timestamp
+    await expect(
+      drugSupplyChain.connect(manufacturer).transferBatch(
+        1,
+        distributor.address,
+        shipmentNumber1,
+        "in_transit"
+      )
+    )
+      .to.emit(drugSupplyChain, "BatchTransferred");
 
-      // Verify each batch maintains independent state
-      const batch1 = await drugSupplyChain.getBatch(1);
-      const batch2 = await drugSupplyChain.getBatch(2);
-      const batch3 = await drugSupplyChain.getBatch(3);
+    // Verify transfer
+    const batch = await drugSupplyChain.getBatch(1);
+    expect(batch.currentOwner).to.equal(distributor.address);
 
-      expect(batch1.currentOwnerUserId).to.equal(3); // Distributor
-      expect(batch1.status).to.equal("In Transit");
-      
-      expect(batch2.currentOwnerUserId).to.equal(4); // Pharmacist
-      expect(batch2.status).to.equal("At Pharmacy");
-      
-      expect(batch3.currentOwnerUserId).to.equal(2); // Manufacturer
-      expect(batch3.status).to.equal("Manufactured");
-    });
+    const transfers = await drugSupplyChain.getBatchTransfers(1);
+    expect(transfers.length).to.equal(1);
+    expect(transfers[0].from).to.equal(manufacturer.address);
+    expect(transfers[0].to).to.equal(distributor.address);
   });
 
-  describe("Edge Cases", function () {
-    it("Should handle large drug IDs", async function () {
-      const largeDrugId = ethers.MaxUint256; // FIXED: Changed from ethers.constants.MaxUint256
-      const manufactureDate = Math.floor(Date.now() / 1000);
+  it("Distributor can transfer batch to pharmacist", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-      await drugSupplyChain.connect(manufacturer).registerBatch(largeDrugId, "QmHash", manufactureDate);
+    // Create and transfer batch to distributor
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
 
-      const batch = await drugSupplyChain.getBatch(1);
-      expect(batch.drugId).to.equal(largeDrugId);
-    });
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
 
-    it("Should handle long IPFS hashes", async function () {
-      const longIpfsHash = "Qm" + "A".repeat(100); // Long IPFS hash
-      const manufactureDate = Math.floor(Date.now() / 1000);
+    // Transfer batch to pharmacist - don't check exact timestamp
+    await expect(
+      drugSupplyChain.connect(distributor).transferBatch(
+        1,
+        pharmacist.address,
+        shipmentNumber2,
+        "in_transit"
+      )
+    )
+      .to.emit(drugSupplyChain, "BatchTransferred");
 
-      await drugSupplyChain.connect(manufacturer).registerBatch(123, longIpfsHash, manufactureDate);
+    // Verify transfer
+    const batch = await drugSupplyChain.getBatch(1);
+    expect(batch.currentOwner).to.equal(pharmacist.address);
 
-      const batch = await drugSupplyChain.getBatch(1);
-      expect(batch.ipfsHash).to.equal(longIpfsHash);
-    });
+    const transfers = await drugSupplyChain.getBatchTransfers(1);
+    expect(transfers.length).to.equal(2);
+    expect(transfers[1].from).to.equal(distributor.address);
+    expect(transfers[1].to).to.equal(pharmacist.address);
+  });
 
-    it("Should handle long blockchain transaction hashes", async function () {
-      const longTxHash = "0x" + "A".repeat(100); // Long transaction hash
-      const manufactureDate = Math.floor(Date.now() / 1000);
+  it("Cannot transfer batch not owned", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-      await drugSupplyChain.connect(manufacturer).registerBatch(123, "QmHash", manufactureDate);
-      await drugSupplyChain.connect(manufacturer).transferBatch(1, pharmacist.address);
-      await drugSupplyChain.connect(pharmacist).dispensePrescription(456, 1, 10, longTxHash);
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
 
-      const dispenseRecord = await drugSupplyChain.getDispenseRecord(1);
-      expect(dispenseRecord.blockchainTx).to.equal(longTxHash);
-    });
+    await expect(
+      drugSupplyChain.connect(distributor).transferBatch(
+        1,
+        pharmacist.address,
+        shipmentNumber1,
+        "in_transit"
+      )
+    ).to.be.revertedWith("Not the batch owner");
+  });
 
-    it("Should handle future manufacture dates", async function () {
-      const futureDate = Math.floor(Date.now() / 1000) + 86400; // 1 day in future
-      
-      await drugSupplyChain.connect(manufacturer).registerBatch(123, "QmHash", futureDate);
+  it("Manufacturer cannot transfer directly to pharmacist", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
 
-      const batch = await drugSupplyChain.getBatch(1);
-      expect(batch.manufactureDate).to.equal(futureDate);
-    });
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await expect(
+      drugSupplyChain.connect(manufacturer).transferBatch(
+        1,
+        pharmacist.address, // Direct to pharmacist
+        shipmentNumber1,
+        "in_transit"
+      )
+    ).to.be.revertedWith("Manufacturer can only transfer to Distributor");
+  });
+
+  it("Pharmacist cannot transfer batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    // Create and transfer batch to distributor then pharmacist
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    await drugSupplyChain.connect(distributor).transferBatch(
+      1,
+      pharmacist.address,
+      shipmentNumber2,
+      "delivered"
+    );
+
+    // Pharmacist tries to transfer
+    await expect(
+      drugSupplyChain.connect(pharmacist).transferBatch(
+        1,
+        distributor.address, // Try to transfer back
+        shipmentNumber2,
+        "in_transit"
+      )
+    ).to.be.revertedWith("Pharmacist cannot transfer batches");
+  });
+
+  it("Cannot transfer counterfeit batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    // Mark as counterfeit
+    await drugSupplyChain.connect(manufacturer).markBatchAsCounterfeit(1, "Suspected counterfeit");
+
+    // Try to transfer
+    await expect(
+      drugSupplyChain.connect(manufacturer).transferBatch(
+        1,
+        distributor.address,
+        shipmentNumber1,
+        "in_transit"
+      )
+    ).to.be.revertedWith("Batch is flagged as counterfeit");
+  });
+
+  // ---------------- Counterfeit Flagging ----------------
+  it("Batch owner can mark batch as counterfeit", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    // Don't check exact timestamp in event
+    await expect(
+      drugSupplyChain.connect(manufacturer).markBatchAsCounterfeit(1, "Quality test failed")
+    )
+      .to.emit(drugSupplyChain, "BatchCounterfeit");
+
+    const batch = await drugSupplyChain.getBatch(1);
+    expect(batch.isCounterfeit).to.be.true;
+  });
+
+  it("Regulator can mark batch as counterfeit", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    // Regulator flags batch - don't check exact timestamp
+    await expect(
+      drugSupplyChain.connect(regulator).markBatchAsCounterfeit(1, "Regulatory inspection failed")
+    )
+      .to.emit(drugSupplyChain, "BatchCounterfeit");
+
+    const batch = await drugSupplyChain.getBatch(1);
+    expect(batch.isCounterfeit).to.be.true;
+  });
+
+  it("Non-owner cannot mark batch as counterfeit", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await expect(
+      drugSupplyChain.connect(addr1).markBatchAsCounterfeit(1, "Random flag")
+    ).to.be.revertedWith("Only batch owner or regulator can flag as counterfeit");
+  });
+
+  // ---------------- Shipment Status Updates ----------------
+  it("Batch owner can update shipment status", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    // Update shipment status - don't check exact timestamp
+    await expect(
+      drugSupplyChain.connect(distributor).updateShipmentStatus(
+        1,
+        shipmentNumber1,
+        "delivered"
+      )
+    )
+      .to.emit(drugSupplyChain, "ShipmentStatusUpdated");
+
+    // Verify status update
+    const transfers = await drugSupplyChain.getBatchTransfers(1);
+    expect(transfers[0].status).to.equal("delivered");
+  });
+
+  it("Cannot update shipment status for non-existent shipment", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await expect(
+      drugSupplyChain.connect(manufacturer).updateShipmentStatus(
+        1,
+        "NONEXISTENT-SHIPMENT",
+        "delivered"
+      )
+    ).to.be.revertedWith("Shipment not found for this batch");
+  });
+
+  // ---------------- View Functions ----------------
+  it("Manufacturer can view their batches", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    // Create multiple batches
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      2,
+      batchNumber2,
+      102,
+      "Paracetamol 500mg",
+      202,
+      500,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility B",
+      302,
+      currentTime,
+      shipmentNumber2,
+      402,
+      502,
+      "/qr/codes/batch-002"
+    );
+
+    const batches = await drugSupplyChain.connect(manufacturer).getBatchesByManufacturer(manufacturer.address);
+    expect(batches.length).to.equal(2);
+    expect(batches[0].details.batchNumber).to.equal(batchNumber1);
+    expect(batches[1].details.batchNumber).to.equal(batchNumber2);
+  });
+
+  it("Distributor can view their batches", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    const batches = await drugSupplyChain.connect(distributor).getBatchesByDistributor(distributor.address);
+    expect(batches.length).to.equal(1);
+    expect(batches[0].details.batchNumber).to.equal(batchNumber1);
+    expect(batches[0].currentOwner).to.equal(distributor.address);
+  });
+
+  it("Pharmacist can view their batches", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    await drugSupplyChain.connect(distributor).transferBatch(
+      1,
+      pharmacist.address,
+      shipmentNumber2,
+      "delivered"
+    );
+
+    const batches = await drugSupplyChain.connect(pharmacist).getBatchesByPharmacist(pharmacist.address);
+    expect(batches.length).to.equal(1);
+    expect(batches[0].details.batchNumber).to.equal(batchNumber1);
+    expect(batches[0].currentOwner).to.equal(pharmacist.address);
+  });
+
+  it("Admin can view all batches", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      2,
+      batchNumber2,
+      102,
+      "Paracetamol 500mg",
+      202,
+      500,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility B",
+      302,
+      currentTime,
+      shipmentNumber2,
+      402,
+      502,
+      "/qr/codes/batch-002"
+    );
+
+    const batches = await drugSupplyChain.connect(admin).getAllBatches();
+    expect(batches.length).to.equal(2);
+  });
+
+  it("Regulator can view flagged batches", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).markBatchAsCounterfeit(1, "Quality issues");
+
+    const flaggedBatches = await drugSupplyChain.connect(regulator).getFlaggedBatches();
+    expect(flaggedBatches.length).to.equal(1);
+    expect(flaggedBatches[0].details.batchNumber).to.equal(batchNumber1);
+    expect(flaggedBatches[0].isCounterfeit).to.be.true;
+  });
+
+  it("Can get batch by batch number", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    const batch = await drugSupplyChain.connect(manufacturer).getBatchByNumber(batchNumber1);
+    expect(batch.details.batchNumber).to.equal(batchNumber1);
+    expect(batch.details.drugName).to.equal("Amoxicillin 500mg");
+  });
+
+  it("Can get batch ownership history", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    await drugSupplyChain.connect(distributor).transferBatch(
+      1,
+      pharmacist.address,
+      shipmentNumber2,
+      "delivered"
+    );
+
+    const ownershipHistory = await drugSupplyChain.connect(pharmacist).getBatchOwnershipHistory(1);
+    expect(ownershipHistory.length).to.equal(3);
+    expect(ownershipHistory[0]).to.equal(manufacturer.address);
+    expect(ownershipHistory[1]).to.equal(distributor.address);
+    expect(ownershipHistory[2]).to.equal(pharmacist.address);
+  });
+
+  // ---------------- Utility Functions ----------------
+  it("Can verify batch authenticity", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).transferBatch(
+      1,
+      distributor.address,
+      shipmentNumber1,
+      "in_transit"
+    );
+
+    await drugSupplyChain.connect(distributor).transferBatch(
+      1,
+      pharmacist.address,
+      shipmentNumber2,
+      "delivered"
+    );
+
+    const isAuthentic = await drugSupplyChain.verifyBatchAuthenticity(1);
+    expect(isAuthentic).to.be.true;
+  });
+
+  it("Cannot verify counterfeit batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await drugSupplyChain.connect(manufacturer).markBatchAsCounterfeit(1, "Quality issues");
+
+    const isAuthentic = await drugSupplyChain.verifyBatchAuthenticity(1);
+    expect(isAuthentic).to.be.false;
+  });
+
+  it("Can detect anomalies in supply chain", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    // Create an anomaly by marking as counterfeit
+    await drugSupplyChain.connect(manufacturer).markBatchAsCounterfeit(1, "Quality issues");
+
+    const anomalies = await drugSupplyChain.connect(regulator).detectAnomalies(1);
+    expect(anomalies.length).to.be.greaterThan(0);
+    expect(anomalies[0]).to.equal("Batch flagged as counterfeit");
+  });
+
+  it("Can check if batch is expired", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 5; // 5 seconds from now
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    // Wait for expiration
+    await ethers.provider.send("evm_increaseTime", [10]);
+    await ethers.provider.send("evm_mine");
+
+    const isExpired = await drugSupplyChain.isBatchExpired(1);
+    expect(isExpired).to.be.true;
+  });
+
+  it("Can update blockchain transaction hash", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    const txHash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+
+    // Don't check exact timestamp in event
+    await expect(
+      drugSupplyChain.connect(manufacturer).updateBatchBlockchainTx(1, txHash)
+    )
+      .to.emit(drugSupplyChain, "BatchBlockchainTxUpdated");
+
+    // Verify the function executed without reverting
+    const batch = await drugSupplyChain.getBatch(1);
+    expect(batch.exists).to.be.true;
+  });
+
+  // ---------------- Edge Cases ----------------
+  it("Suspended manufacturer cannot create batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    // Suspend the manufacturer
+    await userManagement.suspendUser(manufacturer.address);
+
+    await expect(
+      drugSupplyChain.connect(manufacturer).createBatch(
+        1,
+        batchNumber1,
+        101,
+        "Amoxicillin 500mg",
+        201,
+        1000,
+        manufactureDate,
+        expiryDate,
+        "15-25°C",
+        "Manufacturing Facility A",
+        301,
+        currentTime,
+        shipmentNumber1,
+        401,
+        501,
+        "/qr/codes/batch-001"
+      )
+    ).to.be.revertedWith("Manufacturer must be active");
+  });
+
+  it("Suspended distributor cannot receive batch", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    // Suspend the distributor
+    await userManagement.suspendUser(distributor.address);
+
+    await expect(
+      drugSupplyChain.connect(manufacturer).transferBatch(
+        1,
+        distributor.address,
+        shipmentNumber1,
+        "in_transit"
+      )
+    ).to.be.revertedWith("Recipient must be active");
+  });
+
+  it("Cannot access non-existent batch", async function () {
+    await expect(
+      drugSupplyChain.getBatch(999)
+    ).to.be.revertedWith("Batch not found");
+
+    await expect(
+      drugSupplyChain.getBatchByNumber("NONEXISTENT")
+    ).to.be.revertedWith("Batch not found");
+  });
+
+  it("Unauthorized user cannot view batches", async function () {
+    const currentTime = await getCurrentTimestamp();
+    const manufactureDate = currentTime - 7 * 24 * 60 * 60;
+    const expiryDate = currentTime + 365 * 24 * 60 * 60;
+
+    await drugSupplyChain.connect(manufacturer).createBatch(
+      1,
+      batchNumber1,
+      101,
+      "Amoxicillin 500mg",
+      201,
+      1000,
+      manufactureDate,
+      expiryDate,
+      "15-25°C",
+      "Manufacturing Facility A",
+      301,
+      currentTime,
+      shipmentNumber1,
+      401,
+      501,
+      "/qr/codes/batch-001"
+    );
+
+    await expect(
+      drugSupplyChain.connect(addr1).getBatchesByManufacturer(manufacturer.address)
+    ).to.be.revertedWith("Not authorized");
+
+    await expect(
+      drugSupplyChain.connect(addr1).getAllBatches()
+    ).to.be.revertedWith("Only admin or regulator can view all batches");
   });
 });

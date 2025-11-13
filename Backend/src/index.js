@@ -10,22 +10,16 @@ import manufacturerRoutes from './routes/manufacturerRoutes.js';
 import distributorRoutes from './routes/distributorRoutes.js';
 import pharmacistRoutes from './routes/pharmacistRoutes.js';
 import regulatorRoutes from './routes/regulatorRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';
+import adminRoutes from './routes/adminRoutes.js'; 
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
-import userManagementRoutes from './routes/userManagementRoutes.js';
-import drugBatchRoutes from "./routes/drugBatchRoutes.js";
-import shipmentRoutes from "./routes/shipmentRoutes.js";
-import prescriptionRoutes from './routes/prescriptionRoutes.js';
 import qrCodeRoutes from './routes/qrCodeRoutes.js';
 import blockchainEventLogRoutes from './routes/blockchainEventLogRoutes.js';
-import drugSupplyChainRoutes from './routes/drugSupplyChainRoutes.js';
 import fileRoutes from './routes/fileRoutes.js';
-import regulatorOversightRoutes from './routes/regulatorOversightRoutes.js';
+
 dotenv.config();
 
 const app = express();
-
 
 import path from "path";
 // ===============================
@@ -37,7 +31,6 @@ app.use(express.json());
 
 // Serve uploads directory for QR code images and other files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
 
 // --- Request Logger (for debugging) ---
 app.use((req, res, next) => {
@@ -65,15 +58,16 @@ app.use("/api/manufacturer", manufacturerRoutes);
 app.use("/api/distributor", distributorRoutes);
 app.use("/api/pharmacist", pharmacistRoutes);
 app.use("/api/regulator", regulatorRoutes);
-app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminRoutes); 
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", reportRoutes);
-app.use("/api/prescription", prescriptionRoutes);
 app.use("/api/qrcode", qrCodeRoutes);
 app.use("/api/blockchain-event-log", blockchainEventLogRoutes);
-app.use("/api/drug-supply-chain", drugSupplyChainRoutes);
 app.use("/api/files", fileRoutes);
-app.use("/api/regulator-oversight", regulatorOversightRoutes);
+
+
+
+
 // ===============================
 // Test Database Connection
 // ===============================
@@ -101,9 +95,6 @@ app._router.stack.forEach((middleware) => {
   }
 });
 
-app.use('/api/users', userManagementRoutes);
-app.use("/api/drugbatch", drugBatchRoutes);
-app.use('/api/shipments', shipmentRoutes);
 // ===============================
 // Start Server
 // ===============================

@@ -22,10 +22,17 @@ interface User {
   gender?: string;
   dob?: string;
   user_code?: string;
-  status?: "pending" | "active" | "suspended";
+  status?: "pending" | "active" | "suspended" | "inactive";
   createdat?: string;
   updatedat?: string;
   is_deleted?: boolean;
+  blockchain?: {
+    exists?: boolean;
+    role?: string;
+    status?: string;
+    error?: string;
+    is_synced?: boolean;
+  };
 }
 
 const UserManagement = () => {
@@ -49,15 +56,18 @@ const UserManagement = () => {
     { icon: Activity, label: 'Analytics', path: '/admin/analytics', active: false },
   ];
 
+  // ✅ UPDATED: Changed from /api/users to /api/admin/users
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
   const token = localStorage.getItem("token");
 
-  // Fetch all users
+  // Fetch all users - ✅ UPDATED ENDPOINT
   const fetchUsers = async () => {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/admin/users`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
       if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
       setUsers(data.users || []);
@@ -68,11 +78,13 @@ const UserManagement = () => {
     }
   };
 
-  // Fetch deleted users
+  // Fetch deleted users - ✅ UPDATED ENDPOINT
   const fetchDeletedUsers = async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/api/users/deleted`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/admin/users/deleted`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
       if (res.ok) {
         const data = await res.json();
         setDeletedUsers(data.users || []);
@@ -82,13 +94,16 @@ const UserManagement = () => {
     }
   };
 
-  // Search users
+  // Search users - ✅ UPDATED ENDPOINT
   const searchUsers = async () => {
     if (!searchTerm.trim()) return fetchUsers();
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/users/search?query=${encodeURIComponent(searchTerm)}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(
+        `${API_URL}/api/admin/users/search?query=${encodeURIComponent(searchTerm)}`, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       if (!res.ok) throw new Error("Failed to search users");
       const data = await res.json();
       setUsers(data.users || []);
@@ -100,11 +115,13 @@ const UserManagement = () => {
     }
   };
 
-  // Fetch single user
+  // Fetch single user - ✅ UPDATED ENDPOINT
   const fetchUser = async (userId: string) => {
     if (!token) return null;
     try {
-      const res = await fetch(`${API_URL}/api/users/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
       if (!res.ok) throw new Error("Failed to fetch user details");
       const data = await res.json();
       return data.user;
@@ -114,9 +131,37 @@ const UserManagement = () => {
     }
   };
 
+  // Get blockchain status - ✅ NEW FUNCTION
+  const fetchBlockchainStatus = async (userId: string) => {
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}/blockchain-status`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      if (!res.ok) throw new Error("Failed to fetch blockchain status");
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error("Failed to fetch blockchain status:", err);
+      return null;
+    }
+  };
+
   const viewUser = async (userId: string, enableEdit = false) => {
     const user = await fetchUser(userId);
     if (!user) return;
+    
+    // Fetch blockchain status for the user
+    const blockchainStatus = await fetchBlockchainStatus(userId);
+    if (blockchainStatus) {
+      user.blockchain = {
+        exists: blockchainStatus.blockchain_status !== 'not_registered',
+        status: blockchainStatus.blockchain_status,
+        role: blockchainStatus.blockchain_role,
+        is_synced: blockchainStatus.is_synced
+      };
+    }
+    
     setSelectedUser(user);
     setModalOpen(true);
     setEditMode(enableEdit);
@@ -127,9 +172,12 @@ const UserManagement = () => {
   const handleSave = async () => {
     if (!selectedUser || !token) return;
     try {
-      const res = await fetch(`${API_URL}/api/users/${selectedUser.id}`, {
+      const res = await fetch(`${API_URL}/api/admin/users/${selectedUser.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { 
+          "Content-Type": "application/json", 
+          Authorization: `Bearer ${token}` 
+        },
         body: JSON.stringify(selectedUser),
       });
       if (!res.ok) throw new Error("Failed to update user");
@@ -149,7 +197,10 @@ const UserManagement = () => {
     if (!window.confirm("Are you sure you want to delete this user? This will suspend them on the blockchain but keep their record.")) return;
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/api/users/${userId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { 
+        method: "DELETE", 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
       if (!res.ok) throw new Error("Failed to delete user");
       
       // Remove from active users and add to deleted users
@@ -170,7 +221,7 @@ const UserManagement = () => {
     if (!window.confirm("Are you sure you want to restore this user?")) return;
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/api/users/${userId}/restore`, { 
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}/restore`, { 
         method: "PATCH", 
         headers: { Authorization: `Bearer ${token}` } 
       });
@@ -195,7 +246,10 @@ const UserManagement = () => {
     if (!token) return;
     setSyncingUserId(userId);
     try {
-      const res = await fetch(`${API_URL}/api/users/${userId}/sync-blockchain`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}/sync-blockchain`, { 
+        method: "POST", 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
       if (!res.ok) throw new Error("Failed to sync user to blockchain");
       const updatedUser = await fetchUser(userId);
       if (updatedUser) {
@@ -248,8 +302,29 @@ const UserManagement = () => {
       case "active": return "default";
       case "pending": return "secondary";
       case "suspended": return "destructive";
+      case "inactive": return "outline";
       default: return "outline";
     }
+  };
+
+  const getBlockchainStatusBadge = (user: User) => {
+    if (!user.wallet_address) {
+      return <Badge variant="outline" className="text-xs">No Wallet</Badge>;
+    }
+    
+    if (user.blockchain?.error) {
+      return <Badge variant="destructive" className="text-xs">Error</Badge>;
+    }
+    
+    if (!user.blockchain?.exists) {
+      return <Badge variant="secondary" className="text-xs">Not Registered</Badge>;
+    }
+    
+    if (user.blockchain?.is_synced) {
+      return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Synced</Badge>;
+    }
+    
+    return <Badge variant="outline" className="text-xs">Not Synced</Badge>;
   };
 
   const renderUserTable = (userList: User[], isDeleted = false) => (
@@ -259,6 +334,7 @@ const UserManagement = () => {
           <TableHead>User</TableHead>
           <TableHead>Role</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Blockchain</TableHead>
           <TableHead>Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -285,6 +361,9 @@ const UserManagement = () => {
                 {user.status || "pending"}
               </Badge>
             </TableCell>
+            <TableCell>
+              {getBlockchainStatusBadge(user)}
+            </TableCell>
             <TableCell className="flex gap-1">
               <Button variant="ghost" size="sm" onClick={() => viewUser(user.id)}>
                 <Eye className="h-3 w-3" />
@@ -300,7 +379,7 @@ const UserManagement = () => {
                     size="sm"
                     className="text-green-600 hover:text-green-800"
                     onClick={() => handleSyncBlockchain(user.id)}
-                    disabled={syncingUserId === user.id}
+                    disabled={syncingUserId === user.id || !user.wallet_address}
                   >
                     <Plus className="h-3 w-3" />
                     {syncingUserId === user.id ? "Syncing..." : "Sync"}
@@ -340,7 +419,7 @@ const UserManagement = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">User Management</h1>
-            <p className="text-muted-foreground">Manage system users, roles, and permissions</p>
+            <p className="text-muted-foreground">Manage system users, roles, and blockchain synchronization</p>
           </div>
         </div>
 
@@ -348,7 +427,14 @@ const UserManagement = () => {
         <Card>
           <CardHeader>
             <CardTitle>User Directory</CardTitle>
-            <CardDescription>Search and filter registered users</CardDescription>
+            <CardDescription>
+              Search and filter registered users. 
+              {users.some(u => u.blockchain?.is_synced) && (
+                <span className="text-green-600 ml-2">
+                  {users.filter(u => u.blockchain?.is_synced).length} users synced with blockchain
+                </span>
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -400,6 +486,7 @@ const UserManagement = () => {
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button variant="outline" onClick={searchUsers}>
@@ -437,6 +524,27 @@ const UserManagement = () => {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-3">
+                {/* Blockchain Status Display */}
+                {selectedUser.wallet_address && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-semibold mb-2">Blockchain Status</p>
+                    {selectedUser.blockchain ? (
+                      <div className="space-y-1 text-xs">
+                        <p>Status: <Badge variant={selectedUser.blockchain.is_synced ? "default" : "secondary"}>
+                          {selectedUser.blockchain.status || 'Unknown'}
+                        </Badge></p>
+                        <p>Role: {selectedUser.blockchain.role || 'Unknown'}</p>
+                        <p>Synced: {selectedUser.blockchain.is_synced ? '✅' : '❌'}</p>
+                        {selectedUser.blockchain.error && (
+                          <p className="text-red-600">Error: {selectedUser.blockchain.error}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Loading blockchain status...</p>
+                    )}
+                  </div>
+                )}
+
                 {["full_name","email","role","wallet_address","phone_number","gender","dob","user_code"].map(field => (
                   <div key={field}>
                     <p className="text-xs font-semibold">{field.replace("_"," ").toUpperCase()}</p>
@@ -453,7 +561,7 @@ const UserManagement = () => {
                     value={selectedUser.status || "pending"}
                     onValueChange={(val) => {
                       if (editMode && selectedUser && !selectedUser.is_deleted) {
-                        const updatedUser = { ...selectedUser, status: val as "pending"|"active"|"suspended" };
+                        const updatedUser = { ...selectedUser, status: val as "pending"|"active"|"suspended"|"inactive" };
                         setSelectedUser(updatedUser);
                         setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
                       }
@@ -465,6 +573,7 @@ const UserManagement = () => {
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

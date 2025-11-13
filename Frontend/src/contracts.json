@@ -1,8 +1,34 @@
 {
   "USER_MANAGEMENT_ADDRESS": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "REGULATOR_OVERSIGHT_ADDRESS": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+  "DRUG_SUPPLY_CHAIN_ADDRESS": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "PRESCRIPTION_MANAGEMENT_ADDRESS": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
   "ADMIN_WALLET": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "ABI_PATH_BACKEND": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\UserManagementABI.json",
-  "ABI_PATH_FRONTEND": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\UserManagementABI.json",
   "DEPLOYMENT_NETWORK": "localhost",
-  "DEPLOYMENT_TIMESTAMP": "2025-11-04T09:45:55.618Z"
+  "DEPLOYMENT_TIMESTAMP": "2025-11-13T00:18:56.159Z",
+  "ABI_PATHS": {
+    "BACKEND": {
+      "USER_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\UserManagementABI.json",
+      "REGULATOR_OVERSIGHT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\RegulatorOversightABI.json",
+      "DRUG_SUPPLY_CHAIN": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\DrugSupplyChainABI.json",
+      "PRESCRIPTION_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\PrescriptionManagementABI.json"
+    },
+    "FRONTEND": {
+      "USER_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\UserManagementABI.json",
+      "REGULATOR_OVERSIGHT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\RegulatorOversightABI.json",
+      "DRUG_SUPPLY_CHAIN": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\DrugSupplyChainABI.json",
+      "PRESCRIPTION_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\PrescriptionManagementABI.json"
+    }
+  },
+  "DEPENDENCIES": {
+    "REGULATOR_OVERSIGHT": [
+      "USER_MANAGEMENT"
+    ],
+    "DRUG_SUPPLY_CHAIN": [
+      "USER_MANAGEMENT"
+    ],
+    "PRESCRIPTION_MANAGEMENT": [
+      "USER_MANAGEMENT"
+    ]
+  }
 }

@@ -1,21 +1,9 @@
+//src/checkBlockchainState.js
 import dotenv from 'dotenv';
-import { ethers } from 'ethers';
 import pkg from 'pg';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import * as blockchainService from './services/blockchainService.js';
 
 dotenv.config();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load contract artifact
-const userManagementArtifact = JSON.parse(
-  fs.readFileSync(
-    path.join(__dirname, '../../Smart Contracts/artifacts/contracts/UserManagement.sol/UserManagement.json'),
-    'utf8'
-  )
-);
 
 // PostgreSQL setup
 const { Client } = pkg;
@@ -55,70 +43,15 @@ async function getUsersFromDB() {
   }
 }
 
-// Blockchain setup
-const provider = new ethers.providers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
-const wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
-
-// Contract instance
-const userManagement = new ethers.Contract(
-  process.env.USER_MANAGEMENT_ADDRESS,
-  userManagementArtifact.abi,
-  wallet
-);
-
-// Check if user exists on blockchain
-async function checkUserExistsOnChain(walletAddress) {
-  try {
-    const role = await userManagement.getUserRole(walletAddress);
-    return { exists: true, role };
-  } catch (error) {
-    if (error.reason === 'User does not exist') {
-      return { exists: false, role: null };
-    }
-    console.error(`Error checking user existence for ${walletAddress}:`, error.message);
-    return { exists: false, role: null, error: error.message };
-  }
-}
-
-// Get user status from blockchain
-async function getUserStatus(walletAddress) {
-  try {
-    const status = await userManagement.getUserStatus(walletAddress);
-    return status; // returns "pending", "active", or "suspended"
-  } catch (err) {
-    if (err.reason === 'User does not exist') {
-      return "not_registered";
-    }
-    return "error"; // error case
-  }
-}
-
-// Get user role from blockchain
-async function getUserRole(walletAddress) {
-  try {
-    const role = await userManagement.getUserRole(walletAddress);
-    return role;
-  } catch (err) {
-    if (err.reason === 'User does not exist') {
-      return "not_registered";
-    }
-    return "error";
-  }
-}
-
-// Get comprehensive user info from blockchain
+// Get comprehensive user info from blockchain using the service
 async function getUserBlockchainInfo(walletAddress) {
   try {
-    const [role, status, existsCheck] = await Promise.all([
-      getUserRole(walletAddress),
-      getUserStatus(walletAddress),
-      checkUserExistsOnChain(walletAddress)
-    ]);
-
+    const blockchainData = await blockchainService.getUserOnChain(walletAddress);
+    
     return {
-      role,
-      status,
-      exists: existsCheck.exists,
+      role: blockchainData.exists ? blockchainData.role : 'not_registered',
+      status: blockchainData.exists ? blockchainData.status : 'not_registered',
+      exists: blockchainData.exists,
       error: null
     };
   } catch (err) {
@@ -131,9 +64,36 @@ async function getUserBlockchainInfo(walletAddress) {
   }
 }
 
+// Check blockchain health using the service
+async function checkBlockchainHealth() {
+  try {
+    const health = await blockchainService.getBlockchainHealth();
+    return health;
+  } catch (error) {
+    return {
+      connected: false,
+      error: error.message
+    };
+  }
+}
+
 async function main() {
   try {
-    console.log("🔗 Fetching blockchain state...\n");
+    console.log("🔗 Fetching blockchain state using Blockchain Service...\n");
+
+    // Check blockchain health first
+    const blockchainHealth = await checkBlockchainHealth();
+    console.log(`📡 Blockchain Connection: ${blockchainHealth.connected ? '✅ CONNECTED' : '❌ DISCONNECTED'}`);
+    
+    if (blockchainHealth.connected) {
+      console.log(`   Network: ${blockchainHealth.network}`);
+      console.log(`   Chain ID: ${blockchainHealth.chainId}`);
+      console.log(`   Admin Address: ${blockchainHealth.adminAddress}`);
+      console.log(`   Admin Balance: ${blockchainHealth.adminBalance} ETH`);
+      console.log(`   Contract: ${blockchainHealth.contractAddress}`);
+    } else {
+      console.log(`   Error: ${blockchainHealth.error}`);
+    }
 
     const hasIsDeletedColumn = await checkIsDeletedColumnExists();
     const allUsers = await getUsersFromDB();
@@ -146,15 +106,16 @@ async function main() {
       ? allUsers.filter(user => user.is_deleted)
       : [];
 
-    console.log(`📊 Active users in DB: ${activeUsers.length}`);
-    console.log(`🗑️  Deleted users in DB: ${deletedUsers.length}`);
-    console.log(`🔧 Soft Delete Enabled: ${hasIsDeletedColumn ? '✅' : '❌'}`);
-    console.log('=' .repeat(50));
+    console.log(`\n📊 Database Summary:`);
+    console.log(`   Active users in DB: ${activeUsers.length}`);
+    console.log(`   Deleted users in DB: ${deletedUsers.length}`);
+    console.log(`   Soft Delete Enabled: ${hasIsDeletedColumn ? '✅' : '❌'}`);
+    console.log('=' .repeat(60));
 
     // Process active users
     if (activeUsers.length > 0) {
       console.log('\n🎯 ACTIVE USERS:');
-      console.log('-'.repeat(50));
+      console.log('-'.repeat(60));
 
       for (const user of activeUsers) {
         const walletAddress = user.wallet_address;
@@ -163,7 +124,7 @@ async function main() {
           console.log(`❌ User: ${user.full_name}`);
           console.log(`   Email: ${user.email}`);
           console.log(`   Status: NO WALLET ADDRESS`);
-          console.log('-'.repeat(30));
+          console.log('-'.repeat(40));
           continue;
         }
 
@@ -188,14 +149,22 @@ async function main() {
         if (blockchainInfo.error) {
           console.log(`   Error: ${blockchainInfo.error}`);
         }
-        console.log('-'.repeat(30));
+        
+        // Show actionable items for unsynced users
+        if (!isSynced && blockchainInfo.exists) {
+          console.log(`   💡 Action: Run sync for user ID ${user.id}`);
+        } else if (!blockchainInfo.exists && user.status === 'active') {
+          console.log(`   💡 Action: User needs blockchain registration`);
+        }
+        
+        console.log('-'.repeat(40));
       }
     }
 
     // Process deleted users only if soft delete is enabled
     if (hasIsDeletedColumn && deletedUsers.length > 0) {
       console.log('\n🗑️  DELETED USERS (Soft Delete):');
-      console.log('-'.repeat(50));
+      console.log('-'.repeat(60));
 
       for (const deletedUser of deletedUsers) {
         const walletAddress = deletedUser.wallet_address;
@@ -205,7 +174,7 @@ async function main() {
           console.log(`   Email: [DELETED]`);
           console.log(`   DB Status: ${deletedUser.status}`);
           console.log(`   Status: NO WALLET ADDRESS`);
-          console.log('-'.repeat(30));
+          console.log('-'.repeat(40));
           continue;
         }
 
@@ -228,31 +197,68 @@ async function main() {
         if (blockchainInfo.error) {
           console.log(`   Error: ${blockchainInfo.error}`);
         }
-        console.log('-'.repeat(30));
+        
+        // Show actionable items
+        if (!properlyPreserved && blockchainInfo.exists) {
+          console.log(`   💡 Action: Should be suspended on blockchain`);
+        }
+        
+        console.log('-'.repeat(40));
       }
     } else if (hasIsDeletedColumn) {
       console.log('\n🗑️  DELETED USERS: No deleted users found.');
     }
 
-    // Summary
-    console.log('\n📈 SUMMARY:');
-    console.log('-'.repeat(30));
+    // Summary with actionable insights
+    console.log('\n📈 COMPREHENSIVE SUMMARY:');
+    console.log('-'.repeat(40));
     
     const activeWithWallets = activeUsers.filter(u => u.wallet_address);
     const deletedWithWallets = deletedUsers.filter(u => u.wallet_address);
     
+    // Count sync status
+    let syncedCount = 0;
+    let notSyncedCount = 0;
+    let notRegisteredCount = 0;
+    
+    for (const user of activeWithWallets) {
+      const blockchainInfo = await getUserBlockchainInfo(user.wallet_address);
+      const isSynced = blockchainInfo.exists && 
+                      blockchainInfo.status === user.status.toLowerCase() && 
+                      blockchainInfo.role === user.role.toLowerCase();
+      
+      if (isSynced) syncedCount++;
+      else if (!blockchainInfo.exists) notRegisteredCount++;
+      else notSyncedCount++;
+    }
+    
     console.log(`Active users with wallets: ${activeWithWallets.length}`);
+    console.log(`  ✅ Synced: ${syncedCount}`);
+    console.log(`  ⚠️  Not Synced: ${notSyncedCount}`);
+    console.log(`  ❌ Not Registered: ${notRegisteredCount}`);
     console.log(`Deleted users with wallets: ${deletedWithWallets.length}`);
-    console.log(`Total blockchain records: ${activeWithWallets.length + deletedWithWallets.length}`);
     console.log(`Soft Delete Feature: ${hasIsDeletedColumn ? '✅ ENABLED' : '❌ DISABLED'}`);
-
-    // Check contract health
-    try {
-      const roleCounter = await userManagement.roleCounter();
-      console.log(`Contract role counter: ${roleCounter.toString()}`);
-      console.log('✅ Contract connection healthy');
-    } catch (error) {
-      console.log('❌ Contract connection issues:', error.message);
+    
+    // Contract info
+    if (blockchainHealth.connected) {
+      try {
+        const contract = blockchainService.getContract();
+        const roleCounter = await contract.roleCounter();
+        console.log(`Contract role counter: ${roleCounter.toString()}`);
+        
+        // List existing roles
+        console.log(`\n🏷️  EXISTING ROLES ON CHAIN:`);
+        for (let i = 1; i <= roleCounter; i++) {
+          try {
+            const roleName = await contract.getRoleName(i);
+            console.log(`   ${i}. ${roleName}`);
+          } catch (error) {
+            console.log(`   ${i}. [Error fetching role]`);
+          }
+        }
+      } catch (error) {
+        console.log('❌ Error fetching contract details:', error.message);
+      }
     }
 
     // Show setup instructions if needed
@@ -266,14 +272,32 @@ async function main() {
       `);
     }
 
-    console.log("\n✅ Done reading blockchain state!");
+    // Recommendations
+    console.log('\n🎯 RECOMMENDATIONS:');
+    if (notRegisteredCount > 0) {
+      console.log(`   • Register ${notRegisteredCount} users on blockchain`);
+    }
+    if (notSyncedCount > 0) {
+      console.log(`   • Sync ${notSyncedCount} users to match blockchain state`);
+    }
+    if (!hasIsDeletedColumn) {
+      console.log(`   • Enable soft delete feature for better user management`);
+    }
+
+    console.log("\n✅ Blockchain state check completed using Blockchain Service!");
 
   } catch (err) {
-    console.error("❌ Error reading blockchain:", err);
+    console.error("❌ Error reading blockchain state:", err);
   } finally {
     await client.end();
     process.exit(0);
   }
 }
 
-main();
+// Export for potential use in other scripts
+export const checkBlockchainState = main;
+
+// Run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

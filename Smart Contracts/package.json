@@ -1,20 +1,27 @@
 {
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",
-    "ethers": "^6.15.0"
+    "ethers": "^6.15.0",
+    "pg": "^8.16.3"
   },
   "name": "smart-contracts",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "node": "hardhat node",
+    "listen": "node scripts/listenAndLogEvents.js",
+    "listen-dev": "nodemon scripts/listenAndLogEvents.js",
+    "start-dev": "concurrently \"npx hardhat node\" \"npx hardhat run scripts/listenAndLogEvents.js --network localhost\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "hardhat": "^2.22.10"
+    "concurrently": "^9.2.1",
+    "hardhat": "^2.22.10",
+    "nodemon": "^3.1.11"
   }
 }
