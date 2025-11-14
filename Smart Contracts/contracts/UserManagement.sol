@@ -42,6 +42,29 @@ contract UserManagement {
     event UserStatusUpdated(address indexed wallet, Status newStatus);
     event AdminAdded(address indexed newAdmin);
     event AdminRemoved(address indexed removedAdmin);
+    event UserDeleted(address indexed wallet);
+    event UserEdited(address indexed wallet, string metadata);
+    event UserSynced(address indexed wallet);
+    event UserViewed(address indexed wallet);
+    // ---------------- User Actions ----------------
+    function deleteUser(address wallet) public onlyAdmin userExists(wallet) {
+        require(!admins[wallet], "Cannot delete admin");
+        users[wallet].exists = false;
+        emit UserDeleted(wallet);
+    }
+
+    function editUser(address wallet, string memory metadata) public onlyAdmin userExists(wallet) {
+        users[wallet].metadata = metadata;
+        emit UserEdited(wallet, metadata);
+    }
+
+    function syncUser(address wallet) public onlyAdmin userExists(wallet) {
+        emit UserSynced(wallet);
+    }
+
+    function viewUser(address wallet) public userExists(wallet) {
+        emit UserViewed(wallet);
+    }
 
     // ---------------- Modifiers ----------------
     modifier onlyAdmin() {

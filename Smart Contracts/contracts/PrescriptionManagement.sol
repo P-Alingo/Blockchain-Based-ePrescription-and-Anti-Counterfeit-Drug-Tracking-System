@@ -4,6 +4,16 @@ pragma solidity ^0.8.19;
 import "./UserManagement.sol";
 
 contract PrescriptionManagement {
+        event PrescriptionViewed(
+            uint indexed prescriptionId,
+            address indexed doctor,
+            address indexed patient,
+            uint timestamp
+        );
+        function viewPrescription(uint prescriptionId) public prescriptionExists(prescriptionId) {
+            Prescription storage p = prescriptions[prescriptionId];
+            emit PrescriptionViewed(prescriptionId, p.doctor, p.patient, block.timestamp);
+        }
     // ---------------- Structs ----------------
     struct DrugDetails {
         uint drugId;
@@ -51,7 +61,14 @@ contract PrescriptionManagement {
     uint[] public allPrescriptionIds;
     uint public prescriptionCounter;
 
-    // ---------------- Events ----------------
+
+    // ---------------- Events (PrescriptionManagement) ----------------
+    event PrescriptionExpired(
+        uint indexed prescriptionId,
+        address indexed doctor,
+        address indexed patient,
+        uint expiredAt
+    );
     event PrescriptionCreated(
         uint indexed prescriptionId,
         uint indexed databaseId,
@@ -62,7 +79,6 @@ contract PrescriptionManagement {
         uint quantity,
         uint validUntil
     );
-    
     event PrescriptionDispensed(
         uint indexed prescriptionId,
         address indexed pharmacist,
@@ -70,24 +86,107 @@ contract PrescriptionManagement {
         uint dispensedDate,
         string prescriptionCode
     );
-    
     event PrescriptionInvalid(
         uint indexed prescriptionId,
         address indexed pharmacist,
         string reason,
         string prescriptionCode
     );
-    
     event PrescriptionDeleted(
         uint indexed prescriptionId,
         address indexed doctor,
         string prescriptionCode
     );
-
     event PrescriptionUpdated(
         uint indexed prescriptionId,
         string prescriptionCode,
         uint updatedAt
+    );
+
+    // ---------------- Events (DrugSupplyChain) ----------------
+    event BatchCreated(
+        uint indexed batchId,
+        uint indexed databaseId,
+        address indexed manufacturer,
+        string batchNumber,
+        string drugName,
+        uint quantity,
+        uint expiryDate
+    );
+    event BatchTransferred(
+        uint indexed transferId,
+        uint indexed batchId,
+        address indexed from,
+        address to,
+        string shipmentNumber,
+        string status,
+        uint timestamp
+    );
+    event BatchCounterfeit(
+        uint indexed batchId,
+        address indexed flaggedBy,
+        string reason,
+        uint timestamp
+    );
+    event ShipmentStatusUpdated(
+        uint indexed batchId,
+        string shipmentNumber,
+        string newStatus,
+        address updatedBy,
+        uint timestamp
+    );
+    event BatchBlockchainTxUpdated(
+        uint indexed batchId,
+        string batchNumber,
+        string transactionHash,
+        uint timestamp
+    );
+
+    // ---------------- Events (RegulatorOversight) ----------------
+    event AuditLogged(
+        uint indexed auditId,
+        address indexed regulator,
+        string description,
+        string entityType,
+        uint entityId,
+        uint timestamp
+    );
+    event EntityFlagged(
+        uint indexed flagId,
+        address indexed flaggedBy,
+        string entityType,
+        uint entityId,
+        address userAddress,
+        string reason,
+        string status,
+        bool autoSuspended,
+        uint timestamp
+    );
+    event FlagStatusUpdated(
+        uint indexed flagId,
+        string oldStatus,
+        string newStatus,
+        address updatedBy,
+        uint timestamp
+    );
+    event AnomalyDetected(
+        uint indexed reportId,
+        string anomalyType,
+        string severity,
+        string description,
+        uint timestamp
+    );
+    event UserAutoSuspended(
+        address indexed userAddress,
+        uint flagCount,
+        address suspendedBy,
+        uint suspensionEndTime,
+        uint timestamp
+    );
+    event UserSuspensionLifted(
+        address indexed userAddress,
+        address liftedBy,
+        uint timestamp
     );
 
     // ---------------- Modifiers ----------------
@@ -540,6 +639,12 @@ contract PrescriptionManagement {
                 block.timestamp > prescriptions[prescriptionId].validUntil) {
                 prescriptions[prescriptionId].status = Status.Expired;
                 prescriptions[prescriptionId].updatedAt = block.timestamp;
+                emit PrescriptionExpired(
+                    prescriptionId,
+                    prescriptions[prescriptionId].doctor,
+                    prescriptions[prescriptionId].patient,
+                    block.timestamp
+                );
             }
         }
     }

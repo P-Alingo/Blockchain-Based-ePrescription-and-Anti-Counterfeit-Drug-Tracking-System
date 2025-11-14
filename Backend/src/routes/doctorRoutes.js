@@ -1,13 +1,10 @@
 import express from "express";
-import { getDoctorProfile, updateDoctorProfile, getDoctorDashboard, createPrescription, listPrescriptions, getPrescription, deletePrescription, searchPatients, searchDrugs, listExpiredPrescriptions, getDoctorAnalytics, updatePrescription } from "../controllers/doctorController.js";
+import { getDoctorProfile, updateDoctorProfile, getDoctorDashboard, createPrescription, listPrescriptions, getPrescription, deletePrescription, searchPatients, searchDrugs, listExpiredPrescriptions, getDoctorAnalytics, updatePrescription, getDoctorBlockchainEvents } from "../controllers/doctorController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 router.use(authMiddleware);
-
-// Expired prescriptions endpoint
-router.get("/prescription/expired", listExpiredPrescriptions);
 
 router.get("/profile", getDoctorProfile);
 router.put("/profile", updateDoctorProfile);
@@ -24,5 +21,11 @@ router.get("/search/drug", searchDrugs);
 
 // Analytics endpoint
 router.get("/analytics", authMiddleware, getDoctorAnalytics);
+
+// Blockchain events endpoint for doctor
+router.get("/blockchain", getDoctorBlockchainEvents);
+
+// Expired prescriptions endpoint
+router.get("/prescription/expired", listExpiredPrescriptions);
 
 export default router;

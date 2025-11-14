@@ -32,6 +32,18 @@ export const getAllUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const user = await adminService.getUserById(req.params.id);
+    // Blockchain view event (optional, only if wallet exists and not deleted)
+    if (user.wallet_address && user.wallet_address !== '[DELETED]' && !user.is_deleted) {
+      try {
+        const { viewUserOnChain } = await import("../services/blockchainService.js");
+        const tx = await viewUserOnChain(user.wallet_address);
+        const receipt = await tx.wait();
+        // Log event to blockchaineventlog
+        await adminService.logUserViewEvent(user.id, user.wallet_address, receipt.transactionHash, receipt.blockNumber);
+      } catch (err) {
+        console.warn('Blockchain viewUser event failed:', err.message);
+      }
+    }
     res.json({ success: true, user });
   } catch (error) {
     console.error('❌ getUserById error:', error);
@@ -81,13 +93,24 @@ export const addUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   const userId = req.params.id;
   const updates = req.body;
-  
   if (!Object.keys(updates).length) {
     return res.status(400).json({ success: false, message: 'No fields to update' });
   }
-
   try {
     const user = await adminService.updateUser(userId, updates);
+    // Blockchain edit event (optional, only if wallet exists and not deleted)
+    if (user.wallet_address && user.wallet_address !== '[DELETED]' && !user.is_deleted) {
+      try {
+        const { editUserOnChain } = await import("../services/blockchainService.js");
+        // You may want to pass metadata or changed fields here
+        const tx = await editUserOnChain(user.wallet_address, updates);
+        const receipt = await tx.wait();
+        // Log event to blockchaineventlog
+        await adminService.logUserViewEvent(user.id, user.wallet_address, receipt.transactionHash, receipt.blockNumber);
+      } catch (err) {
+        console.warn('Blockchain editUser event failed:', err.message);
+      }
+    }
     res.json({ success: true, user, message: 'User updated successfully' });
   } catch (error) {
     console.error('❌ updateUser error:', error);

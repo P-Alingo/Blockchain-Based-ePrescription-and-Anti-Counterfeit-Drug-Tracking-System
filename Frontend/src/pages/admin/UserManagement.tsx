@@ -563,20 +563,22 @@ const UserManagement = () => {
                 {/* Blockchain Status Display */}
                 {selectedUser.wallet_address && (
                   <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-sm font-semibold mb-2">Blockchain Status</p>
+                    <div className="mb-2">
+                      <span className="text-sm font-semibold">Blockchain Status</span>
+                    </div>
                     {selectedUser.blockchain ? (
                       <div className="space-y-1 text-xs">
-                        <p>Status: <Badge variant={selectedUser.blockchain.is_synced ? "default" : "secondary"}>
+                        <div>Status: <Badge variant={selectedUser.blockchain.is_synced ? "default" : "secondary"}>
                           {selectedUser.blockchain.status || 'Unknown'}
-                        </Badge></p>
-                        <p>Role: {selectedUser.blockchain.role || 'Unknown'}</p>
-                        <p>Synced: {selectedUser.blockchain.is_synced ? '✅' : '❌'}</p>
+                        </Badge></div>
+                        <div>Role: {selectedUser.blockchain.role || 'Unknown'}</div>
+                        <div>Synced: {selectedUser.blockchain.is_synced ? '✅' : '❌'}</div>
                         {selectedUser.blockchain.error && (
-                          <p className="text-red-600">Error: {selectedUser.blockchain.error}</p>
+                          <div className="text-red-600">Error: {selectedUser.blockchain.error}</div>
                         )}
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Loading blockchain status...</p>
+                      <div className="text-xs text-muted-foreground">Loading blockchain status...</div>
                     )}
                   </div>
                 )}

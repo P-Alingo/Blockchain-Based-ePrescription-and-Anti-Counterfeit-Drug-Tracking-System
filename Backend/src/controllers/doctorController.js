@@ -1,3 +1,30 @@
+// Fetch blockchain events for doctor's prescriptions
+
+export async function getDoctorBlockchainEvents(req, res) {
+  try {
+    const userId = req.user.id;
+    // Get doctorId from users table
+    const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
+    if (doctorResult.rowCount === 0) return res.status(404).json([]);
+    const doctorId = doctorResult.rows[0].id;
+
+    // Get prescription IDs for this doctor
+    const prescResult = await query("SELECT id FROM prescription WHERE doctor_id = $1", [doctorId]);
+    const prescriptionIds = prescResult.rows.map(row => row.id);
+
+    if (prescriptionIds.length === 0) return res.json([]);
+
+    // Get blockchain events for these prescriptions
+    const eventsResult = await query(
+      `SELECT * FROM blockchaineventlog WHERE entitytype = 'prescription' AND entityid = ANY($1::int[]) ORDER BY timestamp DESC`,
+      [prescriptionIds]
+    );
+    res.json(eventsResult.rows);
+  } catch (error) {
+    console.error("❌ Error fetching doctor blockchain events:", error);
+    res.status(500).json([]);
+  }
+}
 import * as doctorService from "../services/doctorService.js";
 import {
   createPrescription as createPrescriptionService,
@@ -10,6 +37,11 @@ import {
   getDoctorAnalytics as getDoctorAnalyticsService,
   getExpiredPrescriptions
 } from "../services/doctorService.js";
+import {
+  createPrescriptionOnChain,
+  deletePrescriptionOnChain,
+  updatePrescriptionBlockchainTxOnChain
+} from "../services/blockchainService.js";
 // UPDATE prescription
 export async function updatePrescription(req, res) {
   try {
@@ -38,6 +70,13 @@ export async function updatePrescription(req, res) {
     if (!updated) {
       return res.status(404).json({ message: "Prescription not found or unauthorized" });
     }
+    // Optionally: update blockchain tx hash or other info
+    try {
+      // If you have a blockchainTx to update, call updatePrescriptionBlockchainTxOnChain
+      // await updatePrescriptionBlockchainTxOnChain(id, "newTxHash");
+    } catch (chainErr) {
+      console.error("❌ Blockchain prescription update failed:", chainErr);
+    }
     return res.status(200).json({ message: "Prescription updated successfully" });
   } catch (error) {
     console.error("❌ Error updating prescription:", error);
@@ -54,9 +93,23 @@ export async function searchPatients(req, res) {
       return res.status(400).json({ message: "Missing search query" });
     }
     const decoded = decodeURIComponent(q).trim();
-    const cleanedQuery = decoded.replace(/ID:\s*\d+\s*—\s*/g, "").trim();
-    const patients = await searchPatientsService(cleanedQuery);
-    return res.status(200).json(patients);
+    // Remove 'ID: ... —' prefix if present
+    let cleanedQuery = decoded.replace(/ID:\s*\d+\s*—\s*/g, "").trim();
+    // If cleanedQuery is empty, fallback to original
+    if (!cleanedQuery) cleanedQuery = decoded;
+    // If still empty, return 400
+    if (!cleanedQuery || cleanedQuery.length < 1) {
+      return res.status(400).json({ message: "Invalid search query" });
+    }
+    let patients = [];
+    try {
+      patients = await searchPatientsService(cleanedQuery);
+    } catch (serviceErr) {
+      console.error("❌ Error in searchPatientsService:", serviceErr);
+      return res.status(500).json({ message: "Search service error" });
+    }
+    // Always return array, never error for empty results
+    return res.status(200).json(Array.isArray(patients) ? patients : []);
   } catch (error) {
     console.error("❌ Error searching patients:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -70,8 +123,15 @@ export async function searchDrugs(req, res) {
     if (!q || q.trim().length < 1) {
       return res.status(400).json({ message: "Missing search query" });
     }
-    const drugs = await searchDrugsService(q.trim());
-    return res.status(200).json(drugs);
+    let drugs = [];
+    try {
+      drugs = await searchDrugsService(q.trim());
+    } catch (serviceErr) {
+      console.error("❌ Error in searchDrugsService:", serviceErr);
+      return res.status(500).json({ message: "Search service error" });
+    }
+    // Always return array, never error for empty results
+    return res.status(200).json(Array.isArray(drugs) ? drugs : []);
   } catch (error) {
     console.error("❌ Error searching drugs:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -126,6 +186,32 @@ export async function createPrescription(req, res) {
       validUntil,
       quantity,
     });
+
+    // Call blockchain contract to sync prescription
+    try {
+      // Prepare params for contract
+      const chainParams = {
+        databaseId: prescription.id, // DB prescription ID
+        patient: req.body.patientWalletAddress, // Patient wallet address (must be provided)
+        prescriptionCode: prescription.prescription_code,
+        drugId,
+        drugName: prescription.drug_name,
+        strength: prescription.dosageAmount + prescription.dosageUnit,
+        form: "tablet", // You may want to fetch actual form
+        quantity,
+        instructions,
+        dosageAmount,
+        dosageUnit,
+        frequency,
+        duration,
+        validUntil: Math.floor(new Date(validUntil).getTime() / 1000)
+      };
+      await createPrescriptionOnChain(chainParams);
+    } catch (chainErr) {
+      console.error("❌ Blockchain prescription creation failed:", chainErr);
+      // Optionally: return error or continue
+    }
+
     return res.status(201).json({
       message: "Prescription created successfully",
       prescription,
@@ -187,6 +273,13 @@ export async function deletePrescription(req, res) {
     const deleted = await deletePrescriptionService(id, doctorId);
     if (!deleted) {
       return res.status(404).json({ message: "Prescription not found or unauthorized" });
+    }
+    // Call blockchain contract to delete prescription
+    try {
+      await deletePrescriptionOnChain(id);
+    } catch (chainErr) {
+      console.error("❌ Blockchain prescription delete failed:", chainErr);
+      // Optionally: return error or continue
     }
     return res.status(200).json({ message: "Prescription deleted successfully" });
   } catch (error) {

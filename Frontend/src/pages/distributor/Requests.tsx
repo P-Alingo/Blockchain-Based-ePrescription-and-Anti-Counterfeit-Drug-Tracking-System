@@ -164,25 +164,37 @@ const DistributorRequests: React.FC = () => {
           }
         }
       }
+      // Create shipment in backend
       await api.post('/api/distributor/shipments', {
-  batch_id: selectedRequest.batch_id,
-  drug_id,
-  manufacturer_id: selectedRequest.manufacturer_id,
-  pharmacist_id: selectedRequest.pharmacist_id,
-  quantity_shipped: shipmentFields.quantity,
-  temperature: shipmentFields.temperature,
-  route: shipmentFields.route,
-  vehicle_number: shipmentFields.vehicle_number,
-  departure_date: shipmentFields.departure_date,
-  origin_facility_id: selectedRequest.manufacturer_facility_id,
-  destination_facility_id: selectedRequest.pharmacist_facility_id,
+        batch_id: selectedRequest.batch_id,
+        drug_id,
+        manufacturer_id: selectedRequest.manufacturer_id,
+        pharmacist_id: selectedRequest.pharmacist_id,
+        quantity_shipped: shipmentFields.quantity,
+        temperature: shipmentFields.temperature,
+        route: shipmentFields.route,
+        vehicle_number: shipmentFields.vehicle_number,
+        departure_date: shipmentFields.departure_date,
+        origin_facility_id: selectedRequest.manufacturer_facility_id,
+        destination_facility_id: selectedRequest.pharmacist_facility_id,
       });
-  toast.success('Shipment created');
-  setShipmentModalOpen(false);
-  setSelectedRequest(null);
-  setShipmentFields({ quantity: '', temperature: '', route: '', vehicle_number: '', departure_date: '' });
-  // Auto-refresh after shipment is created
-  setTimeout(() => { loadDrugRequests(); }, 500);
+      // Automatically trigger blockchain batch transfer
+      try {
+        const transferRes = await api.post('/api/distributor/batches/transfer', {
+          batchId: selectedRequest.batch_id,
+          toAddress: selectedRequest.pharmacist_wallet_address || '',
+          status: 'in transit', // or use shipmentFields.status if available
+        });
+        toast.success(`Blockchain transfer successful! Tx: ${(transferRes.data as { blockchain?: { txHash?: string } })?.blockchain?.txHash || 'N/A'}`);
+      } catch (blockchainErr: any) {
+        toast.error(blockchainErr.response?.data?.message || 'Blockchain transfer failed');
+      }
+      toast.success('Shipment created');
+      setShipmentModalOpen(false);
+      setSelectedRequest(null);
+      setShipmentFields({ quantity: '', temperature: '', route: '', vehicle_number: '', departure_date: '' });
+      // Auto-refresh after shipment is created
+      setTimeout(() => { loadDrugRequests(); }, 500);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to create shipment');
     }

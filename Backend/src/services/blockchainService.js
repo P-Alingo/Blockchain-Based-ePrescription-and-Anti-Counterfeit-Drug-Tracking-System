@@ -1,3 +1,19 @@
+// UserManagement contract: new user action functions
+export async function deleteUserOnChain(walletAddress) {
+  return await contract.deleteUser(walletAddress);
+}
+
+export async function editUserOnChain(walletAddress, metadata) {
+  return await contract.editUser(walletAddress, metadata);
+}
+
+export async function syncUserOnChainAction(walletAddress) {
+  return await contract.syncUser(walletAddress);
+}
+
+export async function viewUserOnChain(walletAddress) {
+  return await contract.viewUser(walletAddress);
+}
 import dotenv from 'dotenv';
 dotenv.config();
 import { ethers } from 'ethers';
@@ -9,20 +25,29 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---- Load contract artifacts ----
-const artifactPath = path.resolve(
+const userManagementArtifactPath = path.resolve(
   __dirname,
   '../../../Smart Contracts/artifacts/contracts/UserManagement.sol/UserManagement.json'
 );
+const prescriptionManagementArtifactPath = path.resolve(
+  __dirname,
+  '../../../Smart Contracts/artifacts/contracts/PrescriptionManagement.sol/PrescriptionManagement.json'
+);
 
-if (!fs.existsSync(artifactPath)) {
-  console.error('❌ Contract JSON not found at:', artifactPath);
+if (!fs.existsSync(userManagementArtifactPath)) {
+  console.error('❌ UserManagement contract JSON not found at:', userManagementArtifactPath);
+  process.exit(1);
+}
+if (!fs.existsSync(prescriptionManagementArtifactPath)) {
+  console.error('❌ PrescriptionManagement contract JSON not found at:', prescriptionManagementArtifactPath);
   process.exit(1);
 }
 
-const userManagementArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+const userManagementArtifact = JSON.parse(fs.readFileSync(userManagementArtifactPath, 'utf8'));
+const prescriptionManagementArtifact = JSON.parse(fs.readFileSync(prescriptionManagementArtifactPath, 'utf8'));
 
 // ---- Blockchain Setup ----
-let provider, wallet, contract;
+let provider, wallet, contract, prescriptionContract;
 
 try {
   provider = new ethers.providers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
@@ -32,12 +57,117 @@ try {
     userManagementArtifact.abi,
     wallet
   );
+  prescriptionContract = new ethers.Contract(
+    process.env.PRESCRIPTION_MANAGEMENT_ADDRESS,
+    prescriptionManagementArtifact.abi,
+    wallet
+  );
   console.log('✅ Blockchain service initialized');
   console.log('🔑 Admin wallet address:', wallet.address);
 } catch (error) {
   console.error('❌ Blockchain setup failed:', error.message);
   process.exit(1);
 }
+// ===========================
+// PRESCRIPTION MANAGEMENT CONTRACT FUNCTIONS
+// Log prescription view on-chain
+export async function viewPrescriptionOnChain(prescriptionId) {
+  return await prescriptionContract.viewPrescription(prescriptionId);
+}
+// ===========================
+
+// Create a prescription on-chain
+export async function createPrescriptionOnChain(params) {
+  return await prescriptionContract.createPrescription(
+    params.databaseId,
+    params.patient,
+    params.prescriptionCode,
+    params.drugId,
+    params.drugName,
+    params.strength,
+    params.form,
+    params.quantity,
+    params.instructions,
+    params.dosageAmount,
+    params.dosageUnit,
+    params.frequency,
+    params.duration,
+    params.validUntil
+  );
+}
+
+// Dispense a prescription
+export async function dispensePrescriptionOnChain(prescriptionId) {
+  return await prescriptionContract.dispensePrescription(prescriptionId);
+}
+
+// Mark prescription as invalid
+export async function markPrescriptionInvalidOnChain(prescriptionId, reason) {
+  return await prescriptionContract.markPrescriptionInvalid(prescriptionId, reason);
+}
+
+// Delete a prescription
+export async function deletePrescriptionOnChain(prescriptionId) {
+  return await prescriptionContract.deletePrescription(prescriptionId);
+}
+
+// Update blockchain transaction hash
+export async function updatePrescriptionBlockchainTxOnChain(prescriptionId, transactionHash) {
+  return await prescriptionContract.updateBlockchainTx(prescriptionId, transactionHash);
+}
+
+// Get prescription details (view)
+export async function getPrescriptionOnChain(prescriptionId) {
+  return await prescriptionContract.getPrescription(prescriptionId);
+}
+
+// Get prescription by code (view)
+export async function getPrescriptionByCodeOnChain(prescriptionCode) {
+  return await prescriptionContract.getPrescriptionByCode(prescriptionCode);
+}
+
+// Get all prescriptions for a doctor
+export async function getPrescriptionsByDoctorOnChain(doctorAddress) {
+  return await prescriptionContract.getPrescriptionsByDoctor(doctorAddress);
+}
+
+// Get all prescriptions for a pharmacist
+export async function getPrescriptionsByPharmacistOnChain(pharmacistAddress) {
+  return await prescriptionContract.getPrescriptionsByPharmacist(pharmacistAddress);
+}
+
+// Get all prescriptions for a patient
+export async function getPrescriptionsByPatientOnChain(patientAddress) {
+  return await prescriptionContract.getPrescriptionsByPatient(patientAddress);
+}
+
+// Get all prescriptions (admin/regulator)
+export async function getAllPrescriptionsOnChain() {
+  return await prescriptionContract.getAllPrescriptions();
+}
+
+// Get flagged prescriptions (admin/regulator)
+export async function getFlaggedPrescriptionsOnChain() {
+  return await prescriptionContract.getFlaggedPrescriptions();
+}
+
+// Utility: Get prescription status as string
+export async function getPrescriptionStatusOnChain(prescriptionId) {
+  return await prescriptionContract.getPrescriptionStatus(prescriptionId);
+}
+
+// Utility: Check if valid for dispensing
+export async function isValidForDispensingOnChain(prescriptionId) {
+  return await prescriptionContract.isValidForDispensing(prescriptionId);
+}
+
+// Utility: Expire old prescriptions
+export async function expireOldPrescriptionsOnChain() {
+  return await prescriptionContract.expireOldPrescriptions();
+}
+
+// Export contract instance for direct access
+export const getPrescriptionContract = () => prescriptionContract;
 
 // ===========================
 // CORE BLOCKCHAIN FUNCTIONS
@@ -201,7 +331,7 @@ export const addUserToBlockchain = async (walletAddress, role) => {
     });
     const receipt = await tx.wait();
     console.log(`✅ User added to blockchain in block ${receipt.blockNumber}`);
-    return { success: true, blockNumber: receipt.blockNumber };
+    return { success: true, transactionHash: receipt.transactionHash, blockNumber: receipt.blockNumber };
   } catch (error) {
     console.error(`❌ Blockchain user addition failed for ${walletAddress}:`, error.message);
     
@@ -461,7 +591,6 @@ export const listenForUserEvents = (options = {}) => {
       onUserRegistered = null,
       onUserStatusUpdated = null,
       onRoleCreated = null,
-      onUserRemoved = null,
       logEvents = true
     } = options;
 
@@ -520,22 +649,6 @@ export const listenForUserEvents = (options = {}) => {
     });
 
     // User Removed Event
-    contract.on('UserRemoved', (userAddress, event) => {
-      if (logEvents) {
-        console.log(`🗑️ User removed from blockchain: ${userAddress}`);
-        console.log(`📝 Transaction: ${event.transactionHash}`);
-        console.log(`🕒 Block: ${event.blockNumber}`);
-      }
-      
-      if (onUserRemoved) {
-        onUserRemoved({
-          userAddress,
-          transactionHash: event.transactionHash,
-          blockNumber: event.blockNumber,
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
 
     console.log('✅ Blockchain event listeners activated');
     
