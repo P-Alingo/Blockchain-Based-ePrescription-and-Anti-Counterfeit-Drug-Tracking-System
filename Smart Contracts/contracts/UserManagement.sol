@@ -46,11 +46,21 @@ contract UserManagement {
     event UserEdited(address indexed wallet, string metadata);
     event UserSynced(address indexed wallet);
     event UserViewed(address indexed wallet);
+    event UserRestored(address indexed wallet);
     // ---------------- User Actions ----------------
     function deleteUser(address wallet) public onlyAdmin userExists(wallet) {
         require(!admins[wallet], "Cannot delete admin");
         users[wallet].exists = false;
         emit UserDeleted(wallet);
+    }
+
+    // Restore a previously deleted user (sets exists=true)
+    function restoreUser(address wallet) public onlyAdmin {
+        require(!users[wallet].exists, "User already exists");
+        // Optionally, restore status to Pending or Active, here we use Pending
+        users[wallet].exists = true;
+        users[wallet].status = Status.Pending;
+        emit UserRestored(wallet);
     }
 
     function editUser(address wallet, string memory metadata) public onlyAdmin userExists(wallet) {

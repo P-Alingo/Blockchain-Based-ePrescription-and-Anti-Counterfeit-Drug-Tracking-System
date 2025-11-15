@@ -62,7 +62,7 @@ const AdminBlockchain = () => {
     setLoading(true);
     try {
       // Fetch blockchain events
-      const eventsRes = await fetch(`${API_URL}/api/admin/blockchain`, {
+      const eventsRes = await fetch(`${API_URL}/api/blockchain/events`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -109,12 +109,15 @@ const AdminBlockchain = () => {
     }
   };
 
-  const filteredEvents = events.filter(event =>
-    event.eventname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.entityid?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.details?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.transactionhash?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Show only the latest 12 events
+  const filteredEvents = events
+    .filter(event =>
+      event.eventname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.entityid?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.details?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.transactionhash?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .slice(0, 12);
 
   const getEventTypeColor = (eventType: string) => {
     switch (eventType?.toLowerCase()) {

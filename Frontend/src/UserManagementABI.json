@@ -120,6 +120,19 @@
         "internalType": "address",
         "name": "wallet",
         "type": "address"
+      }
+    ],
+    "name": "UserRestored",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "wallet",
+        "type": "address"
       },
       {
         "indexed": false,
@@ -732,6 +745,19 @@
       }
     ],
     "name": "removeAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "wallet",
+        "type": "address"
+      }
+    ],
+    "name": "restoreUser",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

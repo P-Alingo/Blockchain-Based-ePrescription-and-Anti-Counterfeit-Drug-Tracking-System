@@ -1,10 +1,56 @@
 // UPDATE prescription logic
-import {
-  createPrescriptionOnChain,
-  deletePrescriptionOnChain,
-  updatePrescriptionBlockchainTxOnChain,
-  viewPrescriptionOnChain
-} from "./blockchainService.js";
+export async function updatePrescription(id, doctorId, updateData) {
+  if (!doctorId) throw new Error("doctorId is required");
+  // Only allow update of editable fields
+  const allowed = ["dosageAmount", "dosageUnit", "frequency", "duration", "instructions"];
+  const keys = Object.keys(updateData).filter(k => allowed.includes(k));
+  if (keys.length === 0) return false;
+  const setClause = keys.map((k, i) => `${snakeCase(k)} = $${i + 3}`).join(", ");
+  const values = [id, doctorId, ...keys.map(k => updateData[k])];
+  // Only update if prescription belongs to doctor
+  const checkResult = await query(`SELECT id FROM prescription WHERE id = $1 AND doctor_id = $2;`, [id, doctorId]);
+  if (checkResult.rowCount === 0) return false;
+  await query(`UPDATE prescription SET ${setClause} WHERE id = $1 AND doctor_id = $2`, values);
+
+  // Blockchain integration: update event
+  let blockchainTxHash = null;
+  let blockchainBlockNumber = null;
+  let walletAddress = null;
+  try {
+    const { updatePrescriptionBlockchainTxOnChain } = await import('./blockchainService.js');
+    const tx = await updatePrescriptionBlockchainTxOnChain(id, `edit-${Date.now()}`);
+    const receipt = await tx.wait();
+    blockchainTxHash = receipt.transactionHash;
+    blockchainBlockNumber = receipt.blockNumber;
+    const doctorWalletRes = await query('SELECT wallet_address FROM users WHERE id = $1', [doctorId]);
+    walletAddress = doctorWalletRes.rows[0]?.wallet_address || null;
+  } catch (err) {
+    console.error('❌ Blockchain prescription update failed:', err);
+  }
+  // Log blockchain event
+  try {
+    const eventname = 'PrescriptionUpdated';
+    const contractname = 'PrescriptionManagement';
+    const entityid = id;
+    const entitytype = 'prescription';
+    const transactionhash = blockchainTxHash;
+    const timestamp = new Date().toISOString();
+    const details = JSON.stringify(updateData);
+    await query(
+      `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, timestamp, processed, wallet_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [eventname, contractname, entityid, entitytype, transactionhash, timestamp, false, walletAddress]
+    );
+  } catch (err) {
+    console.error('❌ Failed to log blockchain event:', err);
+  }
+  return true;
+}
+
+// Helper to convert camelCase to snake_case
+function snakeCase(str) {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
 import { query } from "../config/database.js";
 
 // Expose query helper for doctorController dashboard logic
@@ -23,7 +69,6 @@ export async function createPrescription({
   issueDate,
   validUntil,
   quantity,
-  patientWalletAddress // <-- Add this field for blockchain
 }) {
   if (!doctorId || !patientId || !drugId) throw new Error("doctorId, patientId, and drugId are required");
   if (!dosageAmount || !dosageUnit || !frequency || !duration || !issueDate || !validUntil || !quantity) {
@@ -67,7 +112,66 @@ export async function createPrescription({
     quantity,
   ];
   const insertResult = await query(insertText, insertValues);
-  const prescriptionId = insertResult.rows[0].id;
+  const prescriptionRow = insertResult.rows[0];
+  const prescriptionId = prescriptionRow.id;
+
+  // Blockchain integration
+  // Fetch wallet addresses for doctor and patient
+  const doctorWalletRes = await query('SELECT wallet_address FROM users WHERE id = $1', [doctorId]);
+  const patientWalletRes = await query('SELECT wallet_address FROM users WHERE id = (SELECT userid FROM patient WHERE id = $1)', [patientId]);
+  const doctorWallet = doctorWalletRes.rows[0]?.wallet_address;
+  const patientWallet = patientWalletRes.rows[0]?.wallet_address;
+
+  // Prepare blockchain params
+  const blockchainParams = {
+    databaseId: prescriptionId,
+    patient: patientWallet,
+    prescriptionCode: prescriptionRow.prescription_code,
+    drugId,
+    drugName: prescriptionRow.drug_name,
+    strength: prescriptionRow.dosage_amount,
+    form: prescriptionRow.dosage_unit,
+    quantity,
+    instructions,
+    dosageAmount,
+    dosageUnit,
+    frequency,
+    duration,
+    validUntil: Math.floor(new Date(validUntil).getTime() / 1000)
+  };
+
+  let blockchainTxHash = null;
+  let blockchainBlockNumber = null;
+  try {
+    const { createPrescriptionOnChain } = await import('./blockchainService.js');
+    const tx = await createPrescriptionOnChain(blockchainParams);
+    const receipt = await tx.wait();
+    blockchainTxHash = receipt.transactionHash;
+    blockchainBlockNumber = receipt.blockNumber;
+  } catch (err) {
+    console.error('❌ Blockchain prescription creation failed:', err);
+  }
+
+  // Log blockchain event
+  try {
+    const eventname = 'PrescriptionCreated';
+    const contractname = 'PrescriptionManagement';
+    const entityid = prescriptionId;
+    const entitytype = 'prescription';
+    const transactionhash = blockchainTxHash;
+    const blocknumber = blockchainBlockNumber;
+    const timestamp = new Date().toISOString();
+    const details = JSON.stringify(blockchainParams);
+    await query(
+      `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, blocknumber, timestamp, details, processed)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [eventname, contractname, entityid, entitytype, transactionhash, blocknumber, timestamp, details, false]
+    );
+  } catch (err) {
+    console.error('❌ Failed to log blockchain event:', err);
+  }
+
+  // Return prescription with blockchain info
   const result = await query(
     `SELECT 
        p.id, 
@@ -93,33 +197,7 @@ export async function createPrescription({
      WHERE p.id = $1;`,
     [prescriptionId]
   );
-  const prescription = result.rows[0];
-
-  // Call blockchain contract to sync prescription
-  try {
-    const chainParams = {
-      databaseId: prescription.id,
-      patient: patientWalletAddress, // Must be provided by controller
-      prescriptionCode: prescription.prescription_code,
-      drugId,
-      drugName: prescription.drug_name,
-      strength: prescription.dosageAmount + prescription.dosageUnit,
-      form: "tablet", // You may want to fetch actual form
-      quantity,
-      instructions,
-      dosageAmount,
-      dosageUnit,
-      frequency,
-      duration,
-      validUntil: Math.floor(new Date(validUntil).getTime() / 1000)
-    };
-    await createPrescriptionOnChain(chainParams);
-  } catch (chainErr) {
-    console.error("❌ Blockchain prescription creation failed:", chainErr);
-    // Optionally: return error or continue
-  }
-
-  return prescription;
+  return { ...result.rows[0], blockchainTxHash, blockchainBlockNumber };
 }
 
 export async function getPrescriptionsByDoctor(doctorId) {
@@ -153,6 +231,38 @@ export async function getPrescriptionsByDoctor(doctorId) {
 
 export async function getPrescriptionById(id, doctorId) {
   if (!doctorId) throw new Error("doctorId is required");
+  // Blockchain integration: view event
+  let blockchainTxHash = null;
+  let blockchainBlockNumber = null;
+  let walletAddress = null;
+  try {
+    const { viewPrescriptionOnChain } = await import('./blockchainService.js');
+    const tx = await viewPrescriptionOnChain(id);
+    const receipt = await tx.wait();
+    blockchainTxHash = receipt.transactionHash;
+    blockchainBlockNumber = receipt.blockNumber;
+    const doctorWalletRes = await query('SELECT wallet_address FROM users WHERE id = $1', [doctorId]);
+    walletAddress = doctorWalletRes.rows[0]?.wallet_address || null;
+  } catch (err) {
+    console.error('❌ Blockchain prescription view failed:', err);
+  }
+  // Log blockchain event
+  try {
+    const eventname = 'PrescriptionViewed';
+    const contractname = 'PrescriptionManagement';
+    const entityid = id;
+    const entitytype = 'prescription';
+    const transactionhash = blockchainTxHash;
+    const timestamp = new Date().toISOString();
+    const details = JSON.stringify({ viewed: true });
+    await query(
+      `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, timestamp, processed, wallet_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [eventname, contractname, entityid, entitytype, transactionhash, timestamp, false, walletAddress]
+    );
+  } catch (err) {
+    console.error('❌ Failed to log blockchain event:', err);
+  }
   const result = await query(
     `SELECT 
        p.id, 
@@ -177,14 +287,7 @@ export async function getPrescriptionById(id, doctorId) {
      WHERE p.id = $1 AND p.doctor_id = $2;`,
     [id, doctorId]
   );
-  const prescription = result.rows[0] ?? null;
-  // Blockchain: log view event
-  try {
-    await viewPrescriptionOnChain(id);
-  } catch (chainErr) {
-    console.error("❌ Blockchain prescription view failed:", chainErr);
-  }
-  return prescription;
+  return result.rows[0] ?? null;
 }
 
 export async function deletePrescription(id, doctorId) {
@@ -193,47 +296,93 @@ export async function deletePrescription(id, doctorId) {
     `SELECT id FROM prescription WHERE id = $1 AND doctor_id = $2;`,
     [id, doctorId]
   );
-  const deleted = checkResult.rowCount !== 0;
-  if (deleted) {
-    await query(`DELETE FROM prescription WHERE id = $1 AND doctor_id = $2;`, [id, doctorId]);
-    // Call blockchain contract to delete prescription
-    try {
-      await deletePrescriptionOnChain(id);
-    } catch (chainErr) {
-      console.error("❌ Blockchain prescription delete failed:", chainErr);
-      // Optionally: return error or continue
-    }
+  if (checkResult.rowCount === 0) return false;
+  await query(`DELETE FROM prescription WHERE id = $1 AND doctor_id = $2;`, [id, doctorId]);
+
+  // Blockchain integration: delete event
+  let blockchainTxHash = null;
+  let blockchainBlockNumber = null;
+  let walletAddress = null;
+  try {
+    const { deletePrescriptionOnChain } = await import('./blockchainService.js');
+    const tx = await deletePrescriptionOnChain(id);
+    const receipt = await tx.wait();
+    blockchainTxHash = receipt.transactionHash;
+    blockchainBlockNumber = receipt.blockNumber;
+    const doctorWalletRes = await query('SELECT wallet_address FROM users WHERE id = $1', [doctorId]);
+    walletAddress = doctorWalletRes.rows[0]?.wallet_address || null;
+  } catch (err) {
+    console.error('❌ Blockchain prescription delete failed:', err);
   }
-  return deleted;
+  // Log blockchain event
+  try {
+    const eventname = 'PrescriptionDeleted';
+    const contractname = 'PrescriptionManagement';
+    const entityid = id;
+    const entitytype = 'prescription';
+    const transactionhash = blockchainTxHash;
+    const timestamp = new Date().toISOString();
+    const details = JSON.stringify({ deleted: true });
+    await query(
+      `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, timestamp, processed, wallet_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [eventname, contractname, entityid, entitytype, transactionhash, timestamp, false, walletAddress]
+    );
+  } catch (err) {
+    console.error('❌ Failed to log blockchain event:', err);
+  }
+  return true;
 }
 
-export async function updatePrescription(id, doctorId, updateData) {
-  if (!doctorId) throw new Error("doctorId is required");
-  // Only allow update of editable fields
-  const allowed = ["dosageAmount", "dosageUnit", "frequency", "duration", "instructions"];
-  const keys = Object.keys(updateData).filter(k => allowed.includes(k));
-  if (keys.length === 0) return false;
-  const setClause = keys.map((k, i) => `${snakeCase(k)} = $${i + 3}`).join(", ");
-  const values = [id, doctorId, ...keys.map(k => updateData[k])];
-  // Only update if prescription belongs to doctor
-  const checkResult = await query(`SELECT id FROM prescription WHERE id = $1 AND doctor_id = $2;`, [id, doctorId]);
-  const updated = checkResult.rowCount !== 0;
-  if (updated) {
-    await query(`UPDATE prescription SET ${setClause} WHERE id = $1 AND doctor_id = $2`, values);
-    // Optionally: update blockchain tx hash or other info
-    try {
-      // If you have a blockchainTx to update, call updatePrescriptionBlockchainTxOnChain
-      // await updatePrescriptionBlockchainTxOnChain(id, "newTxHash");
-    } catch (chainErr) {
-      console.error("❌ Blockchain prescription update failed:", chainErr);
-    }
-  }
-  return updated;
+export async function searchDrugs(queryString) {
+  if (!queryString || queryString.trim().length === 0) return [];
+  const result = await query(
+    `SELECT id, name, code, formulation, dosageunit
+     FROM drug
+     WHERE LOWER(name) LIKE LOWER($1)
+     ORDER BY name ASC
+     LIMIT 10;`,
+    [`%${queryString.trim()}%`]
+  );
+  return result.rows ?? [];
 }
 
-// Helper to convert camelCase to snake_case
-function snakeCase(str) {
-  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+export async function searchPatients(queryString) {
+  if (!queryString || queryString.trim().length === 0) return [];
+  const cleaned = queryString.trim();
+  const isNumeric = /^\d+$/.test(cleaned);
+  const result = await query(
+    `SELECT 
+        p.id AS patient_id, 
+        u.id AS user_id, 
+        u.full_name, 
+        u.phone_number, 
+        u.gender, 
+        u.dob
+     FROM patient p
+     JOIN users u ON u.id = p.userid
+     WHERE ${isNumeric ? "CAST(p.id AS TEXT) = $1" : "LOWER(u.full_name) LIKE LOWER($1)"}
+     ORDER BY u.full_name ASC
+     LIMIT 10;`,
+    [isNumeric ? cleaned : `%${cleaned}%`]
+  );
+  return result.rows ?? [];
+}
+
+async function getDoctorByUserId(userId) {
+  const { rows } = await query("SELECT * FROM doctor WHERE userid = $1", [userId]);
+  return rows[0] || null;
+}
+
+async function updateDoctorByUserId(userId, updateData) {
+  // Build dynamic SQL for updateData keys
+  const keys = Object.keys(updateData);
+  if (keys.length === 0) return null;
+  const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(", ");
+  const values = [userId, ...keys.map(k => updateData[k])];
+  await query(`UPDATE doctor SET ${setClause} WHERE userid = $1`, values);
+  const { rows } = await query("SELECT * FROM doctor WHERE userid = $1", [userId]);
+  return rows[0] || null;
 }
 
 // In doctorService.js - getDoctorAnalytics function
@@ -346,26 +495,5 @@ export async function getExpiredPrescriptions(doctorId) {
   return result.rows ?? [];
 }
 
-// Search drugs by name or other criteria
-export async function searchDrugs(queryStr) {
-  if (!queryStr || queryStr.trim().length < 1) return [];
-  const result = await query(
-    `SELECT id, name, form, strength FROM drug WHERE LOWER(name) LIKE LOWER($1) LIMIT 20;`,
-    [`%${queryStr.trim()}%`]
-  );
-  return result.rows ?? [];
-}
-
-// Search patients by name or other criteria
-export async function searchPatients(queryStr) {
-  if (!queryStr || queryStr.trim().length < 1) return [];
-  const result = await query(
-    `SELECT pt.id, u.full_name, u.dob, u.gender, u.phone, u.email
-     FROM patient pt
-     JOIN users u ON u.id = pt.userid
-     WHERE LOWER(u.full_name) LIKE LOWER($1) OR u.phone LIKE $1 OR u.email LIKE $1
-     LIMIT 20;`,
-    [`%${queryStr.trim()}%`]
-  );
-  return result.rows ?? [];
-}
+// Single export statement - only export functions that weren't already exported individually
+export { getDoctorByUserId, updateDoctorByUserId };

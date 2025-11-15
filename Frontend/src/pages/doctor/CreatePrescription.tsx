@@ -15,7 +15,6 @@ const CreatePrescription = () => {
     { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: true },
     { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
     { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: false },
-    { icon: AlertTriangle, label: 'Blockchain', path: '/doctor/blockchain', active: false },
        
 ];
   const [formData, setFormData] = useState({

@@ -15,6 +15,7 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import qrCodeRoutes from './routes/qrCodeRoutes.js';
 import blockchainEventLogRoutes from './routes/blockchainEventLogRoutes.js';
+import blockchainRoutes from './routes/blockchainRoutes.js';
 import fileRoutes from './routes/fileRoutes.js';
 
 dotenv.config();
@@ -63,6 +64,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/qrcode", qrCodeRoutes);
 app.use("/api/blockchain-event-log", blockchainEventLogRoutes);
+app.use("/api/blockchain", blockchainRoutes);
 app.use("/api/files", fileRoutes);
 
 

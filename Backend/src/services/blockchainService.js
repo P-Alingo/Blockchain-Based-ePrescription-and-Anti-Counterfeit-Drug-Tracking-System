@@ -1,3 +1,28 @@
+
+
+// Fetch blockchain status for a specific entity type and entity ID
+export async function getBlockchainEntityStatus(entityType, entityId) {
+  try {
+    const queryText = `SELECT * FROM blockchaineventlog WHERE entitytype = $1 AND entityid = $2 ORDER BY timestamp DESC LIMIT 1`;
+    const { rows } = await pool.query(queryText, [entityType, entityId]);
+    return rows.length > 0 ? rows[0] : {};
+  } catch (error) {
+    console.error('❌ Failed to fetch blockchain entity status:', error.message);
+    return {};
+  }
+}
+// Fetch blockchain events for a specific entity type and entity ID
+import { pool } from '../config/database.js';
+export async function getBlockchainEntityEvents(entityType, entityId) {
+  try {
+    const queryText = `SELECT * FROM blockchaineventlog WHERE entitytype = $1 AND entityid = $2 ORDER BY timestamp DESC`;
+    const { rows } = await pool.query(queryText, [entityType, entityId]);
+    return rows;
+  } catch (error) {
+    console.error('❌ Failed to fetch blockchain entity events:', error.message);
+    return [];
+  }
+}
 // UserManagement contract: new user action functions
 export async function deleteUserOnChain(walletAddress) {
   return await contract.deleteUser(walletAddress);
@@ -78,6 +103,23 @@ export async function viewPrescriptionOnChain(prescriptionId) {
 
 // Create a prescription on-chain
 export async function createPrescriptionOnChain(params) {
+  // Validate required string parameters
+  const requiredStrings = [
+    'prescriptionCode', 'drugName', 'strength', 'form',
+    'instructions', 'dosageAmount', 'dosageUnit', 'frequency'
+  ];
+  for (const key of requiredStrings) {
+    if (!params[key] || typeof params[key] !== 'string' || !params[key].trim()) {
+      throw new Error(`Missing or invalid parameter: ${key}`);
+    }
+  }
+  // Validate numbers
+  const requiredNumbers = ['databaseId', 'patient', 'drugId', 'quantity', 'duration', 'validUntil'];
+  for (const key of requiredNumbers) {
+    if (typeof params[key] === 'undefined' || params[key] === null) {
+      throw new Error(`Missing or invalid parameter: ${key}`);
+    }
+  }
   return await prescriptionContract.createPrescription(
     params.databaseId,
     params.patient,
@@ -168,6 +210,7 @@ export async function expireOldPrescriptionsOnChain() {
 
 // Export contract instance for direct access
 export const getPrescriptionContract = () => prescriptionContract;
+export { contract };
 
 // ===========================
 // CORE BLOCKCHAIN FUNCTIONS
@@ -891,44 +934,144 @@ export const getPastEvents = async (eventName, fromBlock = 0, toBlock = 'latest'
   }
 };
 
-// Initialize event listeners on service start (Uncomment to enable)
-const initializeBlockchainService = () => {
-  console.log('🚀 Initializing Blockchain Service...');
-  
-  // Check if we should enable event listeners
-  const enableEventListeners = process.env.ENABLE_BLOCKCHAIN_EVENTS === 'true';
-  
-  if (enableEventListeners) {
-    console.log('🔔 Enabling blockchain event listeners...');
-    
-    initializeEventListeners({
-      enableLogging: true,
-      saveToDatabase: process.env.SAVE_EVENTS_TO_DB === 'true',
-      webhookUrl: process.env.BLOCKCHAIN_WEBHOOK_URL || null,
-      onEvent: (eventType, data) => {
-        // Custom event handler for business logic
-        console.log(`📢 Custom handler for ${eventType}:`, data);
-        
-        // Example: Update user status in database when blockchain status changes
-        if (eventType === 'UserStatusUpdated') {
-          // This would update your database to match blockchain state
-          // updateUserStatusInDatabase(data.userAddress, data.statusName);
-        }
-      }
-    });
-  } else {
-    console.log('🔕 Blockchain event listeners disabled (set ENABLE_BLOCKCHAIN_EVENTS=true to enable)');
+// Add these functions to your blockchainService.js file
+
+// Get all blockchain events
+export async function getBlockchainEvents(limit = 100) {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM blockchaineventlog 
+      ORDER BY timestamp DESC 
+      LIMIT $1
+    `, [limit]);
+    return result.rows;
+  } catch (error) {
+    console.error('❌ Failed to fetch blockchain events:', error.message);
+    throw new Error('Failed to fetch blockchain events');
   }
-  
-  // Verify connection on startup
-  verifyContractConnection().then(result => {
-    if (result) {
-      console.log('🎉 Blockchain service ready and connected');
-    } else {
-      console.log('⚠️ Blockchain service started but contract connection failed');
+}
+
+// Get blockchain statistics
+export async function getBlockchainStats() {
+  try {
+    const [
+      usersResult,
+      prescriptionsResult,
+      batchesResult,
+      flaggedResult
+    ] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM users WHERE wallet_address IS NOT NULL"),
+      pool.query("SELECT COUNT(*) FROM prescription"),
+      pool.query("SELECT COUNT(*) FROM drugbatch"),
+      pool.query("SELECT COUNT(*) FROM flaggeditems")
+    ]);
+
+    return {
+      users: parseInt(usersResult.rows[0].count),
+      prescriptions: parseInt(prescriptionsResult.rows[0].count),
+      batches: parseInt(batchesResult.rows[0].count),
+      flaggedItems: parseInt(flaggedResult.rows[0].count),
+      lastUpdated: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('❌ Failed to fetch blockchain stats:', error.message);
+    throw new Error('Failed to fetch blockchain stats');
+  }
+}
+
+// Sync user to blockchain (alias for syncUserOnChain)
+export async function syncUserToBlockchain(userId) {
+  try {
+    // First get user data from database
+    const userResult = await pool.query(`
+      SELECT * FROM users WHERE id = $1
+    `, [userId]);
+    
+    if (userResult.rows.length === 0) {
+      throw new Error('User not found');
     }
-  });
-};
+    
+    const user = userResult.rows[0];
+    
+    if (!user.wallet_address) {
+      throw new Error('User has no wallet address');
+    }
+    // Use the 'role' field directly
+    user.role_name = user.role;
+    // Use existing sync function
+    return await syncUserOnChain(user);
+  } catch (error) {
+    console.error('❌ Failed to sync user to blockchain:', error.message);
+    throw error;
+  }
+}
+
+// Get user's blockchain status
+export async function getUserBlockchainStatus(userId) {
+  try {
+    // Get user wallet address
+    const userResult = await pool.query(
+      'SELECT wallet_address FROM users WHERE id = $1', 
+      [userId]
+    );
+    if (userResult.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    const walletAddress = userResult.rows[0].wallet_address;
+    if (!walletAddress) {
+      return {
+        synced: false,
+        status: 'no_wallet_address',
+        blockchain_badge: 'not_registered',
+        message: 'User has no wallet address'
+      };
+    }
+    // Check if user exists on blockchain
+    const userExists = await checkUserExistsOnChain(walletAddress);
+    if (!userExists) {
+      return {
+        synced: false,
+        status: 'not_registered',
+        blockchain_badge: 'not_registered',
+        message: 'User not registered on blockchain'
+      };
+    }
+    // Get user details from blockchain
+    const onChainUser = await getUserOnChain(walletAddress);
+    const userStatus = await getUserStatusFromChain(walletAddress);
+    // Determine badge
+    let blockchain_badge = 'not_synced';
+    // Map status enum to string
+    let statusString = 'unknown';
+    switch (userStatus?.toString()) {
+      case '0': statusString = 'pending'; break;
+      case '1': statusString = 'active'; break;
+      case '2': statusString = 'suspended'; break;
+      case '3': statusString = 'inactive'; break;
+      default: statusString = 'unknown';
+    }
+    // Consider synced if status and role match DB (optional: fetch DB user for comparison)
+    // For now, treat 'active' as synced
+    if (statusString === 'active') {
+      blockchain_badge = 'synced';
+    }
+    return {
+      synced: statusString === 'active',
+      status: statusString,
+      blockchain_badge,
+      walletAddress,
+      onChainRole: onChainUser.role,
+      onChainStatus: userStatus,
+      message: 'User successfully synced with blockchain'
+    };
+  } catch (error) {
+    console.error('❌ Failed to get user blockchain status:', error.message);
+    return {
+      synced: false,
+      status: 'error',
+      message: error.message
+    };
+  }
+}
 
 // Auto-initialize when this module is imported
-initializeBlockchainService();

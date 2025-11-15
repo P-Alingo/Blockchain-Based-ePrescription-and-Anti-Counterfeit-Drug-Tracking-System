@@ -4,6 +4,37 @@ pragma solidity ^0.8.19;
 import "./UserManagement.sol";
 
 contract PrescriptionManagement {
+            /**
+             * @dev Update prescription details (doctor or admin only)
+             * @param prescriptionId ID of the prescription to update
+             * @param dosageAmount New dosage amount
+             * @param dosageUnit New dosage unit
+             * @param frequency New frequency
+             * @param duration New duration
+             * @param instructions New instructions
+             */
+            function updatePrescription(
+                uint prescriptionId,
+                string memory dosageAmount,
+                string memory dosageUnit,
+                string memory frequency,
+                uint duration,
+                string memory instructions
+            ) public prescriptionExists(prescriptionId) {
+                Prescription storage prescription = prescriptions[prescriptionId];
+                // Only the creating doctor or admin can update
+                require(
+                    prescription.doctor == msg.sender || userManagement.isAdmin(msg.sender),
+                    "Only prescribing doctor or admin can update"
+                );
+                prescription.drug.dosageAmount = dosageAmount;
+                prescription.drug.dosageUnit = dosageUnit;
+                prescription.drug.frequency = frequency;
+                prescription.drug.duration = duration;
+                prescription.drug.instructions = instructions;
+                prescription.updatedAt = block.timestamp;
+                emit PrescriptionUpdated(prescriptionId, prescription.prescriptionCode, block.timestamp);
+            }
         event PrescriptionViewed(
             uint indexed prescriptionId,
             address indexed doctor,

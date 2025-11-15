@@ -34,6 +34,7 @@ interface User {
     is_synced?: boolean;
     transaction_hash?: string;
     block_number?: number;
+    badge?: string;
   };
 }
 
@@ -80,10 +81,10 @@ const UserManagement = () => {
             const blockchainStatus = await fetchBlockchainStatus(user.id);
             if (blockchainStatus) {
               user.blockchain = {
-                exists: blockchainStatus.blockchain_status !== 'not_registered',
-                status: blockchainStatus.blockchain_status,
-                role: blockchainStatus.blockchain_role,
-                is_synced: blockchainStatus.is_synced,
+                badge: blockchainStatus.blockchain_badge,
+                status: blockchainStatus.status,
+                role: blockchainStatus.onChainRole,
+                is_synced: blockchainStatus.blockchain_badge === 'synced',
                 error: blockchainStatus.error,
                 transaction_hash: blockchainStatus.transaction_hash,
                 block_number: blockchainStatus.block_number
@@ -180,7 +181,7 @@ const UserManagement = () => {
     const blockchainStatus = await fetchBlockchainStatus(userId);
     if (blockchainStatus) {
       user.blockchain = {
-        exists: blockchainStatus.blockchain_status !== 'not_registered',
+        exists: blockchainStatus.blockchain_status !== 'not_registered' && blockchainStatus.blockchain_status !== 'no_wallet_address',
         status: blockchainStatus.blockchain_status,
         role: blockchainStatus.blockchain_role,
         is_synced: blockchainStatus.is_synced
@@ -195,28 +196,42 @@ const UserManagement = () => {
   const handleEdit = () => setEditMode(true);
 
   const handleSave = async () => {
-    if (!selectedUser || !token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/admin/users/${selectedUser.id}`, {
-        method: "PUT",
-        headers: { 
-          "Content-Type": "application/json", 
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify(selectedUser),
-      });
-      if (!res.ok) throw new Error("Failed to update user");
-      const updatedUser = await fetchUser(selectedUser.id);
-      if (!updatedUser) throw new Error("Failed to fetch updated user");
-      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-      setSelectedUser(updatedUser);
-      setEditMode(false);
-      alert("User updated successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to update user");
-    }
-  };
+      if (!selectedUser || !token) return;
+      try {
+        // Fetch original user for comparison
+        const originalUser = users.find(u => u.id === selectedUser.id);
+        if (!originalUser) throw new Error("Original user not found");
+        // Only send changed fields
+        const changedFields: any = {};
+        ["full_name","email","role","wallet_address","phone_number","gender","dob","user_code","status"].forEach(field => {
+          if ((selectedUser as any)[field] !== (originalUser as any)[field]) {
+            changedFields[field] = (selectedUser as any)[field];
+          }
+        });
+        if (Object.keys(changedFields).length === 0) {
+          alert("No changes detected.");
+          return;
+        }
+        const res = await fetch(`${API_URL}/api/admin/users/${selectedUser.id}`, {
+          method: "PUT",
+          headers: { 
+            "Content-Type": "application/json", 
+            Authorization: `Bearer ${token}` 
+          },
+          body: JSON.stringify(changedFields),
+        });
+        if (!res.ok) throw new Error("Failed to update user");
+        const updatedUser = await fetchUser(selectedUser.id);
+        if (!updatedUser) throw new Error("Failed to fetch updated user");
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        setSelectedUser(updatedUser);
+        setEditMode(false);
+        alert("User updated successfully!");
+      } catch (err) {
+        console.error(err);
+        alert("Failed to update user");
+      }
+    };
 
   const handleDelete = async (userId: string) => {
     if (!window.confirm("Are you sure you want to delete this user? This will suspend them on the blockchain but keep their record.")) return;
@@ -271,23 +286,38 @@ const UserManagement = () => {
     if (!token) return;
     setSyncingUserId(userId);
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/${userId}/sync-blockchain`, { 
-        method: "POST", 
-        headers: { Authorization: `Bearer ${token}` } 
+      // Call sync API
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}/sync-blockchain`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Failed to sync user to blockchain");
-      const updatedUser = await fetchUser(userId);
-      if (updatedUser) {
-        if (activeTab === "active") {
-          setUsers(prev => prev.map(u => u.id === userId ? updatedUser : u));
-        } else {
-          setDeletedUsers(prev => prev.map(u => u.id === userId ? updatedUser : u));
-        }
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to sync user to blockchain");
       }
-      alert("✅ User successfully synced to blockchain!");
+      // Refetch blockchain status for this user
+      const blockchainStatus = await fetchBlockchainStatus(userId);
+      // Map blockchain status for badge logic
+      const mappedBlockchain = blockchainStatus ? {
+        badge: blockchainStatus.blockchain_badge,
+        status: blockchainStatus.status,
+        role: blockchainStatus.onChainRole,
+        is_synced: blockchainStatus.blockchain_badge === 'synced',
+        error: blockchainStatus.error,
+        transaction_hash: blockchainStatus.transaction_hash,
+        block_number: blockchainStatus.block_number
+      } : undefined;
+      // Update user in users state
+      setUsers(prevUsers => prevUsers.map(u =>
+        u.id === userId ? { ...u, blockchain: mappedBlockchain } : u
+      ));
+      // If modal is open for this user, update selectedUser
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser({ ...selectedUser, blockchain: mappedBlockchain });
+      }
     } catch (err) {
       console.error(err);
-      alert("❌ Failed to sync user to blockchain");
+      // Optionally show error to user
     } finally {
       setSyncingUserId(null);
     }
@@ -340,23 +370,19 @@ const UserManagement = () => {
   };
 
   const getBlockchainStatusBadge = (user: User) => {
-    if (!user.wallet_address) {
-      return <Badge variant="outline" className="text-xs">No Wallet</Badge>;
+    if (!user.blockchain || !user.blockchain.badge) {
+      return <Badge variant="outline" className="text-xs">Unknown</Badge>;
     }
-    
-    if (user.blockchain?.error) {
-      return <Badge variant="destructive" className="text-xs">Error</Badge>;
+    switch (user.blockchain.badge) {
+      case 'not_registered':
+        return <Badge variant="secondary" className="text-xs">Not Registered</Badge>;
+      case 'synced':
+        return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Synced</Badge>;
+      case 'not_synced':
+        return <Badge variant="outline" className="text-xs">Not Synced</Badge>;
+      default:
+        return <Badge variant="outline" className="text-xs">Unknown</Badge>;
     }
-    
-    if (!user.blockchain?.exists) {
-      return <Badge variant="secondary" className="text-xs">Not Registered</Badge>;
-    }
-    
-    if (user.blockchain?.is_synced) {
-      return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Synced</Badge>;
-    }
-    
-    return <Badge variant="outline" className="text-xs">Not Synced</Badge>;
   };
 
   const renderUserTable = (userList: User[], isDeleted = false) => (
@@ -375,10 +401,10 @@ const UserManagement = () => {
           <TableRow key={user.id} className={isDeleted ? "bg-muted/50" : ""}>
             <TableCell>
               <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  {user.full_name}
-                  {isDeleted && <Badge variant="outline" className="ml-2 text-xs">Deleted</Badge>}
-                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{user.full_name}</span>
+                  {isDeleted && <Badge variant="outline" className="text-xs">Deleted</Badge>}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {user.is_deleted ? '[DELETED]' : user.email}
                 </p>

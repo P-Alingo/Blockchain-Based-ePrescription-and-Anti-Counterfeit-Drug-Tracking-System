@@ -29,6 +29,47 @@ import { ethers } from 'ethers';
 // ===========================
 // USER MANAGEMENT SERVICES
 // ===========================
+// Bulk sync all users to blockchain
+export const syncAllUsersToBlockchain = async () => {
+  const users = await getAllUsers(false);
+  const results = [];
+  for (const user of users) {
+    if (!user.wallet_address || user.is_deleted) {
+      results.push({ id: user.id, status: 'skipped', reason: 'No wallet or deleted' });
+      continue;
+    }
+    try {
+      const { checkUserExistsOnChain, addUserToBlockchain, getContract } = await import("./blockchainService.js");
+      const contract = getContract();
+      let exists = await checkUserExistsOnChain(user.wallet_address);
+      if (!exists) {
+        // Register user on-chain
+        const regResult = await addUserToBlockchain(user.wallet_address, user.role || 'doctor');
+        if (!regResult || !regResult.transactionHash || !regResult.blockNumber) {
+          results.push({ id: user.id, status: 'error', reason: 'Registration failed' });
+          continue;
+        }
+        exists = true;
+      }
+      // Get on-chain status
+      let onChainStatus = 'pending';
+      if (typeof contract.getUserStatusString === 'function') {
+        onChainStatus = await contract.getUserStatusString(user.wallet_address);
+      }
+      // Approve if DB is active and on-chain is pending
+      if (user.status === 'active' && onChainStatus === 'pending' && typeof contract.approveUser === 'function') {
+        const tx = await contract.approveUser(user.wallet_address);
+        await tx.wait();
+        results.push({ id: user.id, status: 'synced', action: 'approved' });
+      } else {
+        results.push({ id: user.id, status: 'synced', action: 'no action needed' });
+      }
+    } catch (err) {
+      results.push({ id: user.id, status: 'error', reason: err.message });
+    }
+  }
+  return results;
+};
 // Approve user (admin action: pending -> active)
 export const approveUser = async (userId) => {
   const user = await getUserById(userId);
@@ -273,7 +314,7 @@ export const updateUser = async (id, updates) => {
   // No longer needed: transaction_hash and block_number columns removed
   let blockchainTxHash = null, blockchainBlockNumber = null;
   if (currentUser.wallet_address && !currentUser.is_deleted) {
-    const { checkUserExistsOnChain, addUserToBlockchain, getOrCreateRoleId, getContract } = await import("./blockchainService.js");
+    const { checkUserExistsOnChain, addUserToBlockchain, getOrCreateRoleId, getContract, getUserStatusFromChain } = await import("./blockchainService.js");
     const contract = getContract();
     // Ensure user exists on-chain before any blockchain action
     const exists = await checkUserExistsOnChain(currentUser.wallet_address);
@@ -281,28 +322,47 @@ export const updateUser = async (id, updates) => {
       // Register user on-chain first
       const roleName = currentUser.role || 'doctor';
       const regResult = await addUserToBlockchain(currentUser.wallet_address, roleName);
+      if (!regResult || !regResult.transactionHash || !regResult.blockNumber) {
+        throw new Error('Blockchain registration failed: No transaction receipt. User not registered on-chain.');
+      }
       blockchainTxHash = regResult?.transactionHash || null;
       blockchainBlockNumber = regResult?.blockNumber || null;
     }
     // Status change
     if (updates.status && updates.status !== currentUser.status) {
       let tx, receipt;
+      // Fetch on-chain status before attempting blockchain update
+      const onChainStatus = await getUserStatusFromChain(currentUser.wallet_address);
       if (updates.status === 'active' && currentUser.status === 'pending') {
-        // Approve user on chain
-        tx = await contract.approveUser(currentUser.wallet_address);
-        receipt = await tx.wait();
+        if (onChainStatus === 'pending') {
+          // Approve user on chain
+          tx = await contract.approveUser(currentUser.wallet_address);
+          receipt = await tx.wait();
+        } else {
+          // Skip blockchain call, user not pending on-chain
+          receipt = null;
+        }
       } else if (updates.status === 'suspended' && currentUser.status === 'active') {
-        // Suspend user on chain
-        tx = await contract.suspendUser(currentUser.wallet_address);
-        receipt = await tx.wait();
+        if (onChainStatus === 'active') {
+          tx = await contract.suspendUser(currentUser.wallet_address);
+          receipt = await tx.wait();
+        } else {
+          receipt = null;
+        }
       } else if (updates.status === 'inactive' && currentUser.status === 'active') {
-        // Deactivate user on chain
-        tx = await contract.deactivateUser(currentUser.wallet_address);
-        receipt = await tx.wait();
+        if (onChainStatus === 'active') {
+          tx = await contract.suspendUser(currentUser.wallet_address);
+          receipt = await tx.wait();
+        } else {
+          receipt = null;
+        }
       } else if (updates.status === 'active' && (currentUser.status === 'inactive' || currentUser.status === 'suspended')) {
-        // Reactivate user on chain
-        tx = await contract.reactivateUser(currentUser.wallet_address);
-        receipt = await tx.wait();
+        if (onChainStatus === 'inactive' || onChainStatus === 'suspended') {
+          tx = await contract.reactivateUser(currentUser.wallet_address);
+          receipt = await tx.wait();
+        } else {
+          receipt = null;
+        }
       }
       if (receipt && receipt.transactionHash) {
         blockchainTxHash = receipt.transactionHash;
@@ -347,7 +407,8 @@ export const deleteUser = async (id) => {
   const hasIsDeletedColumn = await checkIsDeletedColumnExists();
   // No longer needed: transaction_hash and block_number columns removed
   if (user.wallet_address) {
-    const { contract } = await import("./blockchainService.js");
+    let blockchainTxHash = null, blockchainBlockNumber = null;
+    const { deleteUserOnChain } = await import("./blockchainService.js");
     const existsOnChain = await blockchainService.checkUserExistsOnChain(user.wallet_address);
     if (!existsOnChain) {
       const roleId = await blockchainService.getOrCreateRoleId(user.role);
@@ -356,22 +417,27 @@ export const deleteUser = async (id) => {
     }
     let tx, receipt;
     try {
-      tx = await contract.deleteUser(user.wallet_address);
+      tx = await deleteUserOnChain(user.wallet_address);
       receipt = await tx.wait();
       if (!receipt || !receipt.transactionHash) throw new Error("No transaction receipt received");
       blockchainTxHash = receipt.transactionHash;
       blockchainBlockNumber = receipt.blockNumber;
       // Log event to blockchaineventlog (prevent duplicate tx hash)
-      const { rows: existing } = await query(
-        'SELECT id FROM blockchaineventlog WHERE transactionhash = $1',
-        [receipt.transactionHash]
-      );
-      if (existing.length === 0) {
-        await query(
-          `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, processed)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['UserDeleted', 'UserManagement', user.id, 'user', receipt.transactionHash, true]
+      try {
+        const { rows: existing } = await query(
+          'SELECT id FROM blockchaineventlog WHERE transactionhash = $1',
+          [receipt.transactionHash]
         );
+        if (existing.length === 0) {
+          await query(
+            `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, processed)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            ['UserDeleted', 'UserManagement', user.id, 'user', receipt.transactionHash, true]
+          );
+        }
+      } catch (err) {
+        // If duplicate, just skip insert
+        if (!String(err.message).includes('duplicate key value')) throw err;
       }
     } catch (err) {
       throw new Error("Blockchain transaction failed: " + err.message);
@@ -397,22 +463,29 @@ export const restoreUser = async (id) => {
   const hasIsDeletedColumn = await checkIsDeletedColumnExists();
   if (!hasIsDeletedColumn) throw new Error("is_deleted column does not exist");
   const user = await getUserById(id);
-  // No longer needed: transaction_hash and block_number columns removed
   if (user.wallet_address) {
-    const { contract } = require("./blockchainService.js");
-    const existsOnChain = await blockchainService.checkUserExistsOnChain(user.wallet_address);
-    if (!existsOnChain) {
-      const roleId = await blockchainService.getOrCreateRoleId(user.role);
-      const regTx = await blockchainService.registerUserOnChain(user.wallet_address, roleId);
-      if (!regTx || !regTx.transactionHash) throw new Error("Blockchain registration failed");
+    const blockchainService = await import("./blockchainService.js");
+    const contract = blockchainService.contract;
+    if (!contract || typeof contract.restoreUser !== "function") {
+      throw new Error("Contract instance or restoreUser function not available");
+    }
+    // Check on-chain user existence and status
+    let onChainUser = null;
+    try {
+      onChainUser = await contract.getUser(user.wallet_address);
+    } catch (err) {
+      // If user does not exist on-chain, allow restore
+      onChainUser = null;
+    }
+    if (onChainUser && onChainUser.exists) {
+      // User already exists on-chain, cannot restore
+      throw new Error("User already exists on-chain and cannot be restored. Approve instead if needed.");
     }
     let tx, receipt;
     try {
-      tx = await contract.reactivateUser(user.wallet_address);
+      tx = await contract.restoreUser(user.wallet_address);
       receipt = await tx.wait();
       if (!receipt || !receipt.transactionHash) throw new Error("No transaction receipt received");
-      blockchainTxHash = receipt.transactionHash;
-      blockchainBlockNumber = receipt.blockNumber;
       // Log event to blockchaineventlog (prevent duplicate tx hash)
       const { rows: existing } = await query(
         'SELECT id FROM blockchaineventlog WHERE transactionhash = $1',
@@ -420,22 +493,22 @@ export const restoreUser = async (id) => {
       );
       if (existing.length === 0) {
         await query(
-          `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, processed)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['UserRestored', 'UserManagement', user.id, 'user', receipt.transactionHash, true]
+          `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, processed, wallet_address)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          ['UserRestored', 'UserManagement', user.id, 'user', receipt.transactionHash, true, user.wallet_address]
         );
       }
     } catch (err) {
       throw new Error("Blockchain transaction failed: " + err.message);
     }
   }
+  // Set status to pending after restore
   const { rows } = await query(
     'UPDATE users SET is_deleted = FALSE, status = $1, updatedat = NOW() WHERE id = $2 RETURNING *',
-    ['active', id]
+    ['pending', id]
   );
   if (!rows.length) throw new Error('User not found');
   const restoredUser = rows[0];
-  // No longer needed: last_tx_hash and last_block_number columns removed
   return restoredUser;
 };
 
@@ -476,13 +549,14 @@ export const syncUserToBlockchain = async (id) => {
     const contract = blockchainService.getContract();
     if (contract && typeof contract.syncUser === 'function') {
       tx = await contract.syncUser(user.wallet_address);
+      receipt = await tx.wait();
     } else if (typeof blockchainService.syncUserOnChainAction === 'function') {
       // Fallback to syncUserOnChainAction
       tx = await blockchainService.syncUserOnChainAction(user.wallet_address);
+      receipt = await tx.wait();
     } else {
       throw new Error('No syncUser function available on contract or service');
     }
-    receipt = await tx.wait();
     if (!receipt || !receipt.transactionHash) throw new Error("No transaction receipt received");
     // Log event to blockchaineventlog (prevent duplicate tx hash)
     const { rows: existing } = await query(
@@ -496,10 +570,26 @@ export const syncUserToBlockchain = async (id) => {
         ['UserSynced', 'UserManagement', user.id, 'user', receipt.transactionHash, true]
       );
     }
+
+    // After syncing, update on-chain status to match database status
+    // Only update if status transition is valid
+    let onChainStatus = 'pending';
+    if (typeof contract.getUserStatusString === 'function') {
+      onChainStatus = await contract.getUserStatusString(user.wallet_address);
+    }
+    if (user.status === 'active' && onChainStatus === 'pending' && typeof contract.approveUser === 'function') {
+      const tx2 = await contract.approveUser(user.wallet_address);
+      await tx2.wait();
+    } else if (user.status === 'suspended' && onChainStatus === 'active' && typeof contract.suspendUser === 'function') {
+      const tx2 = await contract.suspendUser(user.wallet_address);
+      await tx2.wait();
+    } else if (user.status === 'inactive' && typeof contract.deactivateUser === 'function') {
+      const tx2 = await contract.deactivateUser(user.wallet_address);
+      await tx2.wait();
+    }
   } catch (err) {
     throw new Error("Blockchain transaction failed: " + err.message);
   }
-  // No longer needed: last_tx_hash and last_block_number columns removed
   return { txHash: receipt.transactionHash, blockNumber: receipt.blockNumber };
 };
 

@@ -27,7 +27,6 @@ const sidebarItems = [
   { icon: FileText, label: "Create Prescription", path: "/doctor/create-prescription", active: false },
   { icon: Clock, label: "My Prescriptions", path: "/doctor/prescriptions", active: false },
   { icon: Activity, label: "Analytics", path: "/doctor/analytics", active: true },
-  { icon: AlertTriangle, label: 'Blockchain', path: '/doctor/blockchain', active: false },
 ];
 
 // Define AnalyticsData type

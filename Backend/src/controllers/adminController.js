@@ -4,6 +4,16 @@ import * as blockchainService from "../services/blockchainService.js";
 // ===========================
 // USER MANAGEMENT CONTROLLERS
 // ===========================
+// Bulk sync all users to blockchain
+export const syncAllUsersToBlockchain = async (req, res) => {
+  try {
+    const result = await adminService.syncAllUsersToBlockchain();
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('❌ syncAllUsersToBlockchain error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 // Approve user (admin action: pending -> active)
 export const approveUser = async (req, res) => {
   const userId = req.params.id;

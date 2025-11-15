@@ -410,6 +410,65 @@ async function main() {
 
   console.log("🔗 Listening for blockchain events...");
 
+  // =====================
+  // PRESCRIPTIONMANAGEMENT CONTRACT EVENT LISTENERS
+  // =====================
+
+  // Connect to PrescriptionManagement contract
+  const prescriptionManagement = await ethers.getContractAt(
+    "PrescriptionManagement",
+    deployedContracts.PRESCRIPTION_MANAGEMENT_ADDRESS
+  );
+  console.log(`   - PrescriptionManagement: ${deployedContracts.PRESCRIPTION_MANAGEMENT_ADDRESS}`);
+
+  // PrescriptionCreated event
+  prescriptionManagement.on("PrescriptionCreated", async (prescriptionId, databaseId, doctor, patient, prescriptionCode, drugName, quantity, validUntil, event) => {
+    let txHash = event?.log?.transactionHash || event?.transactionHash;
+    let blockNumber = event?.log?.blockNumber || event?.blockNumber;
+    await logEvent("PrescriptionCreated", "PrescriptionManagement", "prescription", txHash, doctor);
+    console.log(`📝 PrescriptionCreated | ID: ${prescriptionId} | Doctor: ${doctor} | Patient: ${patient} | Drug: ${drugName}`);
+  });
+
+  // PrescriptionUpdated event
+  prescriptionManagement.on("PrescriptionUpdated", async (prescriptionId, doctor, patient, event) => {
+    let txHash = event?.log?.transactionHash || event?.transactionHash;
+    let blockNumber = event?.log?.blockNumber || event?.blockNumber;
+    await logEvent("PrescriptionUpdated", "PrescriptionManagement", "prescription", txHash, doctor);
+    console.log(`✏️ PrescriptionUpdated | ID: ${prescriptionId} | Doctor: ${doctor} | Patient: ${patient}`);
+  });
+
+  // PrescriptionDeleted event
+  prescriptionManagement.on("PrescriptionDeleted", async (prescriptionId, doctor, patient, event) => {
+    let txHash = event?.log?.transactionHash || event?.transactionHash;
+    let blockNumber = event?.log?.blockNumber || event?.blockNumber;
+    await logEvent("PrescriptionDeleted", "PrescriptionManagement", "prescription", txHash, doctor);
+    console.log(`🗑️ PrescriptionDeleted | ID: ${prescriptionId} | Doctor: ${doctor} | Patient: ${patient}`);
+  });
+
+  // PrescriptionViewed event
+  prescriptionManagement.on("PrescriptionViewed", async (prescriptionId, doctor, patient, timestamp, event) => {
+    let txHash = event?.log?.transactionHash || event?.transactionHash;
+    let blockNumber = event?.log?.blockNumber || event?.blockNumber;
+    await logEvent("PrescriptionViewed", "PrescriptionManagement", "prescription", txHash, doctor);
+    console.log(`👀 PrescriptionViewed | ID: ${prescriptionId} | Doctor: ${doctor} | Patient: ${patient}`);
+  });
+
+  // PrescriptionDispensed event
+  prescriptionManagement.on("PrescriptionDispensed", async (prescriptionId, pharmacist, patient, dispensedDate, event) => {
+    let txHash = event?.log?.transactionHash || event?.transactionHash;
+    let blockNumber = event?.log?.blockNumber || event?.blockNumber;
+    await logEvent("PrescriptionDispensed", "PrescriptionManagement", "prescription", txHash, pharmacist);
+    console.log(`💊 PrescriptionDispensed | ID: ${prescriptionId} | Pharmacist: ${pharmacist} | Patient: ${patient}`);
+  });
+
+  // PrescriptionInvalid event
+  prescriptionManagement.on("PrescriptionInvalid", async (prescriptionId, doctor, patient, reason, event) => {
+    let txHash = event?.log?.transactionHash || event?.transactionHash;
+    let blockNumber = event?.log?.blockNumber || event?.blockNumber;
+    await logEvent("PrescriptionInvalid", "PrescriptionManagement", "prescription", txHash, doctor);
+    console.log(`❌ PrescriptionInvalid | ID: ${prescriptionId} | Doctor: ${doctor} | Patient: ${patient} | Reason: ${reason}`);
+  });
+
   // Test event emission
   console.log("🧪 Testing event listeners...");
   try {
@@ -419,6 +478,103 @@ async function main() {
   } catch (err) {
     console.log("⚠️ Event listener test failed (might not have permissions):", err.message);
   }
+
+    // =====================
+    // DRUGSUPPLYCHAIN CONTRACT EVENT LISTENERS
+    // =====================
+
+    const drugSupplyChain = await ethers.getContractAt(
+      "DrugSupplyChain",
+      deployedContracts.DRUG_SUPPLY_CHAIN_ADDRESS
+    );
+    console.log(`   - DrugSupplyChain: ${deployedContracts.DRUG_SUPPLY_CHAIN_ADDRESS}`);
+
+    // BatchCreated event
+    drugSupplyChain.on("BatchCreated", async (batchId, databaseId, manufacturer, batchNumber, drugName, quantity, expiryDate, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("BatchCreated", "DrugSupplyChain", "batch", txHash, manufacturer);
+      console.log(`📦 BatchCreated | ID: ${batchId} | Manufacturer: ${manufacturer} | Drug: ${drugName}`);
+    });
+
+    // BatchTransferred event
+    drugSupplyChain.on("BatchTransferred", async (transferId, batchId, from, to, shipmentNumber, status, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("BatchTransferred", "DrugSupplyChain", "batch", txHash, from);
+      console.log(`🚚 BatchTransferred | BatchID: ${batchId} | From: ${from} | To: ${to} | Status: ${status}`);
+    });
+
+    // BatchCounterfeit event
+    drugSupplyChain.on("BatchCounterfeit", async (batchId, flaggedBy, reason, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("BatchCounterfeit", "DrugSupplyChain", "batch", txHash, flaggedBy);
+      console.log(`⚠️ BatchCounterfeit | BatchID: ${batchId} | FlaggedBy: ${flaggedBy} | Reason: ${reason}`);
+    });
+
+    // ShipmentStatusUpdated event
+    drugSupplyChain.on("ShipmentStatusUpdated", async (batchId, shipmentNumber, newStatus, updatedBy, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("ShipmentStatusUpdated", "DrugSupplyChain", "batch", txHash, updatedBy);
+      console.log(`📦 ShipmentStatusUpdated | BatchID: ${batchId} | Status: ${newStatus} | UpdatedBy: ${updatedBy}`);
+    });
+
+    // BatchBlockchainTxUpdated event
+    drugSupplyChain.on("BatchBlockchainTxUpdated", async (batchId, batchNumber, transactionHash, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("BatchBlockchainTxUpdated", "DrugSupplyChain", "batch", txHash);
+      console.log(`🔗 BatchBlockchainTxUpdated | BatchID: ${batchId} | TxHash: ${transactionHash}`);
+    });
+
+    // =====================
+    // REGULATOROVERSIGHT CONTRACT EVENT LISTENERS
+    // =====================
+
+    const regulatorOversight = await ethers.getContractAt(
+      "RegulatorOversight",
+      deployedContracts.REGULATOR_OVERSIGHT_ADDRESS
+    );
+    console.log(`   - RegulatorOversight: ${deployedContracts.REGULATOR_OVERSIGHT_ADDRESS}`);
+
+    // AuditLogged event
+    regulatorOversight.on("AuditLogged", async (auditId, regulator, description, entityType, entityId, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("AuditLogged", "RegulatorOversight", "audit", txHash, regulator);
+      console.log(`📝 AuditLogged | AuditID: ${auditId} | Regulator: ${regulator} | EntityType: ${entityType}`);
+    });
+
+    // EntityFlagged event
+    regulatorOversight.on("EntityFlagged", async (flagId, flaggedBy, entityType, entityId, userAddress, reason, status, autoSuspended, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("EntityFlagged", "RegulatorOversight", entityType.toLowerCase(), txHash, flaggedBy);
+      console.log(`🚩 EntityFlagged | FlagID: ${flagId} | Type: ${entityType} | EntityID: ${entityId} | Status: ${status}`);
+    });
+
+    // FlagStatusUpdated event
+    regulatorOversight.on("FlagStatusUpdated", async (flagId, oldStatus, newStatus, updatedBy, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("FlagStatusUpdated", "RegulatorOversight", "flag", txHash, updatedBy);
+      console.log(`🔄 FlagStatusUpdated | FlagID: ${flagId} | Old: ${oldStatus} | New: ${newStatus}`);
+    });
+
+    // AnomalyDetected event
+    regulatorOversight.on("AnomalyDetected", async (reportId, anomalyType, severity, description, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("AnomalyDetected", "RegulatorOversight", "anomaly", txHash);
+      console.log(`⚡ AnomalyDetected | ReportID: ${reportId} | Type: ${anomalyType} | Severity: ${severity}`);
+    });
+
+    // UserAutoSuspended event
+    regulatorOversight.on("UserAutoSuspended", async (userAddress, flagCount, suspendedBy, suspensionEndTime, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("UserAutoSuspended", "RegulatorOversight", "user", txHash, suspendedBy);
+      console.log(`⛔ UserAutoSuspended | User: ${userAddress} | By: ${suspendedBy}`);
+    });
+
+    // UserSuspensionLifted event
+    regulatorOversight.on("UserSuspensionLifted", async (userAddress, liftedBy, timestamp, event) => {
+      let txHash = event?.log?.transactionHash || event?.transactionHash;
+      await logEvent("UserSuspensionLifted", "RegulatorOversight", "user", txHash, liftedBy);
+      console.log(`✅ UserSuspensionLifted | User: ${userAddress} | By: ${liftedBy}`);
+    });
 
   // Keep the script running
   process.on('SIGINT', async () => {

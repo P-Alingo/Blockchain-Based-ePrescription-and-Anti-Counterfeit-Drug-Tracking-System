@@ -4,7 +4,6 @@ import {
 	getDashboard,
 	getReports,
 	getAnalytics,
-	getBlockchainLogs,
 	updateSettings,
 	listTables,
 	getTableData,
@@ -29,23 +28,20 @@ import {
 	healthCheck,
 	blockchainHealth,
 	
-	// Blockchain Event Functions - ADD THESE!
+	// Blockchain Event Functions
 	getEventListenerStatus,
 	startEventListeners,
 	stopEventListeners,
 	getPastEvents
 	
 } from "../controllers/adminController.js";
+import { blockchainUserStatus, blockchainSyncUser } from "../controllers/blockchainController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // Apply authentication to all routes
 router.use(authMiddleware);
-
-
-// Optional: Apply admin middleware for sensitive operations
-// router.use(adminMiddleware);
 
 // ===========================
 // DASHBOARD & ANALYTICS ROUTES
@@ -59,9 +55,6 @@ router.get("/reports", getReports);
 
 // Analytics
 router.get("/analytics", getAnalytics);
-
-// Blockchain logs
-router.get("/blockchain", getBlockchainLogs);
 
 // System settings update
 router.put("/settings", updateSettings);
@@ -94,11 +87,15 @@ router.delete("/users/:id", deleteUser);
 // Restore soft-deleted user
 router.patch("/users/:id/restore", restoreUser);
 
+// ===========================
+// BLOCKCHAIN ROUTES (Redirect to blockchainController)
+// ===========================
+
 // Sync user to blockchain
-router.post("/users/:id/sync-blockchain", syncUserToBlockchain);
+router.post("/users/:id/sync-blockchain", blockchainSyncUser);
 
 // Get user's blockchain status
-router.get("/users/:id/blockchain-status", getUserBlockchainStatus);
+router.get("/users/:id/blockchain-status", blockchainUserStatus);
 
 // ===========================
 // DATABASE MANAGEMENT ROUTES
@@ -129,7 +126,7 @@ router.get("/health", healthCheck);
 router.get("/blockchain-health", blockchainHealth);
 
 // ===========================
-// BLOCKCHAIN EVENT ROUTES (Optional)
+// BLOCKCHAIN EVENT ROUTES
 // ===========================
 
 // Get event listener status
