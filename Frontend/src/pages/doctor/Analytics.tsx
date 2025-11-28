@@ -50,6 +50,40 @@ type AnalyticsData = {
 };
 
 export default function Analytics() {
+    // Export analytics data as CSV
+    const exportCSV = () => {
+      if (!data) return;
+      const statHeaders = ["Total Prescriptions", "Last 30 Days", "Unique Patients", "Avg/Week", "Avg/Month"];
+      const statRow = [
+        data.statCards?.total_prescriptions ?? 0,
+        data.statCards?.last_30_days ?? 0,
+        data.statCards?.unique_patients ?? 0,
+        data.statCards?.avg_per_week ?? 0,
+        data.statCards?.avg_per_month ?? 0
+      ];
+      const monthlyHeaders = ["Month", "Prescriptions Issued"];
+      const monthlyRows = (data.monthlyTrends ?? []).map(m => [m.month, m.count]);
+      const statusHeaders = ["Status", "Count"];
+      const statusRows = (data.statusBreakdown ?? []).map(s => [s.status, s.count]);
+      const drugHeaders = ["Drug Name", "Count"];
+      const drugRows = (data.topDrugs ?? []).map(d => [d.drug_name, d.count]);
+      const patientHeaders = ["Month", "Unique Patients"];
+      const patientRows = (data.patientTrends ?? []).map(m => [m.month, m.count]);
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += statHeaders.join(",") + "\n" + statRow.join(",") + "\n\n";
+      csvContent += monthlyHeaders.join(",") + "\n" + monthlyRows.map(r => r.join(",")).join("\n") + "\n\n";
+      csvContent += statusHeaders.join(",") + "\n" + statusRows.map(r => r.join(",")).join("\n") + "\n\n";
+      csvContent += drugHeaders.join(",") + "\n" + drugRows.map(r => r.join(",")).join("\n") + "\n\n";
+      csvContent += patientHeaders.join(",") + "\n" + patientRows.map(r => r.join(",")).join("\n") + "\n";
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `analytics_report_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<AnalyticsData | null>(null);
@@ -273,9 +307,17 @@ export default function Analytics() {
           <h1 className="text-3xl font-bold text-blue-600">
             {userRole === 'doctor' ? 'Doctor' : 'Patient'} Analytics
           </h1>
-          <Badge className="bg-green-100 text-green-800 px-3 py-2 rounded-full text-sm font-semibold">
-            Updated {new Date().toLocaleDateString()}
-          </Badge>
+          <div className="flex gap-2 items-center">
+            <Badge className="bg-green-100 text-green-800 px-3 py-2 rounded-full text-sm font-semibold">
+              Updated {new Date().toLocaleDateString()}
+            </Badge>
+            <button
+              onClick={exportCSV}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold text-sm shadow"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
 
         {/* Stat Cards */}

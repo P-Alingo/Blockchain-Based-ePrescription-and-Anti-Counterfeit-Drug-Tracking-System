@@ -25,7 +25,6 @@ const sidebarItems = [
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
     { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
     { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
-    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
     { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
     { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: true},
 ];
@@ -193,153 +192,137 @@ const Shipments = () => {
   // Table columns: Show all shipments for manufacturer's drug batches
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="manufacturer" userName="Sarah Manufacturer" userEmail="sarah@pharmaceutical.co.ke">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Outgoing Shipments</h1>
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Shipment List</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Shipment No</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Drug</TableHead>
-                <TableHead>Distributor</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Departure Date</TableHead>
-                <TableHead>Arrival Date</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Temperature</TableHead>
-                <TableHead>Route</TableHead>
-                <TableHead>Vehicle No</TableHead>
-                <TableHead>QR Code</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {shipmentsLoading ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8">Loading shipments...</TableCell>
-                </TableRow>
-              ) : shipmentsError ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="text-center text-red-500 py-8">{shipmentsError}</TableCell>
-                </TableRow>
-              ) : shipments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="text-center text-muted-foreground py-8">No shipments found.</TableCell>
-                </TableRow>
-              ) : (
-                shipments.map(s => (
-                  <TableRow key={s.id}>
-                    <TableCell>{s.shipmentnumber}</TableCell>
-                    <TableCell>{s.batchnumber}</TableCell>
-                    <TableCell>{s.drug}</TableCell>
-                    <TableCell>{s.distributor}</TableCell>
-                    <TableCell>
-                      <Badge variant={s.status === 'completed' ? 'secondary' : s.status === 'in_transit' ? 'outline' : s.status === 'flagged' ? 'destructive' : 'default'}>
-                        {s.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{s.departure_date ? new Date(s.departure_date).toLocaleString() : '-'}</TableCell>
-                    <TableCell>{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</TableCell>
-                    <TableCell>{(s.quantity_shipped !== undefined && s.quantity_shipped !== null) ? String(s.quantity_shipped) : '-'}</TableCell>
-                    <TableCell>{s.temperature}</TableCell>
-                    <TableCell>{s.route}</TableCell>
-                    <TableCell>{s.vehicle_number}</TableCell>
-                    <TableCell>
-                      {s.qrcode_path ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            let url = s.qrcode_path;
-                            if (url.startsWith('/')) {
-                              setQrImageUrl(`${API_BASE_URL}${url}`);
-                            } else {
-                              setQrImageUrl(url);
-                            }
-                            setShowQrModal(true);
-                          }}
-                        >
-                          Show QR
-                        </Button>
-                      ) : '-'}
-                    </TableCell>
-      {/* QR Code Modal */}
-      <Dialog open={showQrModal} onOpenChange={setShowQrModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Shipment QR Code</DialogTitle>
-          </DialogHeader>
-          {qrImageUrl ? (
-            <div className="flex flex-col items-center justify-center py-4">
-              <img src={qrImageUrl} alt="QR Code" style={{ width: 200, height: 200 }} />
-              <a href={qrImageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mt-2">Open Full Size</a>
+      <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Outgoing Shipments</h1>
+        </div>
+        <Card className="rounded-xl shadow-lg border border-gray-200">
+          <CardHeader>
+            <CardTitle>Shipment List</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                <thead>
+                  <tr className="bg-gradient-to-r from-orange-100 to-red-100 text-gray-700">
+                    <th className="px-4 py-2 font-semibold text-left">Shipment No</th>
+                    <th className="px-4 py-2 font-semibold text-left">Batch</th>
+                    <th className="px-4 py-2 font-semibold text-left">Drug</th>
+                    <th className="px-4 py-2 font-semibold text-left">Distributor</th>
+                    <th className="px-4 py-2 font-semibold text-left">Status</th>
+                    <th className="px-4 py-2 font-semibold text-left">Departure Date</th>
+                    <th className="px-4 py-2 font-semibold text-left">Arrival Date</th>
+                    <th className="px-4 py-2 font-semibold text-left">Quantity</th>
+                    <th className="px-4 py-2 font-semibold text-left">Temperature</th>
+                    <th className="px-4 py-2 font-semibold text-left">Route</th>
+                    <th className="px-4 py-2 font-semibold text-left">Vehicle No</th>
+                    <th className="px-4 py-2 font-semibold text-left">QR Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shipmentsLoading ? (
+                    <tr>
+                      <td colSpan={12} className="text-center py-8">Loading shipments...</td>
+                    </tr>
+                  ) : shipmentsError ? (
+                    <tr>
+                      <td colSpan={12} className="text-center text-red-500 py-8">{shipmentsError}</td>
+                    </tr>
+                  ) : shipments.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} className="text-center text-muted-foreground py-8">No shipments found.</td>
+                    </tr>
+                  ) : (
+                    shipments.map((s, idx) => (
+                      <tr key={s.id} className={idx % 2 === 0 ? "bg-white" : "bg-orange-50" + " hover:bg-orange-100 transition-colors duration-150"}>
+                        <td className="px-4 py-2 rounded-l-xl">{s.shipmentnumber}</td>
+                        <td className="px-4 py-2">{s.batchnumber}</td>
+                        <td className="px-4 py-2">{s.drug}</td>
+                        <td className="px-4 py-2">{s.distributor}</td>
+                        <td className="px-4 py-2">
+                          <Badge variant={s.status === 'completed' ? 'secondary' : s.status === 'in_transit' ? 'outline' : s.status === 'flagged' ? 'destructive' : 'default'}>
+                            {s.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2">{s.departure_date ? new Date(s.departure_date).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-2">{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-2">{(s.quantity_shipped !== undefined && s.quantity_shipped !== null) ? String(s.quantity_shipped) : '-'}</td>
+                        <td className="px-4 py-2">{s.temperature}</td>
+                        <td className="px-4 py-2">{s.route}</td>
+                        <td className="px-4 py-2">{s.vehicle_number}</td>
+                        <td className="px-4 py-2 rounded-r-xl">
+                          {s.qrcode_path ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="rounded-lg shadow-sm"
+                              onClick={() => {
+                                let url = s.qrcode_path;
+                                if (url.startsWith('/')) {
+                                  setQrImageUrl(`${API_BASE_URL}${url}`);
+                                } else {
+                                  setQrImageUrl(url);
+                                }
+                                setShowQrModal(true);
+                              }}
+                            >
+                              Show QR
+                            </Button>
+                          ) : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <div className="text-center py-8">No QR code available.</div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQrModal(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Details Modal */}
-      <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Shipment Details</DialogTitle>
-          </DialogHeader>
-          {shipmentDetails ? (
-            <div className="space-y-2">
-              <div><b>Shipment No:</b> {shipmentDetails.shipmentnumber}</div>
-              <div><b>Batch:</b> {shipmentDetails.batchnumber}</div>
-              <div><b>Drug:</b> {shipmentDetails.drug}</div>
-              <div><b>Distributor:</b> {shipmentDetails.distributor}</div>
-              <div><b>Status:</b> <Badge>{shipmentDetails.status}</Badge></div>
-              <div><b>Departure Date:</b> {shipmentDetails.departure_date ? new Date(shipmentDetails.departure_date).toLocaleString() : '-'}</div>
-              <div><b>Arrival Date:</b> {shipmentDetails.arrival_date ? new Date(shipmentDetails.arrival_date).toLocaleString() : '-'}</div>
-              <div><b>Route:</b> {shipmentDetails.route}</div>
-              <div><b>Vehicle No:</b> {shipmentDetails.vehicle_number}</div>
-              <div><b>Temperature:</b> {shipmentDetails.temperature}</div>
-              <div><b>QR Code:</b> {shipmentDetails.qrcode ? <img src={shipmentDetails.qrcode} alt="QR" style={{ width: 80 }} /> : '-'}</div>
-              <div><b>Shipment Type:</b> {shipmentDetails.shipment_type}</div>
-              {shipmentDetails.blockchaintx && (
-                <div><b>Blockchain Tx:</b> <a href={`https://etherscan.io/tx/${shipmentDetails.blockchaintx}`} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex gap-1"><Link2 className="h-4 w-4" />{shipmentDetails.blockchaintx}</a></div>
-              )}
-              <div className="flex gap-2 mt-4">
-                <Select value={statusUpdate || shipmentDetails.status} onValueChange={setStatusUpdate}>
-                  <SelectTrigger className="w-40"><SelectValue placeholder="Update Status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="In Transit">In Transit</SelectItem>
-                    <SelectItem value="Delivered">Delivered</SelectItem>
-                    <SelectItem value="Cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button onClick={() => updateStatusMutation.mutate({ id: shipmentDetails.id, status: statusUpdate })} disabled={updateStatusMutation.isPending || !statusUpdate || statusUpdate === shipmentDetails.status}>Update Status</Button>
+          </CardContent>
+        </Card>
+        {/* Details Modal */}
+        <Dialog open={showDetails} onOpenChange={setShowDetails}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Shipment Details</DialogTitle>
+            </DialogHeader>
+            {shipmentDetails ? (
+              <div className="space-y-2">
+                <div><b>Shipment No:</b> {shipmentDetails.shipmentnumber}</div>
+                <div><b>Batch:</b> {shipmentDetails.batchnumber}</div>
+                <div><b>Drug:</b> {shipmentDetails.drug}</div>
+                <div><b>Distributor:</b> {shipmentDetails.distributor}</div>
+                <div><b>Status:</b> <Badge>{shipmentDetails.status}</Badge></div>
+                <div><b>Departure Date:</b> {shipmentDetails.departure_date ? new Date(shipmentDetails.departure_date).toLocaleString() : '-'}</div>
+                <div><b>Arrival Date:</b> {shipmentDetails.arrival_date ? new Date(shipmentDetails.arrival_date).toLocaleString() : '-'}</div>
+                <div><b>Route:</b> {shipmentDetails.route}</div>
+                <div><b>Vehicle No:</b> {shipmentDetails.vehicle_number}</div>
+                <div><b>Temperature:</b> {shipmentDetails.temperature}</div>
+                <div><b>QR Code:</b> {shipmentDetails.qrcode ? <img src={shipmentDetails.qrcode} alt="QR" style={{ width: 80 }} /> : '-'}</div>
+                <div><b>Shipment Type:</b> {shipmentDetails.shipment_type}</div>
+                {shipmentDetails.blockchaintx && (
+                  <div><b>Blockchain Tx:</b> <a href={`https://etherscan.io/tx/${shipmentDetails.blockchaintx}`} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex gap-1"><Link2 className="h-4 w-4" />{shipmentDetails.blockchaintx}</a></div>
+                )}
+                <div className="flex gap-2 mt-4">
+                  <Select value={statusUpdate || shipmentDetails.status} onValueChange={setStatusUpdate}>
+                    <SelectTrigger className="w-40"><SelectValue placeholder="Update Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="In Transit">In Transit</SelectItem>
+                      <SelectItem value="Delivered">Delivered</SelectItem>
+                      <SelectItem value="Cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => updateStatusMutation.mutate({ id: shipmentDetails.id, status: statusUpdate })} disabled={updateStatusMutation.isPending || !statusUpdate || statusUpdate === shipmentDetails.status}>Update Status</Button>
+                </div>
               </div>
-            </div>
-          ) : <div>Loading...</div>}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDetails(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Shipment creation removed for manufacturer role. Only viewing shipments is allowed. */}
+            ) : <div>Loading...</div>}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDetails(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Shipment creation removed for manufacturer role. Only viewing shipments is allowed. */}
+      </div>
     </DashboardLayout>
   );
-};
+}
 export default Shipments;

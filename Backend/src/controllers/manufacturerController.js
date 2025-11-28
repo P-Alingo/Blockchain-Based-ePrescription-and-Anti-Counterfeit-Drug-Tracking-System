@@ -1,35 +1,5 @@
-// Create Drug Batch controller
-async function createDrugBatch(req, res, next) {
-  try {
-    const userId = req.user.id;
-    // Get manufacturer id
-    const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
-    if (manufacturerResult.rowCount === 0) {
-      return res.status(404).json({ message: "Manufacturer profile not found" });
-    }
-    const manufacturerId = manufacturerResult.rows[0].id;
-
-    // Get batch data from request body
-    const batchData = req.body;
-
-    // Call service to create batch
-    const newBatch = await manufacturerService.createDrugBatch(manufacturerId, batchData);
-
-    res.status(201).json(newBatch);
-  } catch (error) {
-    console.error("❌ Error in createDrugBatch:", error);
-    res.status(500).json({ message: "Failed to create drug batch", error: error.message });
-  }
-}
 import { query } from "../config/database.js";
-import QRCode from 'qrcode';
 import * as manufacturerService from "../services/manufacturerService.js";
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Dropdowns for shipment creation form
 async function getShipmentFormDropdowns(req, res, next) {
@@ -82,14 +52,14 @@ async function getShipmentFormDropdowns(req, res, next) {
       pharmacy_facilities: pharmacyFacilitiesResult.rows
     });
   } catch (error) {
-    console.error('❌ ERROR in getShipmentFormDropdowns:', error);
+    console.error("❌ ERROR in getShipmentFormDropdowns:", error);
     res.status(500).json({
       batches: [],
       distributors: [],
       facilities: [],
       pharmacy_companies: [],
       pharmacy_facilities: [],
-      error: 'Failed to fetch shipment dropdown data'
+      error: "Failed to fetch shipment dropdown data"
     });
   }
 }
@@ -107,15 +77,14 @@ async function getManufacturerShipments(req, res, next) {
     const shipments = await manufacturerService.getManufacturerShipments(manufacturerId);
     res.json(shipments);
   } catch (error) {
-    console.error('❌ Error in getManufacturerShipments:', error);
+    console.error("❌ Error in getManufacturerShipments:", error);
     res.status(500).json({ message: "Failed to fetch shipments", error: error.message });
   }
 }
 
 // Dropdowns for batch registration form - CLEAN VERSION (No Fallback Data)
 async function getManufacturerDropdowns(req, res, next) {
-  console.log(' MANUFACTURER DROPDOWNS ENDPOINT CALLED!');
-  
+  console.log("MANUFACTURER DROPDOWNS ENDPOINT CALLED!");
   try {
     // Get drugs from database
     const drugsResult = await query(`
@@ -124,13 +93,13 @@ async function getManufacturerDropdowns(req, res, next) {
       WHERE is_deleted = false OR is_deleted IS NULL
       ORDER BY name ASC
     `);
-    console.log(' Drugs found:', drugsResult.rows.length);
+    console.log("Drugs found:", drugsResult.rows.length);
 
     // Get distributors (id, name)
     const distributorsResult = await query(`
       SELECT id, name FROM distributor_company ORDER BY name ASC
     `);
-    console.log(' Distributors found:', distributorsResult.rows.length);
+    console.log("Distributors found:", distributorsResult.rows.length);
 
     // Get distributor facilities (company_id, facility_id, facility_name, facility_location)
     const distributorFacilitiesResult = await query(`
@@ -139,13 +108,13 @@ async function getManufacturerDropdowns(req, res, next) {
       JOIN facility f ON dc.facility_id = f.id
       ORDER BY dc.name ASC
     `);
-    console.log(' Distributor facilities found:', distributorFacilitiesResult.rows.length);
+    console.log("Distributor facilities found:", distributorFacilitiesResult.rows.length);
 
     // Get quality officers (id, fullname)
     const qualityOfficersResult = await query(`
       SELECT id, fullname FROM staff WHERE role = 'Quality Control Officer' ORDER BY fullname ASC
     `);
-    console.log(' Quality officers found:', qualityOfficersResult.rows.length);
+    console.log("Quality officers found:", qualityOfficersResult.rows.length);
 
     const response = {
       drugs: drugsResult.rows,
@@ -153,10 +122,10 @@ async function getManufacturerDropdowns(req, res, next) {
       distributorFacilities: distributorFacilitiesResult.rows,
       qualityOfficers: qualityOfficersResult.rows
     };
-    console.log('✅ FINAL RESPONSE from database:', response);
+    console.log("✅ FINAL RESPONSE from database:", response);
     res.json(response);
   } catch (error) {
-    console.error('❌ ERROR in getManufacturerDropdowns:', error);
+    console.error("❌ ERROR in getManufacturerDropdowns:", error);
     // Return empty arrays instead of fallback data
     res.status(500).json({
       drugs: [],
@@ -164,6 +133,22 @@ async function getManufacturerDropdowns(req, res, next) {
       qualityOfficers: [],
       error: "Failed to fetch data from database"
     });
+  }
+}
+
+async function createDrugBatch(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
+    if (manufacturerResult.rowCount === 0) {
+      return res.status(404).json({ message: "Manufacturer profile not found" });
+    }
+    const manufacturerId = manufacturerResult.rows[0].id;
+    const batch = await manufacturerService.createDrugBatch(manufacturerId, req.body);
+    res.status(201).json(batch);
+  } catch (error) {
+    console.error("❌ Error in createDrugBatch:", error);
+    res.status(500).json({ message: "Failed to create batch", error: error.message });
   }
 }
 
@@ -177,13 +162,14 @@ async function getBatchesReadyForShipping(req, res, next) {
     }
     const manufacturerId = manufacturerResult.rows[0].id;
 
-    const batchesResult = await query(`
+    const batchesResult = await query(
+      `
       SELECT 
         db.id,
         db.batchnumber,
         db.manufacturedate,
         db.expirydate,
-        db.quantity,
+        db.total_batch_quantity as quantity,
         db.status as batch_status,
         d.name as drug_name,
         d.code as drug_code,
@@ -203,18 +189,19 @@ async function getBatchesReadyForShipping(req, res, next) {
         AND db.status = 'approved'
         AND db.distributorcompanyid IS NOT NULL
       ORDER BY db.manufacturedate DESC
-    `, [manufacturerId]);
+    `,
+      [manufacturerId]
+    );
 
     res.json({
       success: true,
       batches: batchesResult.rows
     });
-
   } catch (error) {
-    console.error('❌ Error in getBatchesReadyForShipping:', error);
-    res.status(500).json({ 
+    console.error("❌ Error in getBatchesReadyForShipping:", error);
+    res.status(500).json({
       message: "Failed to fetch batches ready for shipping",
-      error: error.message 
+      error: error.message
     });
   }
 }
@@ -224,14 +211,15 @@ async function getManufacturerShipmentDetails(req, res, next) {
   try {
     const userId = req.user.id;
     const shipmentId = req.params.id;
-    
+
     const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
     if (manufacturerResult.rowCount === 0) {
       return res.status(404).json({ message: "Manufacturer profile not found" });
     }
     const manufacturerId = manufacturerResult.rows[0].id;
 
-    const shipmentResult = await query(`
+    const shipmentResult = await query(
+      `
       SELECT 
         s.*,
         db.batchnumber,
@@ -258,7 +246,9 @@ async function getManufacturerShipmentDetails(req, res, next) {
       JOIN distributor_company dc ON dc.facility_id = df.id
       LEFT JOIN distributor dist ON dist.companyid = dc.id
       WHERE s.id = $1 AND s.manufacturer_id = $2
-    `, [shipmentId, manufacturerId]);
+    `,
+      [shipmentId, manufacturerId]
+    );
 
     if (shipmentResult.rows.length === 0) {
       return res.status(404).json({ message: "Shipment not found" });
@@ -268,34 +258,33 @@ async function getManufacturerShipmentDetails(req, res, next) {
       success: true,
       shipment: shipmentResult.rows[0]
     });
-
   } catch (error) {
-    console.error('❌ Error in getManufacturerShipmentDetails:', error);
-    res.status(500).json({ 
+    console.error("❌ Error in getManufacturerShipmentDetails:", error);
+    res.status(500).json({
       message: "Failed to fetch shipment details",
-      error: error.message 
+      error: error.message
     });
   }
 }
 
-// Create Manufacturer Shipment - UPDATED to match frontend
+// Create Manufacturer Shipment - CLEANED & FIXED
 async function createManufacturerShipment(req, res, next) {
   try {
     const userId = req.user.id;
-    const { 
-      batch_id,           // Changed from batchId
-      distributor_company_id, 
+    const {
+      batch_id, // Changed from batchId
+      distributor_company_id,
       destination_facility_id,
       pharmacy_company_id,
       pharmacy_facility_id,
-      quantity_shipped,   // Changed from quantity
-      vehicle_number,     // Changed from vehicleNumber
-      route, 
-      temperature 
+      quantity_shipped, // Changed from quantity
+      vehicle_number, // Changed from vehicleNumber
+      route,
+      temperature
     } = req.body;
-    
-    console.log('🚚 Creating shipment for user:', userId);
-    console.log('📦 Shipment data:', req.body);
+
+    console.log("🚚 Creating shipment for user:", userId);
+    console.log("📦 Shipment data:", req.body);
 
     // Get manufacturer id
     const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
@@ -304,17 +293,16 @@ async function createManufacturerShipment(req, res, next) {
     }
     const manufacturerId = manufacturerResult.rows[0].id;
 
-    // Use batch_id instead of batchId
     const batchId = batch_id;
 
     // Get batch details for shipment creation
-    const batchResult = await query(`
-        createDrugBatch
+    const batchResult = await query(
+      `
       SELECT 
         db.id AS batch_id,
         db.batchnumber,
-        db.drugid,
-        db.quantity,
+        db.drugid AS drug_id,
+        db.total_batch_quantity AS total_batch_quantity,
         db.qrcode_path,
         db.manufacturerid,
         db.distributorcompanyid,
@@ -343,29 +331,34 @@ async function createManufacturerShipment(req, res, next) {
       JOIN drug d ON d.id = db.drugid
       LEFT JOIN distributor dist ON dist.companyid = dc.id
       WHERE db.id = $1 AND db.manufacturerid = $2
-    `, [batchId, manufacturerId]);
+    `,
+      [batchId, manufacturerId]
+    );
 
     if (batchResult.rows.length === 0) {
-      return res.status(404).json({ 
-        message: "Batch not found or you don't have permission to access this batch" 
+      return res.status(404).json({
+        message: "Batch not found or you don't have permission to access this batch"
       });
     }
 
     const batch = batchResult.rows[0];
-    console.log('🏭 Origin facility:', batch.origin_facility_name);
-    console.log('🏢 Destination facility:', batch.destination_facility_name);
+    console.log("🏭 Origin facility:", batch.origin_facility_name);
+    console.log("🏢 Destination facility:", batch.destination_facility_name);
 
     // Check if batch already has an active shipment
-    const existingShipmentResult = await query(`
+    const existingShipmentResult = await query(
+      `
       SELECT id, status 
       FROM shipment 
       WHERE batch_id = $1 AND status IN ('pending', 'in_transit')
-    `, [batchId]);
+    `,
+      [batchId]
+    );
 
     if (existingShipmentResult.rows.length > 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "This batch already has an active shipment",
-        existingShipment: existingShipmentResult.rows[0] 
+        existingShipment: existingShipmentResult.rows[0]
       });
     }
 
@@ -373,8 +366,9 @@ async function createManufacturerShipment(req, res, next) {
     const shipmentQrCodePath = batch.qrcode_path;
 
     // Create shipment with batch QR code
-    console.log('💾 Inserting shipment into database...');
-    const shipmentResult = await query(`
+    console.log("💾 Inserting shipment into database...");
+    const shipmentResult = await query(
+      `
       INSERT INTO shipment (
         batch_id, 
         drug_id, 
@@ -391,22 +385,24 @@ async function createManufacturerShipment(req, res, next) {
         departure_date
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', CURRENT_TIMESTAMP)
       RETURNING *
-    `, [
-      batch.batch_id,
-      batch.drugid,
-      batch.manufacturerid,
-      batch.distributor_id,
-      quantity_shipped || batch.quantity,
-      temperature,
-      route,
-      vehicle_number,
-      batch.origin_facility_id,
-      batch.destination_facility_id,
-      shipmentQrCodePath
-    ]);
+    `,
+      [
+        batchId,
+        batch.drug_id,
+        batch.manufacturerid,
+        batch.distributor_id,
+        quantity_shipped,
+        temperature,
+        route,
+        vehicle_number,
+        batch.origin_facility_id,
+        batch.destination_facility_id,
+        shipmentQrCodePath
+      ]
+    );
 
     const shipment = shipmentResult.rows[0];
-    console.log('✅ Shipment created successfully:', shipment.shipmentnumber);
+    console.log("✅ Shipment created successfully:", shipment.shipmentnumber);
 
     // Enrich QR code data for shipment (for API response only)
     const shipmentQrData = {
@@ -419,11 +415,11 @@ async function createManufacturerShipment(req, res, next) {
       distributor: batch.distributor_company_name,
       destination_facility: batch.destination_facility_name,
       destination_location: batch.destination_location,
-      quantity_shipped: quantity_shipped || batch.quantity,
+      quantity_shipped: quantity_shipped || batch.total_batch_quantity,
       vehicle_number,
       route,
       temperature,
-      shipment_type: 'Manufacturer→Distributor→Pharmacist',
+      shipment_type: "Manufacturer→Distributor→Pharmacist",
       created_at: new Date().toISOString()
     };
 
@@ -448,22 +444,21 @@ async function createManufacturerShipment(req, res, next) {
         phone: batch.destination_phone
       },
       distributor_company: batch.distributor_company_name,
-      quantity: quantity_shipped || batch.quantity,
+      quantity: quantity_shipped || batch.total_batch_quantity,
       qrCodeData: shipmentQrData,
-      qrCodeImageUrl: shipmentQrCodePath ? `${req.protocol}://${req.get('host')}${shipmentQrCodePath}` : null
+      qrCodeImageUrl: shipmentQrCodePath ? `${req.protocol}://${req.get("host")}${shipmentQrCodePath}` : null
     };
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Shipment created successfully",
       shipment: enrichedShipment
     });
-
   } catch (error) {
-    console.error('❌ Error in createManufacturerShipment:', error);
-    res.status(500).json({ 
+    console.error("❌ Error in createManufacturerShipment:", error);
+    res.status(500).json({
       message: "Failed to create shipment",
-      error: error.message 
+      error: error.message
     });
   }
 }
@@ -478,7 +473,11 @@ async function updateManufacturerShipmentStatus(req, res, next) {
       return res.status(404).json({ message: "Manufacturer profile not found" });
     }
     const manufacturerId = manufacturerResult.rows[0].id;
-    await manufacturerService.updateManufacturerShipmentStatus(manufacturerId, shipmentId, status.toLowerCase());
+    await manufacturerService.updateManufacturerShipmentStatus(
+      manufacturerId,
+      shipmentId,
+      status.toLowerCase()
+    );
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -491,32 +490,32 @@ async function getManufacturerAnalytics(req, res, next) {
     if (!req.user || !req.user.id) {
       return res.status(401).json({ message: "User not authenticated" });
     }
-    
+
     const userId = req.user.id;
-    console.log('🔍 Fetching analytics for user:', userId);
-    
+    console.log("🔍 Fetching analytics for user:", userId);
+
     const manufacturerResult = await query("SELECT id FROM manufacturer WHERE userid = $1", [userId]);
     if (manufacturerResult.rowCount === 0) {
       return res.status(404).json({ message: "Manufacturer profile not found" });
     }
-    
+
     const manufacturerId = manufacturerResult.rows[0].id;
-    console.log('🏭 Manufacturer ID found:', manufacturerId);
-    
+    console.log("🏭 Manufacturer ID found:", manufacturerId);
+
     const analytics = await manufacturerService.getManufacturerAnalytics(manufacturerId);
-    
-    console.log('📊 Sending analytics response:', {
+
+    console.log("📊 Sending analytics response:", {
       hasData: !!analytics,
       batchesCount: analytics.batchesByMonth?.length || 0,
       shipmentsCount: analytics.shipmentStatus?.length || 0
     });
-    
+
     res.json(analytics);
   } catch (error) {
-    console.error('❌ Error in getManufacturerAnalytics controller:', error);
-    res.status(500).json({ 
+    console.error("❌ Error in getManufacturerAnalytics controller:", error);
+    res.status(500).json({
       message: "Failed to fetch analytics",
-      error: error.message 
+      error: error.message
     });
   }
 }
@@ -534,8 +533,16 @@ async function getManufacturerBlockchain(req, res, next) {
     let filterSql = "";
     let params = [manufacturerId];
     let paramIdx = 2;
-    if (batchnumber) { filterSql += ` AND db.batchnumber = $${paramIdx}`; params.push(batchnumber); paramIdx++; }
-    if (blockchaintx) { filterSql += ` AND db.blockchaintx = $${paramIdx}`; params.push(blockchaintx); paramIdx++; }
+    if (batchnumber) {
+      filterSql += ` AND db.batchnumber = $${paramIdx}`;
+      params.push(batchnumber);
+      paramIdx++;
+    }
+    if (blockchaintx) {
+      filterSql += ` AND db.blockchaintx = $${paramIdx}`;
+      params.push(blockchaintx);
+      paramIdx++;
+    }
     const sql = `
       SELECT db.batchnumber, db.blockchaintx, db.status, db.manufacturedate, db.expirydate, db.qrcode_path,
         ev.timestamp, ev.verified, ev.event_type, ev.block_number, ev.entityid, ev.tx_hash
@@ -594,12 +601,24 @@ async function getManufacturerBatches(req, res, next) {
     let filterSql = "";
     let params = [manufacturerId];
     let paramIdx = 2;
-    if (drugid) { filterSql += ` AND db.drugid = $${paramIdx}`; params.push(drugid); paramIdx++; }
-    if (manufacturedate) { filterSql += ` AND db.manufacturedate >= $${paramIdx}`; params.push(manufacturedate); paramIdx++; }
-    if (expirydate) { filterSql += ` AND db.expirydate <= $${paramIdx}`; params.push(expirydate); paramIdx++; }
+    if (drugid) {
+      filterSql += ` AND db.drugid = $${paramIdx}`;
+      params.push(drugid);
+      paramIdx++;
+    }
+    if (manufacturedate) {
+      filterSql += ` AND db.manufacturedate >= $${paramIdx}`;
+      params.push(manufacturedate);
+      paramIdx++;
+    }
+    if (expirydate) {
+      filterSql += ` AND db.expirydate <= $${paramIdx}`;
+      params.push(expirydate);
+      paramIdx++;
+    }
 
     const sql = `
-      SELECT db.id, db.batchnumber, d.name AS drugname, db.quantity, db.manufacturedate, db.expirydate, db.blockchaintx, db.qrcode_path,
+      SELECT db.id, db.batchnumber, d.name AS drugname, db.total_batch_quantity as quantity, db.manufacturedate, db.expirydate, db.qrcode_path,
         s.shipmentnumber, db.manufacturingfacility
       FROM drugbatch db
       JOIN drug d ON d.id = db.drugid
@@ -625,7 +644,7 @@ async function getManufacturerBatchDetails(req, res, next) {
     }
     const manufacturerId = manufacturerResult.rows[0].id;
     const sql = `
-      SELECT db.id, db.batchnumber, db.quantity, db.manufacturedate, db.expirydate, db.blockchaintx,
+      SELECT db.id, db.batchnumber, db.total_batch_quantity as quantity, db.manufacturedate, db.expirydate,
         db.qrcode_path,
         d.name AS drugname,
         db.manufacturingfacility,
@@ -678,30 +697,35 @@ async function getManufacturerDashboard(req, res, next) {
     const manufacturerId = manufacturerResult.rows[0].id;
 
     // Summary cards - Remove status references
-    const totalBatchesResult = await query("SELECT COUNT(*) AS total FROM drugbatch WHERE manufacturerid = $1", [manufacturerId]);
-    // Remove pendingQCResult (no status column)
-    // Remove activeShipmentsResult and deliveredShipmentsResult status filters
+    const totalBatchesResult = await query(
+      "SELECT COUNT(*) AS total FROM drugbatch WHERE manufacturerid = $1",
+      [manufacturerId]
+    );
     const activeShipmentsResult = await query(
-      "SELECT COUNT(*) AS active FROM shipment WHERE manufacturer_id = $1", 
+      "SELECT COUNT(*) AS active FROM shipment WHERE manufacturer_id = $1",
       [manufacturerId]
     );
     const deliveredShipmentsResult = await query(
-      "SELECT COUNT(*) AS delivered FROM shipment WHERE manufacturer_id = $1", 
+      "SELECT COUNT(*) AS delivered FROM shipment WHERE manufacturer_id = $1",
       [manufacturerId]
     );
 
-    // Recent batches (last 5)
-    const recentBatchesResult = await query(`
-      SELECT db.batchnumber, d.name AS drug, db.quantity, db.expirydate, db.blockchaintx, db.qrcode_path
+    // Recent batches (last 5) - blockchaintx removed
+    const recentBatchesResult = await query(
+      `
+      SELECT db.batchnumber, d.name AS drug, db.total_batch_quantity as quantity, db.expirydate, db.qrcode_path
       FROM drugbatch db
       JOIN drug d ON d.id = db.drugid
       WHERE db.manufacturerid = $1
       ORDER BY db.id DESC
       LIMIT 5
-    `, [manufacturerId]);
+    `,
+      [manufacturerId]
+    );
 
     // Recent shipments (last 5)
-    const recentShipmentsResult = await query(`
+    const recentShipmentsResult = await query(
+      `
       SELECT s.shipmentnumber, db.batchnumber, dc.name AS distributor, s.departure_date
       FROM shipment s
       JOIN drugbatch db ON db.id = s.batch_id
@@ -709,31 +733,38 @@ async function getManufacturerDashboard(req, res, next) {
       WHERE s.manufacturer_id = $1
       ORDER BY s.id DESC
       LIMIT 5
-    `, [manufacturerId]);
+    `,
+      [manufacturerId]
+    );
 
-    // Blockchain snapshot (last 5 verified)
-    const blockchainSnapshotResult = await query(`
-      SELECT batchnumber, blockchaintx
+    // Blockchain snapshot (last 5 verified) - blockchaintx removed
+    const blockchainSnapshotResult = await query(
+      `
+      SELECT batchnumber
       FROM drugbatch
-      WHERE manufacturerid = $1 AND blockchaintx IS NOT NULL
+      WHERE manufacturerid = $1
       ORDER BY id DESC
       LIMIT 5
-    `, [manufacturerId]);
+    `,
+      [manufacturerId]
+    );
 
-      return res.json({
-        summary: {
-          totalBatches: Number(totalBatchesResult.rows[0]?.total ?? 0),
-          // Remove pendingQualityChecks
-          activeShipments: Number(activeShipmentsResult.rows[0]?.active ?? 0),
-          deliveredShipments: Number(deliveredShipmentsResult.rows[0]?.delivered ?? 0),
-        },
-        recentBatches: recentBatchesResult.rows,
-        recentShipments: recentShipmentsResult.rows,
-        blockchainSnapshot: blockchainSnapshotResult.rows,
-      });
-    } catch (error) {
-      console.error('❌ Error in getManufacturerDashboard:', error);
-      res.status(500).json({ message: 'Failed to fetch manufacturer dashboard', error: error.message });
+    return res.json({
+      summary: {
+        totalBatches: Number(totalBatchesResult.rows[0]?.total ?? 0),
+        activeShipments: Number(activeShipmentsResult.rows[0]?.active ?? 0),
+        deliveredShipments: Number(deliveredShipmentsResult.rows[0]?.delivered ?? 0)
+      },
+      recentBatches: recentBatchesResult.rows,
+      recentShipments: recentShipmentsResult.rows,
+      blockchainSnapshot: blockchainSnapshotResult.rows
+    });
+  } catch (error) {
+    console.error("❌ Error in getManufacturerDashboard:", error);
+    res.status(500).json({
+      message: "Failed to fetch manufacturer dashboard",
+      error: error.message
+    });
   }
 }
 
@@ -771,8 +802,10 @@ async function deleteManufacturerShipment(req, res, next) {
     }
     const manufacturerId = manufacturerResult.rows[0].id;
     await manufacturerService.deleteManufacturerShipment(manufacturerId, shipmentId);
+    console.log(`🗑️ Deleted shipment: ${shipmentId} for user: ${userId}`);
     res.status(200).json({ success: true, message: "Shipment deleted successfully" });
   } catch (error) {
+    console.error("❌ Error in deleteManufacturerShipment:", error);
     res.status(400).json({ success: false, error: error.message });
   }
 }
@@ -789,9 +822,14 @@ async function updateManufacturerBatch(req, res, next) {
       return res.status(404).json({ message: "Manufacturer profile not found" });
     }
     const manufacturerId = manufacturerResult.rows[0].id;
-    const updatedBatch = await manufacturerService.updateManufacturerBatch(manufacturerId, batchId, updateData);
+    const updatedBatch = await manufacturerService.updateManufacturerBatch(
+      manufacturerId,
+      batchId,
+      updateData
+    );
     res.status(200).json(updatedBatch);
   } catch (error) {
+    console.error("❌ Error in updateManufacturerBatch:", error);
     res.status(400).json({ success: false, error: error.message });
   }
 }
@@ -807,10 +845,14 @@ async function deleteManufacturerBatch(req, res, next) {
       return res.status(404).json({ message: "Manufacturer profile not found" });
     }
     const manufacturerId = manufacturerResult.rows[0].id;
+    console.log(`🗑️ Attempting to delete batch: ${batchId} for user: ${userId}`);
     await manufacturerService.deleteManufacturerBatch(manufacturerId, batchId);
-    res.status(200).json({ success: true, message: "Batch deleted successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Batch deleted successfully" });
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    console.error("❌ Error in deleteManufacturerBatch:", error);
+    res.status(400).json({ success: false, error: error.message, details: error });
   }
 }
 
@@ -834,5 +876,5 @@ export {
   getBatchesReadyForShipping,
   getShipmentFormDropdowns,
   createDrugBatch,
-  deleteManufacturerBatch // Ensure this is exported
+  deleteManufacturerBatch
 };

@@ -1,7 +1,228 @@
+// Regulator: Update violator status (suspend/activate)
+export async function updateViolatorStatus(req, res) {
+  try {
+    const userId = req.params.userid;
+    const { status, reason } = req.body;
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+    // Fetch wallet address
+    const userRes = await query('SELECT wallet_address FROM users WHERE id = $1', [userId]);
+    const walletAddress = userRes.rows[0]?.wallet_address;
+    if (!walletAddress) {
+      return res.status(404).json({ success: false, message: 'User wallet address not found' });
+    }
+    // Call RegulatorOversight contract for suspension/reactivation
+    try {
+      const { suspendUserOnChain, liftUserSuspensionOnChain } = await import('../services/blockchainService.js');
+      if (status === 'suspended') {
+        await suspendUserOnChain(walletAddress, reason || 'Suspended by regulator');
+      } else if (status === 'active') {
+        await liftUserSuspensionOnChain(walletAddress);
+      }
+    } catch (err) {
+      console.error('[Blockchain] Failed to call RegulatorOversight contract:', err);
+    }
+    // Update DB status
+    await query('UPDATE users SET status = $1, updatedat = NOW() WHERE id = $2', [status, userId]);
+    // Log blockchain event via RegulatorOversight contract
+    try {
+      const { logAuditOnChain } = await import('../services/blockchainService.js');
+      await logAuditOnChain({
+        description: `User status changed to '${status}' for userId=${userId} by regulator=${req.user?.id || 'regulator'}`,
+        entityType: 'user',
+        entityId: userId
+      });
+    } catch (err) {
+      console.error('[Blockchain] Failed to log RegulatorOversight status change event:', err);
+    }
+    res.json({ success: true, message: `User status updated to ${status}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+// Get manufacturer users whose batch was flagged, who flagged it, and their status
+export async function regulatorManufacturerViolations(req, res) {
+  try {
+    // Fetch flagged shipments
+    const shipmentsRes = await query(`
+      SELECT s.*, 
+        u_flagger.full_name AS flagged_by_name, u_flagger.role AS flagged_by_role,
+        u_violator.full_name AS violator_name, u_violator.role AS violator_role, u_violator.status AS violator_status
+      FROM shipment s
+      LEFT JOIN users u_flagger ON s.flagged_by = u_flagger.id
+      LEFT JOIN users u_violator ON s.violator = u_violator.id
+      WHERE s.status = 'flagged'
+      ORDER BY s.updated_at DESC
+    `);
+    const flaggedShipments = shipmentsRes.rows;
+
+    // Prepare results array
+    const results = [];
+    for (const shipment of flaggedShipments) {
+      results.push({
+        shipment_id: shipment.id,
+        violator_id: shipment.violator,
+        violator_role: shipment.violator_role || 'Unknown',
+        violator_name: shipment.violator_name || 'Unknown',
+        violator_status: shipment.violator_status || 'Unknown',
+        flagged_by_role: shipment.flagged_by_role || 'Unknown',
+        flagged_by_id: shipment.flagged_by,
+        flagged_by_name: shipment.flagged_by_name || 'Unknown',
+        reason: shipment.received_condition || shipment.flag_reason || shipment.reason || shipment.status,
+        timestamp: shipment.updated_at,
+        status: shipment.status
+      });
+    }
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+// Toggle manufacturer user status (active/suspended)
+export async function regulatorToggleManufacturerStatus(req, res) {
+  try {
+    const userId = req.params.id;
+    const { status } = req.body;
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+    await query('UPDATE users SET status = $1, updatedat = NOW() WHERE id = $2', [status, userId]);
+
+    // Log suspension/activation on-chain via RegulatorOversight contract
+    try {
+      const { suspendUserOnChain, liftUserSuspensionOnChain } = await import('../services/blockchainService.js');
+      // Get violator wallet address
+      const userRes = await query('SELECT wallet_address FROM users WHERE id = $1', [userId]);
+      const walletAddress = userRes.rows[0]?.wallet_address;
+      if (walletAddress) {
+        if (status === 'suspended') {
+          await suspendUserOnChain(walletAddress, 'Suspended by regulator');
+        } else if (status === 'active') {
+          await liftUserSuspensionOnChain(walletAddress);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Failed to call RegulatorOversight suspension functions:', err);
+    }
+
+    res.json({ success: true, message: `User status updated to ${status}` });
+  } 
+  catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+// Get suspended users from users table
+export async function regulatorSuspendedUsers(req, res) {
+  try {
+    const result = await query("SELECT * FROM users WHERE status = 'suspended' ORDER BY updatedat DESC");
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+// Activate a suspended user
+export async function regulatorActivateUser(req, res) {
+  try {
+    const userId = req.params.id;
+    await query("UPDATE users SET status = 'active', updatedat = NOW() WHERE id = $1", [userId]);
+    res.json({ success: true, message: 'User activated' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+// Get flagged batches from shipment table
+// ...existing code...
+// Get flagged batches (RegulatorOversight contract)
+// ...existing code...
+// Get contractPrescriptionId mapping for a given database prescription ID
+// Get on-chain status for a contractPrescriptionId
+export async function blockchainPrescriptionStatus(req, res) {
+  try {
+    const contractPrescriptionId = req.params.id;
+    const { getPrescriptionOnChain } = await import("../services/blockchainService.js");
+    const presc = await getPrescriptionOnChain(contractPrescriptionId);
+    let status = null;
+    // Try to extract status from array (index 12), object property, or fallback
+    function extractStatus(raw) {
+      let val = null;
+      if (raw && typeof raw === 'object' && raw.hex) {
+        val = parseInt(raw.hex, 16);
+      } else if (typeof raw === 'number') {
+        val = raw;
+      } else if (typeof raw === 'string' && !isNaN(Number(raw))) {
+        val = Number(raw);
+      }
+      // Only accept valid status values (0,1,2)
+      if (val !== null && [0,1,2].includes(val)) return val;
+      return null;
+    }
+
+    if (Array.isArray(presc)) {
+      status = extractStatus(presc[12]);
+    } else if (presc && typeof presc.status !== 'undefined') {
+      status = extractStatus(presc.status);
+    }
+    // Fallback: try to find a valid status value anywhere in the array
+    if (status === null && Array.isArray(presc)) {
+      for (const v of presc) {
+        const candidate = extractStatus(v);
+        if (candidate !== null) {
+          status = candidate;
+          break;
+        }
+      }
+    }
+    // Extra debug logging for unexpected status values
+    if (status === null || typeof status === 'undefined' || isNaN(status)) {
+      console.error('[DEBUG] Unexpected prescription status value:', {
+        contractPrescriptionId,
+        presc,
+        extractedStatus: status
+      });
+      return res.status(404).json({ message: 'Status not found for this prescription', debug: { contractPrescriptionId, presc, extractedStatus: status } });
+    }
+    res.json({ status });
+  } catch (error) {
+    res.status(404).json({ message: error.message || 'Prescription not found on-chain' });
+  }
+}
+import fs from 'fs';
+import path from 'path';
+export async function blockchainPrescriptionMap(req, res) {
+  try {
+    const prescriptionId = req.params.id;
+    const mapPath = path.resolve(__dirname, '../../prescription_id_map.json');
+    if (!fs.existsSync(mapPath)) {
+      return res.status(404).json({ success: false, message: 'Mapping file not found' });
+    }
+    const mappings = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+    const mapping = mappings.find(obj => String(obj.databaseId) === String(prescriptionId));
+    if (!mapping) {
+      return res.status(404).json({ success: false, message: 'Mapping not found for this prescription ID' });
+    }
+    res.json({ contractPrescriptionId: mapping.contractPrescriptionId });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
 // Centralized Blockchain Controller
+// Debug: Get all on-chain prescriptions
+export async function blockchainAllPrescriptions(req, res) {
+  try {
+    const { getAllPrescriptionsOnChain } = await import("../services/blockchainService.js");
+    const prescriptions = await getAllPrescriptionsOnChain();
+    res.json(prescriptions);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
 import { 
   getBlockchainHealth, 
-  getBlockchainEvents, 
+  getAllBlockchainEvents, 
   getBlockchainStats, 
   getBlockchainEntityEvents, 
   getBlockchainEntityStatus, 
@@ -26,8 +247,9 @@ export async function blockchainHealth(req, res) {
 
 // All blockchain events
 export async function blockchainEvents(req, res) {
+  console.log("📨 [DEBUG] /api/blockchain/events endpoint hit");
   try {
-    const events = await getBlockchainEvents();
+    const events = await getAllBlockchainEvents();
     res.json(events);
   } catch (error) {
     res.status(500).json([]);
@@ -184,7 +406,9 @@ export async function blockchainUserStatus(req, res) {
   try {
     const userId = req.params.id;
     const status = await getUserBlockchainStatus(userId);
-    res.json({ success: true, ...status });
+    // Always set badge for frontend mapping
+    const badge = status.is_synced === true ? 'synced' : 'not_synced';
+    res.json({ success: true, ...status, badge });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

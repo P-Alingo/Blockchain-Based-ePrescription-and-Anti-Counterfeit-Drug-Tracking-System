@@ -16,12 +16,10 @@ const RegulatorAudits = () => {
   // Add header and description for consistent aesthetic
   const auditsHeader = (
     <div className="space-y-2 mb-8">
-      <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">
+      <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent drop-shadow-lg">
         Regulator Audits
       </h1>
-      <p className="text-muted-foreground">
-        Review audit logs, monitor compliance actions, and ensure regulatory standards are upheld
-      </p>
+      <p className="text-muted-foreground text-lg">Review audit logs, monitor compliance actions, and ensure regulatory standards are upheld</p>
     </div>
   );
   useEffect(() => {
@@ -315,13 +313,13 @@ const RegulatorAudits = () => {
     <DashboardLayout sidebarItems={sidebarItems} userRole="regulator">
       {auditsHeader}
       <Tabs defaultValue="recent" className="w-full">
-        <TabsList>
-          <TabsTrigger value="recent">Recent Audits</TabsTrigger>
-          <TabsTrigger value="auditlog">Audit Logs</TabsTrigger>
+        <TabsList className="rounded-xl bg-gradient-to-r from-pink-100 to-red-100 p-1 shadow-md mb-4 flex gap-2">
+          <TabsTrigger value="recent" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">Recent Audits</TabsTrigger>
+          <TabsTrigger value="auditlog" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">Audit Logs</TabsTrigger>
         </TabsList>
         {/* Recent Audits Tab */}
         <TabsContent value="recent" className="space-y-4">
-          <Card className="healthcare-card">
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardHeader>
               <CardTitle>Recent Audits</CardTitle>
               <CardDescription>
@@ -382,24 +380,24 @@ const RegulatorAudits = () => {
               )}
               {!loadingLog && !logError && getProcessedLogs(auditLog).length > 0 && (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm border rounded-lg">
-                    <thead className="sticky top-0 bg-background z-10">
-                      <tr className="border-b bg-muted">
-                        <th className="px-4 py-2 text-left">ID</th>
-                        <th className="px-4 py-2 text-left">User</th>
-                        <th className="px-4 py-2 text-left">Action</th>
-                        <th className="px-4 py-2 text-left">Entity</th>
-                        <th className="px-4 py-2 text-left">Entity ID</th>
-                        <th className="px-4 py-2 text-left">Timestamp</th>
-                        <th className="px-4 py-2 text-left">Details</th>
+                  <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm text-sm">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-gradient-to-r from-pink-100 to-red-100 text-gray-700">
+                        <th className="px-4 py-2 text-left font-semibold">ID</th>
+                        <th className="px-4 py-2 text-left font-semibold">User</th>
+                        <th className="px-4 py-2 text-left font-semibold">Action</th>
+                        <th className="px-4 py-2 text-left font-semibold">Entity</th>
+                        <th className="px-4 py-2 text-left font-semibold">Entity ID</th>
+                        <th className="px-4 py-2 text-left font-semibold">Timestamp</th>
+                        <th className="px-4 py-2 text-left font-semibold">Details</th>
                       </tr>
                     </thead>
                     <tbody>
                       {getProcessedLogs(auditLog)
                         .slice(0, 10)
                         .map((log, idx) => (
-                          <tr key={log.id} className={idx % 2 === 0 ? "bg-background" : "bg-muted/40"}>
-                            <td className="px-4 py-2 font-semibold">{log.id}</td>
+                          <tr key={log.id} className={clsx(idx % 2 === 0 ? "bg-white" : "bg-pink-50", "hover:bg-pink-100 transition-colors duration-150")}> 
+                            <td className="px-4 py-2 font-semibold rounded-l-xl">{log.id}</td>
                             <td className="px-4 py-2">{log.user ?? <span className="italic text-muted-foreground">System</span>}</td>
                             <td className="px-4 py-2">
                               <Badge variant="outline" className="bg-muted text-muted-foreground">
@@ -413,7 +411,7 @@ const RegulatorAudits = () => {
                             </td>
                             <td className="px-4 py-2">{log.entity_id}</td>
                             <td className="px-4 py-2">{log.timestamp ? new Date(log.timestamp).toLocaleString() : ''}</td>
-                            <td className="px-4 py-2 align-top" style={{maxWidth: '240px', wordBreak: 'break-word'}}>
+                            <td className="px-4 py-2 align-top rounded-r-xl" style={{maxWidth: '240px', wordBreak: 'break-word'}}>
                               <Dialog>
                                 <DialogTrigger asChild>
                                   <Button variant="ghost" size="sm" className="w-full text-left p-0 h-auto min-h-0">
@@ -492,7 +490,7 @@ const RegulatorAudits = () => {
         </TabsContent>
         {/* Audit Logs Tab */}
         <TabsContent value="auditlog" className="space-y-4">
-          <Card className="healthcare-card">
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardHeader>
               <CardTitle>Audit Logs</CardTitle>
               <CardDescription>
@@ -541,23 +539,23 @@ const RegulatorAudits = () => {
               )}
               {!loadingLog && !logError && getProcessedLogs(auditLog).length > 0 && (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm border rounded-lg">
-                    <thead className="sticky top-0 bg-background z-10">
-                      <tr className="border-b bg-muted">
-                        <th className="px-4 py-2 text-left">ID</th>
-                        <th className="px-4 py-2 text-left">User</th>
-                        <th className="px-4 py-2 text-left">Action</th>
-                        <th className="px-4 py-2 text-left">Entity</th>
-                        <th className="px-4 py-2 text-left">Entity ID</th>
-                        <th className="px-4 py-2 text-left">Timestamp</th>
-                        <th className="px-4 py-2 text-left">Details</th>
+                  <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm text-sm">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-gradient-to-r from-pink-100 to-red-100 text-gray-700">
+                        <th className="px-4 py-2 text-left font-semibold">ID</th>
+                        <th className="px-4 py-2 text-left font-semibold">User</th>
+                        <th className="px-4 py-2 text-left font-semibold">Action</th>
+                        <th className="px-4 py-2 text-left font-semibold">Entity</th>
+                        <th className="px-4 py-2 text-left font-semibold">Entity ID</th>
+                        <th className="px-4 py-2 text-left font-semibold">Timestamp</th>
+                        <th className="px-4 py-2 text-left font-semibold">Details</th>
                       </tr>
                     </thead>
                     <tbody>
                       {getProcessedLogs(auditLog)
                         .map((log, idx) => (
-                          <tr key={log.id} className={idx % 2 === 0 ? "bg-background" : "bg-muted/40"}>
-                            <td className="px-4 py-2 font-semibold">{log.id}</td>
+                          <tr key={log.id} className={clsx(idx % 2 === 0 ? "bg-white" : "bg-pink-50", "hover:bg-pink-100 transition-colors duration-150")}> 
+                            <td className="px-4 py-2 font-semibold rounded-l-xl">{log.id}</td>
                             <td className="px-4 py-2">{log.user ?? <span className="italic text-muted-foreground">System</span>}</td>
                             <td className="px-4 py-2">
                               <Badge variant="outline" className="bg-muted text-muted-foreground">
@@ -571,7 +569,7 @@ const RegulatorAudits = () => {
                             </td>
                             <td className="px-4 py-2">{log.entity_id}</td>
                             <td className="px-4 py-2">{log.timestamp ? new Date(log.timestamp).toLocaleString() : ''}</td>
-                            <td className="px-4 py-2 align-top" style={{maxWidth: '240px', wordBreak: 'break-word'}}>
+                            <td className="px-4 py-2 align-top rounded-r-xl" style={{maxWidth: '240px', wordBreak: 'break-word'}}>
                               <Dialog>
                                 <DialogTrigger asChild>
                                   <Button variant="ghost" size="sm" className="w-full text-left p-0 h-auto min-h-0">

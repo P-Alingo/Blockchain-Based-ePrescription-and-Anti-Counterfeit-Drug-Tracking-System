@@ -86,7 +86,7 @@ interface Batch {
   storagetemperature?: number;
   manufacturingfacility?: string;
   datechecked?: string;
-  blockchaintx?: string;
+  // blockchaintx?: string; // Removed, no longer in backend
   distributorcompanyid?: number;
   distributorcompany?: string;
   distributorfacility?: string;
@@ -128,7 +128,6 @@ const Batches = () => {
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
     { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
     { icon: List, label: "Batches", path: "/manufacturer/batches", active: true },
-    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
     { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
     { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
   ];
@@ -223,7 +222,7 @@ const Batches = () => {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      const url = `${API_BASE}/api/drugbatch/form/dropdowns`;
+      const url = `${API_BASE}/api/manufacturer/api/drugbatch/form/dropdowns`;
       const res = await axios.get<{ 
         drugs: Drug[]; 
         qualityOfficers: QualityOfficer[];
@@ -329,7 +328,7 @@ const Batches = () => {
         payload.manufacturedate = editForm.manufacturedate;
       if (editForm.expirydate && editForm.expirydate !== formatDate(selectedBatch.expirydate)) 
         payload.expirydate = editForm.expirydate;
-      if (editForm.quantity !== selectedBatch.quantity) payload.quantity = editForm.quantity;
+      if (editForm.quantity !== selectedBatch.quantity) payload.total_batch_quantity = editForm.quantity;
       if (editForm.storagetemperature !== selectedBatch.storagetemperature) 
         payload.storagetemperature = editForm.storagetemperature;
       if (editForm.manufacturingfacility !== selectedBatch.manufacturingfacility) 
@@ -357,7 +356,7 @@ const Batches = () => {
       }
 
       const response = await axios.put(
-        `http://localhost:4000/api/drugbatch/${selectedBatch.id}`,
+        `http://localhost:4000/api/manufacturer/api/drugbatch/${selectedBatch.id}`,
         payload,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -389,7 +388,7 @@ const Batches = () => {
       const token = localStorage.getItem("token");
       
       await axios.delete(
-        `http://localhost:4000/api/drugbatch/${selectedBatch.id}`,
+        `http://localhost:4000/api/manufacturer/api/drugbatch/${selectedBatch.id}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -480,7 +479,7 @@ const Batches = () => {
   const fetchBatchDetails = async (id: number) => {
     try {
       const token = localStorage.getItem("token");
-      const url = `${API_BASE}/api/manufacturer/batches/${id}`;
+      const url = `${API_BASE}/api/manufacturer/api/drugbatch/${id}`; // <-- use the new alias
       const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
       setBatchDetails(res.data);
       setDetailsModalOpen(true);
@@ -521,7 +520,7 @@ const Batches = () => {
       userName={userName}
       userEmail={userEmail}
     >
-      <div className="space-y-8">
+      <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
@@ -555,7 +554,7 @@ const Batches = () => {
 
         {/* Stats Card - Only show total batches */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-primary/20">
+          <Card className="border-primary/20 rounded-xl shadow-lg border border-gray-200">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Package2 className="h-6 w-6 text-blue-600" />
@@ -569,7 +568,7 @@ const Batches = () => {
         </div>
 
         {/* Table Section */}
-        <Card className="border-primary/20 shadow-lg">
+        <Card className="border-primary/20 rounded-xl shadow-lg border border-gray-200">
           <CardHeader>
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
@@ -630,72 +629,46 @@ const Batches = () => {
                 )}
               </div>
             ) : (
-              <div className="rounded-md border">
-                <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Batch Number</TableHead>
-            <TableHead>Drug Name</TableHead>
-            <TableHead>Quantity</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filteredBatches.map((batch) => (
-            <TableRow key={batch.id}>
-              <TableCell>{batch.batchnumber}</TableCell>
-              <TableCell>{batch.drugname}</TableCell>
-              <TableCell>{batch.quantity}</TableCell>
-              <TableCell>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleViewShipment(batch)} title="Shipment Details">
-                    <Truck className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => fetchBatchDetails(batch.id) || setDetailsModalOpen(true)} title="Details">
-                    <List className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleViewQRCode(batch)} title="QR Code">
-                    <QrCode className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleEditClick(batch)} title="Edit">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDeleteClick(batch)} title="Delete">
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </Button>
-        {/* Batch Details Modal */}
-        <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Batch Details</DialogTitle>
-            </DialogHeader>
-            {batchDetails ? (
-              <div className="space-y-2">
-                <div><strong>Batch Number:</strong> {batchDetails.batchnumber}</div>
-                <div><strong>Drug Name:</strong> {batchDetails.drugname}</div>
-                <div><strong>Quantity:</strong> {batchDetails.quantity}</div>
-                <div><strong>Manufacture Date:</strong> {batchDetails.manufacturedate}</div>
-                <div><strong>Expiry Date:</strong> {batchDetails.expirydate}</div>
-                <div><strong>Manufacturing Facility:</strong> {batchDetails.manufacturingfacility}</div>
-                <div><strong>Distributor Company:</strong> {batchDetails.distributorcompany || 'N/A'}</div>
-                <div><strong>Quality Officer:</strong> {batchDetails.quality_officer || 'N/A'}</div>
-                <div><strong>Shipment Number:</strong> {batchDetails.shipment_number || 'N/A'}</div>
-                {/* QR Code removed from Batch Details modal as requested */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-orange-100 to-red-100 text-gray-700">
+                      <th className="px-4 py-2 font-semibold text-left">Batch Number</th>
+                      <th className="px-4 py-2 font-semibold text-left">Drug Name</th>
+                      <th className="px-4 py-2 font-semibold text-left">Quantity</th>
+                      <th className="px-4 py-2 font-semibold text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredBatches.map((batch, idx) => (
+                      <tr key={`${batch.id}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-orange-50" + " hover:bg-orange-100 transition-colors duration-150"}>
+                        <td className="px-4 py-2 rounded-l-xl">{batch.batchnumber}</td>
+                        <td className="px-4 py-2">{batch.drugname}</td>
+                        <td className="px-4 py-2">{batch.quantity}</td>
+                        <td className="px-4 py-2 rounded-r-xl">
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="rounded-lg shadow-sm" onClick={() => handleViewShipment(batch)} title="Shipment Details">
+                              <Truck className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg shadow-sm" onClick={() => fetchBatchDetails(batch.id) || setDetailsModalOpen(true)} title="Details">
+                              <List className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg shadow-sm" onClick={() => handleViewQRCode(batch)} title="QR Code">
+                              <QrCode className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg shadow-sm" onClick={() => handleEditClick(batch)} title="Edit">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg shadow-sm" onClick={() => handleDeleteClick(batch)} title="Delete">
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="text-center py-8 text-red-600 font-semibold">
-                No details found for this batch.<br />
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
   )}
           </CardContent>
         </Card>

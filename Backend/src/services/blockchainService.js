@@ -1,5 +1,3 @@
-
-
 // Fetch blockchain status for a specific entity type and entity ID
 export async function getBlockchainEntityStatus(entityType, entityId) {
   try {
@@ -58,6 +56,14 @@ const prescriptionManagementArtifactPath = path.resolve(
   __dirname,
   '../../../Smart Contracts/artifacts/contracts/PrescriptionManagement.sol/PrescriptionManagement.json'
 );
+const drugSupplyChainArtifactPath = path.resolve(
+  __dirname,
+  '../../../Smart Contracts/artifacts/contracts/DrugSupplyChain.sol/DrugSupplyChain.json'
+);
+const regulatorOversightArtifactPath = path.resolve(
+  __dirname,
+  '../../../Smart Contracts/artifacts/contracts/RegulatorOversight.sol/RegulatorOversight.json'
+);
 
 if (!fs.existsSync(userManagementArtifactPath)) {
   console.error('❌ UserManagement contract JSON not found at:', userManagementArtifactPath);
@@ -67,33 +73,94 @@ if (!fs.existsSync(prescriptionManagementArtifactPath)) {
   console.error('❌ PrescriptionManagement contract JSON not found at:', prescriptionManagementArtifactPath);
   process.exit(1);
 }
+if (!fs.existsSync(drugSupplyChainArtifactPath)) {
+  console.error('❌ DrugSupplyChain contract JSON not found at:', drugSupplyChainArtifactPath);
+  process.exit(1);
+}
+if (!fs.existsSync(regulatorOversightArtifactPath)) {
+  console.error('❌ RegulatorOversight contract JSON not found at:', regulatorOversightArtifactPath);
+  process.exit(1);
+}
 
 const userManagementArtifact = JSON.parse(fs.readFileSync(userManagementArtifactPath, 'utf8'));
 const prescriptionManagementArtifact = JSON.parse(fs.readFileSync(prescriptionManagementArtifactPath, 'utf8'));
+const drugSupplyChainArtifact = JSON.parse(fs.readFileSync(drugSupplyChainArtifactPath, 'utf8'));
+const regulatorOversightArtifact = JSON.parse(fs.readFileSync(regulatorOversightArtifactPath, 'utf8'));
 
 // ---- Blockchain Setup ----
-let provider, wallet, contract, prescriptionContract;
+let provider, adminWallet, contract, prescriptionContract, drugSupplyChainContract, regulatorContract;
+
+function isValidEnv() {
+  return process.env.BLOCKCHAIN_RPC_URL && process.env.ADMIN_PRIVATE_KEY &&
+    process.env.USER_MANAGEMENT_ADDRESS && process.env.PRESCRIPTION_MANAGEMENT_ADDRESS &&
+    process.env.DRUG_SUPPLY_CHAIN_ADDRESS && process.env.REGULATOR_OVERSIGHT_ADDRESS;
+}
 
 try {
+  if (!isValidEnv()) {
+    throw new Error('Missing required blockchain environment variables.');
+  }
   provider = new ethers.providers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
-  wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
+  if (!process.env.ADMIN_PRIVATE_KEY) {
+    throw new Error('ADMIN_PRIVATE_KEY is missing from environment');
+  }
+  try {
+    adminWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
+    if (!adminWallet.address) throw new Error('Admin wallet address is undefined after initialization');
+    console.log('🔑 Admin wallet address:', adminWallet.address);
+  } catch (walletError) {
+    console.error('❌ Failed to initialize admin wallet:', walletError);
+    throw walletError;
+  }
   contract = new ethers.Contract(
     process.env.USER_MANAGEMENT_ADDRESS,
     userManagementArtifact.abi,
-    wallet
+    adminWallet
   );
   prescriptionContract = new ethers.Contract(
     process.env.PRESCRIPTION_MANAGEMENT_ADDRESS,
     prescriptionManagementArtifact.abi,
-    wallet
+    adminWallet
+  );
+  drugSupplyChainContract = new ethers.Contract(
+    process.env.DRUG_SUPPLY_CHAIN_ADDRESS,
+    drugSupplyChainArtifact.abi,
+    adminWallet
+  );
+  regulatorContract = new ethers.Contract(
+    process.env.REGULATOR_OVERSIGHT_ADDRESS,
+    regulatorOversightArtifact.abi,
+    adminWallet
   );
   console.log('✅ Blockchain service initialized');
-  console.log('🔑 Admin wallet address:', wallet.address);
 } catch (error) {
-  console.error('❌ Blockchain setup failed:', error.message);
-  process.exit(1);
+  console.error('❌ Blockchain setup failed:', error);
+  provider = null;
+  adminWallet = null;
+  contract = null;
+  prescriptionContract = null;
+  drugSupplyChainContract = null;
+  regulatorContract = null;
 }
 // ===========================
+// ===========================
+// DRUG SUPPLY CHAIN CONTRACT FUNCTIONS
+// Pharmacist requests batch on-chain
+export async function requestBatchOnChain({ requestId, batchId, pharmacist, quantityRequested, drugId, distributorId }) {
+  if (!drugSupplyChainContract) throw new Error('DrugSupplyChain contract not initialized');
+  // pharmacist must be the sender, so connect with pharmacist wallet if needed
+  // For now, use adminWallet for demo; in production, use pharmacist's wallet
+  const tx = await drugSupplyChainContract.requestBatch(
+    requestId,
+    batchId,
+    pharmacist,
+    quantityRequested,
+    drugId,
+    distributorId
+  );
+  const receipt = await tx.wait();
+  return receipt;
+}
 // PRESCRIPTION MANAGEMENT CONTRACT FUNCTIONS
 // Log prescription view on-chain
 export async function viewPrescriptionOnChain(prescriptionId) {
@@ -103,25 +170,44 @@ export async function viewPrescriptionOnChain(prescriptionId) {
 
 // Create a prescription on-chain
 export async function createPrescriptionOnChain(params) {
+    console.log('[DEBUG] createPrescriptionOnChain called with params:', JSON.stringify(params, null, 2));
   // Validate required string parameters
   const requiredStrings = [
     'prescriptionCode', 'drugName', 'strength', 'form',
     'instructions', 'dosageAmount', 'dosageUnit', 'frequency'
   ];
   for (const key of requiredStrings) {
-    if (!params[key] || typeof params[key] !== 'string' || !params[key].trim()) {
-      throw new Error(`Missing or invalid parameter: ${key}`);
+    if (
+      typeof params[key] === 'undefined' ||
+      params[key] === null ||
+      (typeof params[key] === 'string' && params[key].toString().trim() === '')
+    ) {
+        console.error(`[DEBUG] Validation failed: Missing or invalid string param: ${key}. Value:`, params[key]);
+      throw new Error(`Missing or invalid string param: ${key}`);
+    }
+    // Special case for dosageAmount: allow string numbers
+    if (key === 'dosageAmount') {
+      const val = params[key];
+        console.log('[DEBUG] Validating dosageAmount:', val, 'Type:', typeof val);
+        // Accept any non-empty string that represents a positive number (integer or decimal, including leading zeros)
+        if (typeof val !== 'string' || val.trim() === '' || !/^\d*\.?\d+$/.test(val.trim()) || Number(val) <= 0) {
+          console.error(`[DEBUG] dosageAmount validation failed. Value: ${val}, Type: ${typeof val}`);
+          throw new Error(`Missing or invalid string param: ${key} (value: ${val})`);
+        }
     }
   }
-  // Validate numbers
-  const requiredNumbers = ['databaseId', 'patient', 'drugId', 'quantity', 'duration', 'validUntil'];
-  for (const key of requiredNumbers) {
-    if (typeof params[key] === 'undefined' || params[key] === null) {
-      throw new Error(`Missing or invalid parameter: ${key}`);
+    // Validate numbers
+    const requiredNumbers = ['databaseId', 'patient', 'drugId', 'quantity', 'duration', 'validUntil'];
+    for (const key of requiredNumbers) {
+      if (typeof params[key] === 'undefined' || params[key] === null) {
+        throw new Error(`Missing or invalid number param: ${key}`);
+      }
     }
-  }
-  return await prescriptionContract.createPrescription(
+
+  // Call contract with validated addresses and parameters
+  const tx = await prescriptionContract.createPrescription(
     params.databaseId,
+    params.doctor,
     params.patient,
     params.prescriptionCode,
     params.drugId,
@@ -136,21 +222,46 @@ export async function createPrescriptionOnChain(params) {
     params.duration,
     params.validUntil
   );
+  const receipt = await tx.wait();
+
+    // Mapping file write is now handled in doctorService.js only
+    return tx;
 }
 
 // Dispense a prescription
 export async function dispensePrescriptionOnChain(prescriptionId) {
-  return await prescriptionContract.dispensePrescription(prescriptionId);
+  // Send transaction and wait for receipt
+  const tx = await prescriptionContract.dispensePrescription(prescriptionId);
+  const receipt = await tx.wait();
+  return receipt;
 }
 
 // Mark prescription as invalid
-export async function markPrescriptionInvalidOnChain(prescriptionId, reason) {
-  return await prescriptionContract.markPrescriptionInvalid(prescriptionId, reason);
-}
 
 // Delete a prescription
 export async function deletePrescriptionOnChain(prescriptionId) {
   return await prescriptionContract.deletePrescription(prescriptionId);
+}
+
+// Update prescription fields (doctor edit)
+export async function updatePrescriptionOnChain(prescriptionId, {
+  dosageAmount,
+  dosageUnit,
+  frequency,
+  duration,
+  instructions
+}) {
+  if (!prescriptionId && prescriptionId !== 0) {
+    throw new Error('Missing prescriptionId for on-chain update');
+  }
+  return await prescriptionContract.updatePrescription(
+    prescriptionId,
+    dosageAmount?.toString() || "",
+    dosageUnit?.toString() || "",
+    frequency || "",
+    Number(duration) || 0,
+    instructions || ""
+  );
 }
 
 // Update blockchain transaction hash
@@ -534,32 +645,54 @@ export async function syncUserOnChain(user) {
     // Update status on-chain (approve or change status)
     let statusTx, statusReceipt;
     try {
-      // Use updateUserStatusOnChain for status changes
-      const statusEnum = statusToEnum(user.status || 'active');
-      // Only update status if not 'pending' (enum 0)
-      if (statusEnum !== 0) {
-        const statusResult = await updateUserStatusOnChain(user.wallet_address, statusEnum);
-        console.log(`✅ User ${user.full_name} status updated on-chain (${user.status})`);
-        if (statusResult && statusResult.blockNumber) {
-          console.log(`📌 Status block number: ${statusResult.blockNumber}`);
+      // Get current on-chain status
+      const onChainStatusEnum = await getUserStatusFromChain(user.wallet_address);
+      const desiredStatusEnum = statusToEnum(user.status || 'active');
+      console.log(`[syncUserOnChain] On-chain status: ${onChainStatusEnum}, Desired status: ${desiredStatusEnum}`);
+
+      let is_synced = onChainStatusEnum === desiredStatusEnum;
+      // Always call contract function if DB and on-chain status differ
+      console.log(`[syncUserOnChain] Transition attempt: DB status=${user.status}, On-chain status enum=${onChainStatusEnum}, Desired status enum=${desiredStatusEnum}`);
+      if (!is_synced) {
+        switch (desiredStatusEnum) {
+          case 1:
+            statusTx = await contract.approveUser(user.wallet_address);
+            statusReceipt = await statusTx.wait();
+            is_synced = true;
+            console.log(`✅ User ${user.full_name} set to active on-chain`);
+            break;
+          case 2:
+            statusTx = await contract.suspendUser(user.wallet_address);
+            statusReceipt = await statusTx.wait();
+            is_synced = true;
+            console.log(`✅ User ${user.full_name} set to suspended on-chain`);
+            break;
+          case 3:
+            statusTx = await contract.deactivateUser(user.wallet_address);
+            statusReceipt = await statusTx.wait();
+            is_synced = true;
+            console.log(`✅ User ${user.full_name} set to inactive on-chain`);
+            break;
+          default:
+            console.error(`[syncUserOnChain] Unsupported desired status enum: ${desiredStatusEnum}`);
+            statusReceipt = { transactionHash: null, blockNumber: null };
         }
-        statusReceipt = { transactionHash: statusResult.transactionHash, blockNumber: statusResult.blockNumber };
       } else {
-        console.log(`ℹ️ Skipping status update to 'pending' for user ${user.wallet_address}`);
+        console.log(`[syncUserOnChain] No status update needed: DB and on-chain status match.`);
         statusReceipt = { transactionHash: null, blockNumber: null };
       }
+      return {
+        success: true,
+        transactionHash: transactionHash || null,
+        blockNumber: blockNumber || null,
+        statusTxHash: statusReceipt.transactionHash,
+        statusBlockNumber: statusReceipt.blockNumber,
+        is_synced
+      };
     } catch (statusErr) {
       console.error(`❌ Failed to update user status on-chain:`, statusErr.message || statusErr);
       return { success: false, error: statusErr };
     }
-
-    return {
-      success: true,
-      transactionHash: transactionHash || null,
-      blockNumber: blockNumber || null,
-      statusTxHash: statusReceipt.transactionHash,
-      statusBlockNumber: statusReceipt.blockNumber
-    };
   } catch (err) {
     console.error("❌ syncUserOnChain failed:", err.message || err);
     return { success: false, error: err };
@@ -585,20 +718,26 @@ export const statusToEnum = (status) => {
 // Get blockchain health status
 export const getBlockchainHealth = async () => {
   try {
-    const isConnected = await verifyContractConnection();
+    if (!adminWallet || !provider) {
+      return {
+        connected: false,
+        error: 'wallet is not defined',
+      };
+    }
+    const isConnected = !!adminWallet.address;
     const network = await provider.getNetwork();
-    const balance = await wallet.getBalance();
+    const balance = await adminWallet.getBalance();
     const gasPrice = await provider.getGasPrice();
-    
     return {
       connected: isConnected,
-      network: network.name,
+      network: network.name || network.chainId,
       chainId: network.chainId,
-      adminAddress: wallet.address,
+      adminAddress: adminWallet.address,
       adminBalance: ethers.utils.formatEther(balance),
       gasPrice: ethers.utils.formatUnits(gasPrice, 'gwei'),
       contractAddress: process.env.USER_MANAGEMENT_ADDRESS,
-      blockNumber: await provider.getBlockNumber()
+      blockNumber: await provider.getBlockNumber(),
+      error: null
     };
   } catch (error) {
     return {
@@ -840,20 +979,25 @@ const saveEventToDatabase = async (eventType, data) => {
   try {
     // Import query from database config
     const { query } = await import('../config/database.js');
+    // Require transactionHash and blockNumber
+    const transactionHash = data.transactionHash || data.txHash;
+    const blockNumber = data.blockNumber;
+    if (!transactionHash || !blockNumber) {
+      throw new Error('Missing transactionHash or blockNumber for blockchain event log');
+    }
     // Prepare event log fields
     const eventname = eventType;
-    const contractname = 'UserManagement';
+    const contractname = data.contractName || 'UserManagement';
     const entityid = data.userAddress || data.roleId || data.entityId || null;
     const entitytype = data.roleId ? 'user' : (data.entityType || null);
-    const transactionhash = data.transactionHash || data.txHash || null;
     const timestamp = data.timestamp || new Date().toISOString();
     const details = JSON.stringify(data);
     // Insert into blockchaineventlog
-    const sql = `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, timestamp, details, processed)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
-    const params = [eventname, contractname, entityid, entitytype, transactionhash, timestamp, details, false];
+    const sql = `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, blocknumber, timestamp, details, processed)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
+    const params = [eventname, contractname, entityid, entitytype, transactionHash, blockNumber, timestamp, details, false];
     await query(sql, params);
-    console.log(`💾 Blockchain event saved:`, { eventname, entityid, transactionhash, timestamp });
+    console.log(`💾 Blockchain event saved:`, { eventname, entityid, transactionHash, blockNumber, timestamp });
     return { success: true };
   } catch (error) {
     console.error('❌ Failed to save event to database:', error);
@@ -936,18 +1080,18 @@ export const getPastEvents = async (eventName, fromBlock = 0, toBlock = 'latest'
 
 // Add these functions to your blockchainService.js file
 
-// Get all blockchain events
-export async function getBlockchainEvents(limit = 100) {
+// Get all blockchain events from blockchaineventlog
+export async function getAllBlockchainEvents(limit = 100) {
   try {
     const result = await pool.query(`
-      SELECT * FROM blockchaineventlog 
-      ORDER BY timestamp DESC 
+      SELECT * FROM blockchaineventlog
+      ORDER BY timestamp DESC
       LIMIT $1
     `, [limit]);
     return result.rows;
   } catch (error) {
     console.error('❌ Failed to fetch blockchain events:', error.message);
-    throw new Error('Failed to fetch blockchain events');
+    return [];
   }
 }
 
@@ -1050,19 +1194,26 @@ export async function getUserBlockchainStatus(userId) {
       case '3': statusString = 'inactive'; break;
       default: statusString = 'unknown';
     }
-    // Consider synced if status and role match DB (optional: fetch DB user for comparison)
-    // For now, treat 'active' as synced
-    if (statusString === 'active') {
-      blockchain_badge = 'synced';
+    // Fetch DB status for comparison
+    let dbStatus = null;
+    try {
+      const dbRes = await pool.query('SELECT status FROM users WHERE id = $1', [userId]);
+      if (dbRes.rows.length > 0) dbStatus = dbRes.rows[0].status;
+    } catch (err) {
+      dbStatus = null;
     }
+    // Consider synced only if both DB and on-chain status are 'active'
+    const is_synced = dbStatus === 'active' && statusString === 'active';
+    blockchain_badge = is_synced ? 'synced' : 'not_synced';
     return {
-      synced: statusString === 'active',
+      is_synced,
       status: statusString,
       blockchain_badge,
       walletAddress,
       onChainRole: onChainUser.role,
       onChainStatus: userStatus,
-      message: 'User successfully synced with blockchain'
+      dbStatus,
+      message: is_synced ? 'User successfully synced with blockchain' : 'User not synced with blockchain'
     };
   } catch (error) {
     console.error('❌ Failed to get user blockchain status:', error.message);
@@ -1074,4 +1225,188 @@ export async function getUserBlockchainStatus(userId) {
   }
 }
 
-// Auto-initialize when this module is imported
+// DrugSupplyChain: create batch
+export async function createBatchOnChain(params) {
+  // Validate required parameters for DrugSupplyChain.createBatch
+  const requiredFields = [
+    'databaseId', 'batchNumber', 'drugId', 'drugName', 'manufacturerId', 'quantity',
+    'manufactureDate', 'expiryDate', 'storageTemperature', 'manufacturingFacility',
+    'qualityControlOfficerId', 'dateChecked', 'shipmentNumber', 'distributorCompanyId',
+    'distributorFacilityId', 'qrCodePath'
+  ];
+  for (const key of requiredFields) {
+    if (typeof params[key] === 'undefined' || params[key] === null || (typeof params[key] === 'string' && !params[key].toString().trim())) {
+      throw new Error(`Missing or invalid param: ${key}`);
+    }
+  }
+  // Call contract
+  const tx = await drugSupplyChainContract.createDrugBatch(
+    params.databaseId,
+    params.manufacturerId,
+    params.drugId,
+    params.batchNumber,
+    params.manufactureDate,
+    params.expiryDate,
+    params.quantity,
+    params.storageTemperature,
+    params.manufacturingFacility,
+    params.qualityControlOfficerId,
+    params.dateChecked
+  );
+  return await tx.wait();
+}
+
+// DrugSupplyChain: transfer batch
+export async function transferBatchOnChain({ batchId, distributorAddress, pharmacistAddress, shipmentNumber, status, shipmentId }) {
+  // Validate required parameters for DrugSupplyChain.createShipment
+  if (typeof batchId === 'undefined' || batchId === null || batchId.toString().trim() === '') throw new Error('Missing or invalid param: batchId');
+  console.log(`[DEBUG] transferBatchOnChain: distributorAddress initial:`, distributorAddress);
+  if (!distributorAddress || typeof distributorAddress !== 'string' || distributorAddress.trim() === '') {
+    console.error(`[ERROR] transferBatchOnChain: distributorAddress missing or empty:`, distributorAddress);
+    throw new Error('Missing or invalid param: distributorAddress');
+  }
+  console.log(`[DEBUG] transferBatchOnChain: distributorAddress after empty check:`, distributorAddress);
+  if (!/^0x[a-fA-F0-9]{40}$/.test(distributorAddress.trim())) {
+    console.error(`[ERROR] transferBatchOnChain: distributorAddress format invalid:`, distributorAddress);
+    throw new Error(`Invalid distributorAddress format: ${distributorAddress}`);
+  }
+  console.log(`[DEBUG] transferBatchOnChain: distributorAddress after format check:`, distributorAddress);
+  if (typeof shipmentNumber === 'undefined' || shipmentNumber === null || shipmentNumber.toString().trim() === '') throw new Error('Missing or invalid param: shipmentNumber');
+  if (typeof status === 'undefined' || status === null || status.toString().trim() === '') throw new Error('Missing or invalid param: status');
+  // Call contract
+  console.log(`[DEBUG] transferBatchOnChain: Calling contract with distributorAddress:`, distributorAddress);
+  const tx = await drugSupplyChainContract.createShipment(
+    shipmentId,
+    batchId,
+    distributorAddress,
+    pharmacistAddress,
+    status || "in_transit"
+  );
+  const receipt = await tx.wait();
+  console.log(`[DEBUG] transferBatchOnChain: Contract call completed for distributorAddress:`, distributorAddress);
+
+  // Extract contractShipmentId from event logs
+  let contractShipmentId = null;
+  if (receipt && receipt.events) {
+    const event = receipt.events.find(e => e.event === "ShipmentCreated");
+    if (event && event.args && event.args.shipmentId) {
+      contractShipmentId = event.args.shipmentId.toString();
+    }
+  }
+
+  // Save mapping: databaseShipmentId <-> contractShipmentId
+  if (shipmentId && contractShipmentId) {
+    const path = await import('path');
+    const fs = await import('fs');
+    const mapPath = path.resolve(process.cwd(), 'shipment_id.json');
+    let mappings = [];
+    if (fs.existsSync(mapPath)) {
+      try {
+        const fileContent = fs.readFileSync(mapPath, 'utf8');
+        mappings = fileContent ? JSON.parse(fileContent) : [];
+      } catch (err) { mappings = []; }
+    }
+    mappings.push({ databaseShipmentId: shipmentId, contractShipmentId });
+    fs.writeFileSync(mapPath, JSON.stringify(mappings, null, 2));
+  }
+  return contractShipmentId;
+}
+
+// Mark counterfeit batches
+export async function markBatchAsCounterfeitOnChain(batchId, reason) {
+  if (!batchId && batchId !== 0) {
+    throw new Error('batchId is required to flag counterfeit batch');
+  }
+  if (!reason || !reason.trim()) {
+    throw new Error('reason is required to flag counterfeit batch');
+  }
+  const tx = await drugSupplyChainContract.markBatchAsCounterfeit(batchId, reason);
+  return await tx.wait();
+}
+
+// Update shipment status
+export async function updateShipmentStatusOnChain(shipmentId, newStatus) {
+  if (typeof shipmentId === 'undefined' || shipmentId === null) {
+    throw new Error('shipmentId is required to update shipment status');
+  }
+  if (!newStatus || !newStatus.trim()) {
+    throw new Error('newStatus is required to update shipment status');
+  }
+  // Always use admin wallet for contract call
+  const tx = await drugSupplyChainContract.updateDistributorShipmentStatus(
+    shipmentId,
+    newStatus
+  );
+  return await tx.wait();
+}
+
+export const getDrugSupplyChainContract = () => drugSupplyChainContract;
+
+// ===========================
+// REGULATOR OVERSIGHT CONTRACT FUNCTIONS
+// ===========================
+
+export async function logAuditOnChain({ description, entityType, entityId }) {
+  if (!description || !description.trim()) {
+    throw new Error('description is required to log audit on-chain');
+  }
+  if (!entityType || !entityType.trim()) {
+    throw new Error('entityType is required to log audit on-chain');
+  }
+  const tx = await regulatorContract.logAudit(
+    description,
+    entityType.toUpperCase(),
+    Number(entityId) || 0
+  );
+  return await tx.wait();
+}
+
+export async function flagEntityOnChain({ entityType, entityId, userAddress, reason }) {
+  if (!entityType || !entityType.trim()) {
+    throw new Error('entityType is required to flag entity');
+  }
+  if (!reason || !reason.trim()) {
+    throw new Error('reason is required to flag entity');
+  }
+  const tx = await regulatorContract.flagEntity(
+    entityType.toUpperCase(),
+    Number(entityId) || 0,
+    userAddress || ethers.constants.AddressZero,
+    reason
+  );
+  return await tx.wait();
+}
+
+export async function getFlaggedEntitiesOnChain(entityType) {
+  if (!entityType || !entityType.trim()) {
+    throw new Error('entityType is required to fetch flagged entities');
+  }
+  const normalized = entityType.toLowerCase();
+  switch (normalized) {
+    case 'batch':
+      return await regulatorContract.getFlaggedBatches();
+    case 'prescription':
+      return await regulatorContract.getFlaggedPrescriptions();
+    case 'user':
+      return await regulatorContract.getFlaggedUsers();
+    default:
+      throw new Error(`Unsupported entity type: ${entityType}`);
+  }
+}
+
+// RegulatorOversight: suspend user on-chain
+export async function suspendUserOnChain(walletAddress, reason) {
+  if (!walletAddress) throw new Error('walletAddress required');
+  if (!reason) reason = 'Suspended by regulator';
+  const tx = await regulatorContract.suspendUser(walletAddress, reason);
+  return await tx.wait();
+}
+
+// RegulatorOversight: lift user suspension on-chain
+export async function liftUserSuspensionOnChain(walletAddress) {
+  if (!walletAddress) throw new Error('walletAddress required');
+  const tx = await regulatorContract.liftUserSuspension(walletAddress);
+  return await tx.wait();
+}
+
+export const getRegulatorContract = () => regulatorContract;

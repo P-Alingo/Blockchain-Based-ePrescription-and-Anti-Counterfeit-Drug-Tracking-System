@@ -205,9 +205,8 @@ contract UserManagement {
     function suspendUser(address wallet) public userExists(wallet) {
         // Only admin or regulator can suspend
         require(admins[msg.sender] || hasRole(msg.sender, REGULATOR), "Not authorized");
-        require(users[wallet].status == Status.Active, "Can only suspend active users");
         require(!admins[wallet], "Cannot suspend an admin");
-
+        // Allow suspension from any status except admin
         users[wallet].status = Status.Suspended;
         emit UserStatusUpdated(wallet, Status.Suspended);
     }
@@ -215,6 +214,7 @@ contract UserManagement {
     function deactivateUser(address wallet) public onlyAdmin userExists(wallet) {
         require(wallet != msg.sender, "Cannot deactivate self");
         require(!admins[wallet], "Cannot deactivate admin");
+        // Allow deactivation from any status except admin/self
         users[wallet].status = Status.Inactive;
         emit UserStatusUpdated(wallet, Status.Inactive);
     }

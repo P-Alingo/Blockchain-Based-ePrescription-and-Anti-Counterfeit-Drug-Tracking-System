@@ -58,7 +58,7 @@ const RegisterBatch = () => {
   drugid: "",
   manufacturedate: "",
   expirydate: "",
-  quantity: "",
+  total_batch_quantity: "",
   storagetemperature: "",
   manufacturingfacility: "",
   distributorcompanyid: "",
@@ -71,7 +71,6 @@ const RegisterBatch = () => {
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
     { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: true},
     { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
-    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
     { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
     { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
   ];
@@ -275,7 +274,7 @@ const RegisterBatch = () => {
   try {
     const payload: any = {
       drugid: formData.drugid,
-      quantity: formData.quantity ? Number(formData.quantity) : null,
+      total_batch_quantity: formData.total_batch_quantity ? Number(formData.total_batch_quantity) : null,
       manufacturedate: formData.manufacturedate,
       expirydate: formData.expirydate,
       storagetemperature: formData.storagetemperature || null,
@@ -312,7 +311,7 @@ const RegisterBatch = () => {
       drugid: "",
       manufacturedate: "",
       expirydate: "",
-      quantity: "",
+      total_batch_quantity: "",
       storagetemperature: "",
       manufacturingfacility: "",
       distributorcompanyid: "",
@@ -380,11 +379,11 @@ const RegisterBatch = () => {
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="quantity">Quantity</Label>
+                      <Label htmlFor="total_batch_quantity">Quantity</Label>
                       <Input 
-                        id="quantity" 
+                        id="total_batch_quantity" 
                         type="number" 
-                        value={formData.quantity} 
+                        value={formData.total_batch_quantity} 
                         onChange={handleChange} 
                         placeholder="Enter quantity"
                       />
@@ -520,7 +519,7 @@ const RegisterBatch = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="font-semibold">Batch Number: <span className="text-green-700">{confirmation.batchnumber}</span></div>
-                <div className="font-semibold">Blockchain Tx: <span className="text-green-700">{confirmation.blockchaintx}</span></div>
+                  {/* Blockchain Tx removed as per requirements */}
                 <div className="font-semibold">QR Code:</div>
                 {confirmation.qrCodeImageUrl ? (
                   <img src={confirmation.qrCodeImageUrl} alt="Batch QR Code" className="w-32 h-32 border" />

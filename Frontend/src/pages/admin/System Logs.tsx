@@ -341,9 +341,9 @@ const SystemLogs = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
+                    <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-lg text-sm">
                       <thead>
-                        <tr className="border-b bg-gray-50">
+                        <tr className="bg-gradient-to-r from-pink-200 to-red-200 text-gray-700">
                           <th className="px-4 py-3 text-left font-semibold">Event Name</th>
                           <th className="px-4 py-3 text-left font-semibold">Contract Name</th>
                           <th className="px-4 py-3 text-left font-semibold">Transaction Hash</th>
@@ -371,16 +371,16 @@ const SystemLogs = () => {
                               return matchesSearch && matchesDate;
                             })
                             .map((log, idx) => (
-                              <tr key={idx}>
-                                <td className="px-4 py-3">{log.eventname || '-'}</td>
+                              <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-pink-50" + " hover:bg-pink-100 transition-colors duration-150"}>
+                                <td className="px-4 py-3 rounded-l-xl">{log.eventname || '-'}</td>
                                 <td className="px-4 py-3">{log.contractname || '-'}</td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3 font-mono text-xs">
                                   {log.transactionhash ? (
                                     <a href={`https://etherscan.io/tx/${log.transactionhash}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{log.transactionhash}</a>
                                   ) : '-'}
                                 </td>
                                 <td className="px-4 py-3">{log.status || 'processed'}</td>
-                                <td className="px-4 py-3">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
+                                <td className="px-4 py-3 rounded-r-xl">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
                               </tr>
                             ))
                         )}

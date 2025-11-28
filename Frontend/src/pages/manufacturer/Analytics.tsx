@@ -103,7 +103,6 @@ export default function ManufacturerAnalytics() {
        { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: false },
        { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
        { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
-       { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
        { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: true},
        { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
    ];

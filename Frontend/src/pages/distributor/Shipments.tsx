@@ -65,7 +65,6 @@ const useShipments = () => {
     { icon: List, label: 'Dashboard', path: '/distributor/dashboard', active: false },
     { icon: Truck, label: 'Shipments', path: '/distributor/shipments', active: false },
     { icon: Package, label: 'Requests', path: '/distributor/requests', active: true },
-    { icon: RotateCcw, label: 'Blockchain', path: '/distributor/blockchain', active: false },
     { icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
   ];
 
@@ -110,26 +109,8 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getProgressValue = (shipment: Shipment) => {
-  switch (shipment.status.toLowerCase()) {
-    case 'pending': return 25;
-    case 'in transit': return 65;
-    case 'delivered': return 100;
-    default: return 10;
-  }
-};
-
 const formatDate = (dateString: string) => !dateString ? 'N/A' :
   new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-
-const getShipmentTypeBadge = (shipment: Shipment) => {
-  switch (shipment.shipment_type) {
-    case 'assigned': return <Badge className="bg-blue-100 text-blue-800">Assigned</Badge>;
-    case 'destination': return <Badge className="bg-orange-100 text-orange-800">Destination</Badge>;
-    case 'assigned_no_destination': return <Badge className="bg-purple-100 text-purple-800">No Destination</Badge>;
-    default: return <Badge>Other</Badge>;
-  }
-};
 
 const isUnassigned = (shipment: Shipment) => !shipment.distributor_id;
 const isOverdue = (shipment: Shipment) => {
@@ -181,7 +162,6 @@ const DistributorShipments = () => {
     { icon: List, label: 'Dashboard', path: '/distributor/dashboard', active: false },
     { icon: Truck, label: 'Shipments', path: '/distributor/shipments', active: true },
     { icon: Package, label: 'Requests', path: '/distributor/requests', active: false },
-    { icon: RotateCcw, label: 'Blockchain', path: '/distributor/blockchain', active: false },
     { icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
   ];
   const userName = "Distributor";
@@ -208,7 +188,6 @@ const DistributorShipments = () => {
   const [createFields, setCreateFields] = useState({
     batch_id: '',
     drug_id: '',
-    shipment_type: 'in_transit',
     departure_date: '',
     route: '',
     vehicle_number: '',
@@ -235,11 +214,11 @@ const DistributorShipments = () => {
   // Render
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName={userName} userEmail={userEmail}>
-      <div className="space-y-8">
+      <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
         {/* Tabs + Filters */}
         <div className="flex gap-4 items-center mb-4">
-          <Button variant="default">All Shipments</Button>
-          <select className="border rounded px-2 py-1 ml-4" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <Button variant="default" className="rounded-lg shadow-sm">All Shipments</Button>
+          <select className="border rounded-lg px-2 py-1 ml-4 shadow-sm" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
             <option value="in transit">In Transit</option>
@@ -249,15 +228,15 @@ const DistributorShipments = () => {
           <input
             type="text"
             placeholder="Search by shipment # or drug"
-            className="border px-2 py-1 rounded-md ml-2"
+            className="border px-2 py-1 rounded-lg ml-2 shadow-sm"
             value={search} onChange={e => setSearch(e.target.value)}
           />
-          <Button onClick={refresh} variant="outline" className="ml-2"><RefreshCw className="h-4 w-4 mr-1" />Refresh</Button>
+          <Button onClick={refresh} variant="outline" className="ml-2 rounded-lg shadow-sm"><RefreshCw className="h-4 w-4 mr-1" />Refresh</Button>
         </div>
         {/* Stats and Table Wrapper */}
         <div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <Card><CardContent className="p-4">
+            <Card className="rounded-xl shadow-lg border border-gray-200"><CardContent className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <p className="text-sm text-muted-foreground">Total</p>
@@ -266,7 +245,7 @@ const DistributorShipments = () => {
                 <Truck className="h-8 w-8 text-blue-600"/>
               </div>
             </CardContent></Card>
-            <Card><CardContent className="p-4">
+            <Card className="rounded-xl shadow-lg border border-gray-200"><CardContent className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <p className="text-sm text-muted-foreground">Assigned</p>
@@ -275,7 +254,7 @@ const DistributorShipments = () => {
                 <Package className="h-8 w-8 text-green-600"/>
               </div>
             </CardContent></Card>
-            <Card><CardContent className="p-4">
+            <Card className="rounded-xl shadow-lg border border-gray-200"><CardContent className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <p className="text-sm text-muted-foreground">Unassigned</p>
@@ -284,7 +263,7 @@ const DistributorShipments = () => {
                 <Clock className="h-8 w-8 text-orange-600"/>
               </div>
             </CardContent></Card>
-            <Card><CardContent className="p-4">
+            <Card className="rounded-xl shadow-lg border border-gray-200"><CardContent className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <p className="text-sm text-muted-foreground">In Transit</p>
@@ -295,7 +274,7 @@ const DistributorShipments = () => {
             </CardContent></Card>
           </div>
           {/* Shipments Table */}
-          <Card>
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardHeader>
               <CardTitle>Shipments</CardTitle>
               <CardDescription>{filteredShipments.length ? "Click a shipment to update or claim it" : "No shipments found"}</CardDescription>
@@ -307,70 +286,66 @@ const DistributorShipments = () => {
                   <p className="text-muted-foreground">No shipments found</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Shipment #</TableHead>
-                      <TableHead>Drug & Batch</TableHead>
-                      <TableHead>Manufacturer Company</TableHead>
-                      <TableHead>Pharmacy Facility</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead>Departure</TableHead>
-                      <TableHead>Arrival</TableHead>
-                      <TableHead>Condition/Notes</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredShipments.map(s => (
-                      <TableRow key={s.id} className={`cursor-pointer hover:bg-gray-50 transition-colors ${isUnassigned(s) ? "bg-orange-50 hover:bg-orange-100" : ""} ${isOverdue(s) ? "bg-red-50" : ""}`}>
-                        <TableCell>{s.shipmentnumber || `SH-${s.id}`}{isUnassigned(s) && <Badge className="bg-yellow-100 text-yellow-800 text-xs ml-1">Unclaimed</Badge>}</TableCell>
-                        <TableCell>
-                          <p className="font-medium">{s.drugname}</p>
-                          <p className="text-xs text-muted-foreground">Batch: {s.batchnumber}</p>
-                        </TableCell>
-                        <TableCell>{s.manufacturer_company_name}</TableCell>
-                        <TableCell>{s.pharmacy_facility_name || s.destination_facility}</TableCell>
-                        <TableCell>{s.quantity_shipped}</TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusColor(s.status)}>{getStatusDisplay(s.status)}</Badge>
-                          {isOverdue(s) && <Badge className="bg-red-100 text-red-800 ml-1">Overdue</Badge>}
-                        </TableCell>
-                        <TableCell>{getShipmentTypeBadge(s)}</TableCell>
-                        <TableCell>
-                          <Progress value={getProgressValue(s)} className="h-2" />
-                        </TableCell>
-                        <TableCell>{formatDate(s.departure_date)}</TableCell>
-                        <TableCell>{formatDate(s.arrival_date || '')}</TableCell>
-                        <TableCell>{s.received_condition || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => openModal(s)}>
-                              <Edit className="h-4 w-4 mr-1" />Update
-                            </Button>
-                            <Button size="sm" variant="secondary" onClick={() => {
-                              setQrCodePath(s.qrcode_path || null);
-                              setQrModalOpen(true);
-                            }} disabled={!s.qrcode_path}>
-                              QR Code
-                            </Button>
-                            {isUnassigned(s) && (
-                              <Button size="sm" variant="default" onClick={e => handleClaimShipment(s.id, e)}>
-                                Claim
+                <div className="overflow-x-auto">
+                  <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-purple-100 to-pink-100 text-gray-700">
+                        <th className="px-4 py-2 font-semibold text-left">Shipment #</th>
+                        <th className="px-4 py-2 font-semibold text-left">Drug & Batch</th>
+                        <th className="px-4 py-2 font-semibold text-left">Manufacturer Company</th>
+                        <th className="px-4 py-2 font-semibold text-left">Pharmacy Facility</th>
+                        <th className="px-4 py-2 font-semibold text-left">Qty</th>
+                        <th className="px-4 py-2 font-semibold text-left">Status</th>
+                        <th className="px-4 py-2 font-semibold text-left">Departure</th>
+                        <th className="px-4 py-2 font-semibold text-left">Arrival</th>
+                        <th className="px-4 py-2 font-semibold text-left">Condition/Notes</th>
+                        <th className="px-4 py-2 font-semibold text-left">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredShipments.map((s, idx) => (
+                        <tr key={s.id} className={`cursor-pointer ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-purple-50 transition-colors duration-150 ${isUnassigned(s) ? "bg-orange-50 hover:bg-orange-100" : ""} ${isOverdue(s) ? "bg-red-50" : ""}`}>
+                          <td className="px-4 py-2 rounded-l-xl">{s.shipmentnumber || `SH-${s.id}`}{isUnassigned(s) && <Badge className="bg-yellow-100 text-yellow-800 text-xs ml-1">Unclaimed</Badge>}</td>
+                          <td className="px-4 py-2">
+                            <p className="font-medium">{s.drugname}</p>
+                            <p className="text-xs text-muted-foreground">Batch: {s.batchnumber}</p>
+                          </td>
+                          <td className="px-4 py-2">{s.manufacturer_company_name}</td>
+                          <td className="px-4 py-2">{s.pharmacy_facility_name || s.destination_facility}</td>
+                          <td className="px-4 py-2">{s.quantity_shipped}</td>
+                          <td className="px-4 py-2">
+                            <Badge variant={getStatusColor(s.status)}>{getStatusDisplay(s.status)}</Badge>
+                            {isOverdue(s) && <Badge className="bg-red-100 text-red-800 ml-1">Overdue</Badge>}
+                          </td>
+                          <td className="px-4 py-2">{formatDate(s.departure_date)}</td>
+                          <td className="px-4 py-2">{formatDate(s.arrival_date || '')}</td>
+                          <td className="px-4 py-2">{s.received_condition || '-'}</td>
+                          <td className="px-4 py-2 rounded-r-xl">
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" className="rounded-lg shadow-sm" onClick={() => openModal(s)}>
+                                <Edit className="h-4 w-4 mr-1" />Update
                               </Button>
-                            )}
-                            <Button size="sm" variant="destructive" onClick={() => handleCancelShipment(s.id)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                              <Button size="sm" variant="secondary" className="rounded-lg shadow-sm" onClick={() => {
+                                setQrCodePath(s.qrcode_path || null);
+                                setQrModalOpen(true);
+                              }} disabled={!s.qrcode_path}>
+                                QR Code
+                              </Button>
+                              {isUnassigned(s) && (
+                                <Button size="sm" variant="default" className="rounded-lg shadow-sm" onClick={e => handleClaimShipment(s.id, e)}>
+                                  Claim
+                                </Button>
+                              )}
+                              <Button size="sm" variant="destructive" className="rounded-lg shadow-sm" onClick={() => handleCancelShipment(s.id)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -378,13 +353,13 @@ const DistributorShipments = () => {
         {/* Update Modal */}
         {modalOpen && selectedShipment && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg relative">
+            <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg relative border border-gray-200">
               <button className="absolute top-2 right-2 text-gray-500" onClick={closeModal}>&times;</button>
               <h2 className="text-xl font-bold mb-4">Update Shipment</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Status</label>
-                  <select className="border rounded px-2 py-1 w-full" value={updateFields.status} onChange={e => setUpdateFields(f => ({ ...f, status: e.target.value }))}>
+                  <select className="border rounded-lg px-2 py-1 w-full shadow-sm" value={updateFields.status} onChange={e => setUpdateFields(f => ({ ...f, status: e.target.value }))}>
                     <option value="delivered">Delivered</option>
                     <option value="failed">Failed</option>
                     <option value="flagged">Flagged</option>
@@ -392,13 +367,13 @@ const DistributorShipments = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Arrival Date</label>
-                  <input type="date" className="border rounded px-2 py-1 w-full" value={updateFields.arrival_date} onChange={e => setUpdateFields(f => ({ ...f, arrival_date: e.target.value }))} />
+                  <input type="date" className="border rounded-lg px-2 py-1 w-full shadow-sm" value={updateFields.arrival_date} onChange={e => setUpdateFields(f => ({ ...f, arrival_date: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Received Condition / Notes</label>
-                  <textarea className="border rounded px-2 py-1 w-full" value={updateFields.received_condition} onChange={e => setUpdateFields(f => ({ ...f, received_condition: e.target.value }))} />
+                  <textarea className="border rounded-lg px-2 py-1 w-full shadow-sm" value={updateFields.received_condition} onChange={e => setUpdateFields(f => ({ ...f, received_condition: e.target.value }))} />
                 </div>
-                <Button className="w-full mt-4" onClick={handleUpdateShipment}>Update Shipment</Button>
+                <Button className="w-full mt-4 rounded-lg shadow-sm" onClick={handleUpdateShipment}>Update Shipment</Button>
               </div>
             </div>
           </div>
@@ -406,11 +381,11 @@ const DistributorShipments = () => {
         {/* QR Code Modal */}
         {qrModalOpen && qrCodePath && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative border border-gray-200">
               <button className="absolute top-2 right-2 text-gray-500" onClick={() => setQrModalOpen(false)}>&times;</button>
               <h2 className="text-xl font-bold mb-4">Shipment QR Code</h2>
               <div className="flex flex-col items-center gap-4">
-                <img src={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} alt="Shipment QR Code" className="w-64 h-64 object-contain border" />
+                <img src={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} alt="Shipment QR Code" className="w-64 h-64 object-contain border rounded-lg" />
                 <a href={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Open Full Size</a>
               </div>
             </div>

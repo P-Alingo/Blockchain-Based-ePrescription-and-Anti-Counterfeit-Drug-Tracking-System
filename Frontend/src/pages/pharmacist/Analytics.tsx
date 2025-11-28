@@ -13,7 +13,6 @@ import { Activity, Search, Filter, Download, Calendar, User, Pill, Package, Shie
 const PharmacistAnalytics = () => {
 const sidebarItems = [
   { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
-  { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
   { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: true },
   { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
   { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },

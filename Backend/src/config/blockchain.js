@@ -1,66 +1,54 @@
 // src/config/blockchain.js
+
 import dotenv from "dotenv";
 import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { logger } from "./logger.js";
-
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ---- Path to UserManagement contract artifact ----
-const artifactPath = path.resolve(
-  __dirname,
-  "../../../Smart Contracts/artifacts/contracts/UserManagement.sol/UserManagement.json"
+const contractsConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../contracts.json"), "utf8"));
+const provider = new ethers.providers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
+let wallet = null;
+console.log('Loaded ADMIN_PRIVATE_KEY:', process.env.ADMIN_PRIVATE_KEY);
+if (!process.env.ADMIN_PRIVATE_KEY) {
+  console.error("❌ ADMIN_PRIVATE_KEY is missing from environment variables. Blockchain wallet will not be initialized.");
+} else {
+  wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
+}
+
+function loadABI(abiPath) {
+  return JSON.parse(fs.readFileSync(abiPath, "utf8"));
+}
+
+const userManagementContract = new ethers.Contract(
+  contractsConfig.USER_MANAGEMENT_ADDRESS,
+  loadABI(contractsConfig.ABI_PATHS.BACKEND.USER_MANAGEMENT),
+  wallet
 );
 
-// Load ABI
-let userManagementABI;
-try {
-  if (!fs.existsSync(artifactPath)) {
-    throw new Error(`Contract artifact not found at: ${artifactPath}`);
-  }
-  const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
-  userManagementABI = artifact.abi;
-  console.log("✅ UserManagement ABI loaded");
-} catch (err) {
-  console.error("❌ Failed to load UserManagement ABI:", err.message);
-  process.exit(1);
-}
+const regulatorOversightContract = new ethers.Contract(
+  contractsConfig.REGULATOR_OVERSIGHT_ADDRESS,
+  loadABI(contractsConfig.ABI_PATHS.BACKEND.REGULATOR_OVERSIGHT),
+  wallet
+);
 
-// ---- Provider & Wallet ----
-let provider, wallet;
-try {
-  provider = new ethers.providers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
-  wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
-  console.log("✅ Provider & wallet initialized");
-} catch (err) {
-  console.error("❌ Failed to initialize provider/wallet:", err.message);
-  process.exit(1);
-}
+const drugSupplyChainContract = new ethers.Contract(
+  contractsConfig.DRUG_SUPPLY_CHAIN_ADDRESS,
+  loadABI(contractsConfig.ABI_PATHS.BACKEND.DRUG_SUPPLY_CHAIN),
+  wallet
+);
 
-// ---- UserManagement Contract ----
-let userManagementContract;
-try {
-  if (!process.env.USER_MANAGEMENT_ADDRESS) {
-    throw new Error("USER_MANAGEMENT_ADDRESS not set in .env");
-  }
-  userManagementContract = new ethers.Contract(
-    process.env.USER_MANAGEMENT_ADDRESS,
-    userManagementABI,
-    wallet
-  );
-  console.log("✅ UserManagement contract initialized at", process.env.USER_MANAGEMENT_ADDRESS);
-  logger.info("UserManagement contract connected to blockchain");
-} catch (err) {
-  console.error("❌ Failed to initialize UserManagement contract:", err.message);
-  process.exit(1);
-}
+const prescriptionManagementContract = new ethers.Contract(
+  contractsConfig.PRESCRIPTION_MANAGEMENT_ADDRESS,
+  loadABI(contractsConfig.ABI_PATHS.BACKEND.PRESCRIPTION_MANAGEMENT),
+  wallet
+);
 
-// ---- Optional: verify connection ----
+// Optional: verify connection
 async function verifyConnection() {
   try {
     const network = await provider.getNetwork();
@@ -73,14 +61,14 @@ async function verifyConnection() {
     return false;
   }
 }
-
-// Verify connection immediately
 verifyConnection();
 
-// ---- Export ----
 export {
   provider,
   wallet,
   userManagementContract,
+  regulatorOversightContract,
+  drugSupplyChainContract,
+  prescriptionManagementContract,
   verifyConnection
 };

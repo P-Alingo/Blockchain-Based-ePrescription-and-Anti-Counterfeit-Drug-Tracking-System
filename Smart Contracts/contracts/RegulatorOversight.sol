@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: MIT
+// IMPORTANT: To allow the admin wallet to perform RegulatorOversight contract calls,
+// ensure the admin wallet address is registered as a regulator in the UserManagement contract.
+// You can do this by calling the UserManagement contract's addRegulator or setRole function from the admin wallet.
+// Example (using ethers.js):
+//   await userManagementContract.addRegulator(adminWalletAddress);
+// Or, if using a role system:
+//   await userManagementContract.setRole(adminWalletAddress, 'REGULATOR');
+// This will allow the admin wallet to pass the onlyRegulator/onlyRegulatorOrAdmin checks.
 pragma solidity ^0.8.19;
 
 import "./UserManagement.sol";
 
 contract RegulatorOversight {
+    address public admin;
     // ---------------- Structs ----------------
     struct AuditLog {
         uint auditId;
@@ -122,7 +131,7 @@ contract RegulatorOversight {
 
     // ---------------- Modifiers ----------------
     modifier onlyRegulator() {
-        require(userManagement.isRegulator(msg.sender), "Only regulators can perform this action");
+        require(userManagement.isRegulator(msg.sender) || msg.sender == admin, "Only regulators or admin can perform this action");
         _;
     }
 
@@ -133,7 +142,7 @@ contract RegulatorOversight {
 
     modifier onlyRegulatorOrAdmin() {
         require(
-            userManagement.isRegulator(msg.sender) || userManagement.isAdmin(msg.sender),
+            userManagement.isRegulator(msg.sender) || userManagement.isAdmin(msg.sender) || msg.sender == admin,
             "Only regulator or admin can perform this action"
         );
         _;
@@ -145,16 +154,16 @@ contract RegulatorOversight {
     }
 
     // ---------------- Constructor ----------------
-    constructor(address _userManagementAddress) {
-        userManagement = UserManagement(_userManagementAddress);
-        
-        // Initialize suspension policy
-        suspensionPolicy = SuspensionPolicy({
-            maxFlagsBeforeSuspension: 3, // Suspend after 3 flags
-            suspensionDuration: 30 days, // 30-day suspension
-            autoSuspensionEnabled: true
-        });
-    }
+        constructor(address _userManagementAddress, address _admin) {
+            userManagement = UserManagement(_userManagementAddress);
+            admin = _admin;
+            // Initialize suspension policy
+            suspensionPolicy = SuspensionPolicy({
+                maxFlagsBeforeSuspension: 3, // Suspend after 3 flags
+                suspensionDuration: 30 days, // 30-day suspension
+                autoSuspensionEnabled: true
+            });
+        }
 
     // ---------------- Core Functions ----------------
 

@@ -1,9 +1,36 @@
+// Pharmacist updates shipment status (completed/flagged)
+export async function updatePharmacistShipmentStatus(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const pharmacist = await pharmacistService.getPharmacistByUserId(userId);
+    if (!pharmacist) return res.status(404).json({ message: "Pharmacist not found" });
+    const { shipmentId, status } = req.body;
+    const result = await pharmacistService.updatePharmacistShipmentStatus(pharmacist.id, shipmentId, status, { ...req.body, userId });
+    res.json(result);
+  } catch (error) { next(error); }
+}
+// Edit a batch request (quantity, etc.) and sync to chain
+export async function updatePharmacistRequest(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const requestId = req.params.id;
+    const updateData = req.body;
+    const result = await pharmacistService.updatePharmacistRequest(userId, requestId, updateData);
+    res.json(result);
+  } catch (error) { next(error); }
+}
 // Expire a prescription
 export async function expirePharmacistPrescription(req, res, next) {
   try {
     const prescriptionId = req.params.id;
-    const result = await pharmacistService.expirePharmacistPrescription(prescriptionId);
-    res.json(result);
+    // Get contractPrescriptionId from mapping
+    const contractPrescriptionId = await pharmacistService.getContractPrescriptionId(prescriptionId);
+    // Expire on-chain first
+    const { expireOldPrescriptionsOnChain } = await import("../services/blockchainService.js");
+    await expireOldPrescriptionsOnChain(contractPrescriptionId);
+    // If successful, update DB status to match contract
+    await pharmacistService.updatePrescriptionStatus(prescriptionId, "expired");
+    res.json({ success: true });
   } catch (error) { next(error); }
 }
 // Pharmacist confirms delivery of shipment
@@ -38,6 +65,7 @@ export async function getPharmacistPrescriptions(req, res, next) {
   } catch (error) { next(error); }
 }
 import * as pharmacistService from "../services/pharmacistService.js";
+import { dispensePrescriptionOnChain, transferBatchOnChain } from "../services/blockchainService.js";
 
 export async function getPharmacistProfile(req, res, next) {
   try {
@@ -77,10 +105,10 @@ export async function verifyPrescription(req, res, next) {
 export async function dispenseDrug(req, res, next) {
   try {
     const userId = req.user.id;
-    const { prescriptionId, patientId, drugId, quantity } = req.body;
-    // Pass userId as pharmacistId to service
-    const result = await pharmacistService.dispenseDrug(prescriptionId, userId, drugId, quantity);
-    res.json(result);
+    const { prescriptionId, drugId, quantity } = req.body;
+    // Call pharmacistService.dispenseDrug to handle full dispense logic
+    const result = await pharmacistService.dispenseDrug(prescriptionId, userId, drugId, Number(quantity));
+    res.json({ success: true, prescription: result });
   } catch (error) { next(error); }
 }
 
@@ -133,8 +161,16 @@ export async function createPharmacistRequest(req, res, next) {
     const userId = req.user.id;
     const data = req.body;
     const result = await pharmacistService.createPharmacistRequest(userId, data);
+    if (result && result.success === false) {
+      // If pharmacistService returns a failure, send error response
+      return res.status(400).json({ error: result.message || "Failed to create batch request" });
+    }
     res.json(result);
-  } catch (error) { next(error); }
+  } catch (error) {
+    // Log error and send error response
+    console.error("Error in createPharmacistRequest:", error);
+    res.status(500).json({ error: error.message || "Internal server error" });
+  }
 }
 
 export async function getPharmacistDistributors(req, res, next) {

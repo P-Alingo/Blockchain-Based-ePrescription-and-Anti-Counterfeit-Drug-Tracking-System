@@ -1,152 +1,129 @@
-# Blockchain-Based ePrescription and Anti-Counterfeit Drug Tracking System for Kenya
-
-A blockchain-based proof-of-concept system that integrates electronic prescriptions (ePrescriptions) with drug authentication and supply chain traceability to combat counterfeit drugs in Kenya.
-
-## Description
-
-Counterfeit drugs pose a significant threat to public health in Kenya, particularly in rural and informal markets with weak regulatory oversight. Current prescription and distribution systems are fragmented, paper-based, and vulnerable to tampering.
-
-This project proposes a *blockchain-powered ePrescription and drug tracking system* built on Ethereum smart contracts. The system records transactions from doctors to patients, ensures drugs are registered and traceable across the supply chain, and allows pharmacists and patients to verify authenticity through QR codes.
-
-While this is a *proof of concept* and does not integrate with Kenya’s national health infrastructure or real patient data, it demonstrates the potential of blockchain to improve transparency, accountability, and trust in medicine distribution.
-
----
-
-## Getting Started
-
-### Dependencies
-
-#### Blockchain Development Tools
-- *Hardhat* – Smart contract development, testing, and deployment.
-- *Solidity + OpenZeppelin* – Smart contract language and secure, audited libraries.
-- *Ethereum Testnets (Goerli, Sepolia) + Infura* – For contract deployment and network connectivity.
-
-#### Backend & Database
-- *Node.js (>= v18)* – JavaScript runtime for backend services and Hardhat scripts.
-- *Express.js* – RESTful APIs for off-chain logic.
-- *PostgreSQL* (Planned) – Future database for structured off-chain data (user details, prescription metadata, logs).
-- *IPFS* (Planned) – Future distributed storage for large/unstructured files (scanned prescriptions, certificates).
-
-#### Frontend
-- *React.js + Vite* – dApp frontend framework.
-- *TailwindCSS* – Responsive design system.
-- *qrcode.react* – QR code generation for prescriptions and drug packages.
-
-#### Wallet & Authentication
-- *MetaMask* – Browser wallet for user login, authentication, and signing blockchain transactions.
-
----
-
-## Installing
-
-Clone this repository:
-bash
 git clone https://github.com/P-Alingo/Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System.git
-cd Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System
-
-### Install blockchain dependencies
-```bash
-cd Smart Contracts
-npm install --save-dev hardhat
-```
-### Install backend dependencies
-```bash
-cd Backend
-npm install
-```
-
-### Install frontend dependencies 
-```bash
-cd Frontend
-npm install
-cd ..
-```
-
----
-## Executing Program
-
-Follow these steps in order.
-
-1. **Compile smart contracts**
-```bash
-npx hardhat compile
-```
-
-2. **Run a local blockchain (Hardhat node)**
-Open a terminal and run:
-```bash
-npx hardhat node
-```
-Leave this running while you develop and deploy to localhost.
-
-3. **Deploy contracts to local network**
-In a new terminal:
-```bash
-npx hardhat run scripts/deploy.js --network localhost
-```
-This will deploy your smart contracts to the Hardhat local node and print contract addresses.
-
-Run this command to test the contracts
-```bash
-npx hardhat test --network localhost
-```
-
-4. **Start backend server**
-In the project root:
-```bash
-npm start
-# or
-node src/index.js
-```
-
-5. **Start frontend (React + Vite)**
-```bash
-cd client
-npm run dev
-```
-
----
-
-## Frontend Access
-The frontend will be accessible at:  
-[http://localhost:8080](http://localhost:8080)
-
----
-
-## Help
-
-### Common issues and quick fixes:
-
-*Hardhat node not running*
 bash
-npx hardhat node
-
-
-*MetaMask not connecting*
-- Add the Hardhat network to MetaMask (RPC URL: http://127.0.0.1:8545).
-- Import one of the local Hardhat accounts (printed when running npx hardhat node).
-- If transactions fail, check the account balance on the local node.
-
-*General troubleshooting*
-- Check server logs (backend) for stack traces.
-- Re-run Hardhat deploy script after compiling if contracts changed.
-- Clear browser cache and reset MetaMask between network changes.
-
-For more commands:
 bash
-npx hardhat help
 
+# Blockchain-Based ePrescription & Anti-Counterfeit Drug Tracking System
 
-## Authors
-- Petra Alingo – petrahaalingo@gmail.com
+A full-stack system for secure e-prescription management and anti-counterfeit drug tracking using blockchain smart contracts. The project includes a Node.js/Express backend, React frontend, and Solidity smart contracts for end-to-end traceability and role-based access.
 
----
+## Project Overview
 
-## Version History
-- 0.1 – Initial proof-of-concept release  
-  - Smart contract structure and conceptual framework established
+This system provides:
 
----
+- Secure e-prescription creation, editing, and deletion
+- Drug batch tracking and anti-counterfeit verification
+- Role-based access for doctors, pharmacists, distributors, regulators, and admins
+- On-chain event logging and audit trails
 
-## License
-This project is licensed under the MIT License – see the LICENSE.md file for details.
+## Technologies
+
+- **Backend:** Node.js, Express, PostgreSQL, Ethers.js
+- **Frontend:** React, TypeScript, Tailwind CSS
+- **Smart Contracts:** Solidity (Hardhat)
+- **Blockchain:** Local Ethereum (Hardhat)
+- **Other:** IPFS, JWT, Brevo (email)
+
+## Requirements
+
+- Node.js 18+
+- npm
+- PostgreSQL
+- Hardhat (for smart contract development)
+- 8GB+ RAM recommended
+
+## Local Setup
+
+1. **Clone the repository**
+  ```sh
+  git clone https://github.com/P-Alingo/Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System.git
+  cd Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System
+  ```
+
+2. **Install dependencies**
+  ```sh
+  cd Backend
+  npm install
+  cd ../Frontend
+  npm install
+  ```
+
+3. **Configure environment variables**
+  - Copy `.env.example` to `.env` in each main folder and fill in required values (see documentation for details).
+
+4. **Start PostgreSQL and run migrations**
+  - Ensure your database is running and accessible.
+
+5. **Deploy smart contracts**
+  ```sh
+  cd "Smart Contracts"
+  npx hardhat compile
+  npx hardhat run scripts/deploy.js --network localhost
+  ```
+
+6. **Start backend server**
+  ```sh
+  cd ../Backend
+  npm start
+  ```
+
+7. **Start frontend**
+  ```sh
+  cd ../Frontend
+  npm run dev
+  ```
+
+## Project Structure
+
+```
+Blockchain-Based-ePrescription-and-Anti-Counterfeit-Drug-Tracking-System/
+├── Backend/                        # Node.js/Express backend API
+│   ├── src/                        # Source code (controllers, services, routes, utils)
+│   │   ├── config/                 # Configuration files (blockchain, database, logger, etc.)
+│   │   ├── controllers/            # API controllers
+│   │   ├── middleware/             # Express middleware
+│   │   ├── routes/                 # API route definitions
+│   │   ├── services/               # Business logic/services
+│   │   ├── utils/                  # Utility functions
+│   │   └── ...
+│   ├── tests/                      # Backend unit/integration tests
+│   ├── uploads/                    # QR code and file uploads
+│   ├── package.json                # Backend dependencies
+│   └── .env                        # Backend environment variables
+├── Frontend/                       # React + TypeScript frontend
+│   ├── src/                        # Frontend source code
+│   │   ├── assets/                 # Static assets (images, etc.)
+│   │   ├── components/             # Reusable React components
+│   │   ├── hooks/                  # Custom React hooks
+│   │   ├── lib/                    # Utility libraries
+│   │   ├── pages/                  # Page components
+│   │   └── ...
+│   ├── public/                     # Public static files
+│   ├── package.json                # Frontend dependencies
+│   ├── tailwind.config.ts          # Tailwind CSS config
+│   ├── vite.config.ts              # Vite build config
+│   └── .env                        # Frontend environment variables
+├── Smart Contracts/                # Solidity contracts (Hardhat)
+│   ├── contracts/                  # Solidity source files
+│   ├── scripts/                    # Deployment and utility scripts
+│   ├── test/                       # Smart contract tests
+│   ├── artifacts/                  # Compiled contract artifacts
+│   ├── hardhat.config.js           # Hardhat configuration
+│   └── package.json                # Smart contract dependencies
+├── README.md                       # Project documentation
+└── ...                             # Other files and folders
+```
+
+## Troubleshooting
+
+- **Port conflicts:** Make sure ports 4000 (backend) and 8080 (frontend) are free.
+- **Contract address mismatch:** Ensure backend `.env` and `contracts.json` use the same deployed contract addresses.
+- **Database errors:** Check PostgreSQL connection and credentials.
+- **Blockchain errors:** Restart Hardhat node and redeploy contracts if needed.
+
+## Contributing
+
+We welcome contributions! See `CONTRIBUTING.md` for code style, testing, and PR guidelines.
+
+## For Reviewers
+
+See `RUN_INSTRUCTIONS.md` for a quick start. All source code, documentation, and setup scripts are included.

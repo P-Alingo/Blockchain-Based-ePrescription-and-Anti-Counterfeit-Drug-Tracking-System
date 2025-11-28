@@ -5,6 +5,11 @@
         "internalType": "address",
         "name": "_userManagementAddress",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_admin",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
@@ -249,6 +254,19 @@
     ],
     "name": "UserSuspensionLifted",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "admin",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [],

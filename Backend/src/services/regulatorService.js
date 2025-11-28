@@ -238,48 +238,104 @@ export async function createComplianceAction(data) {
 }
 
 // Blockchain verification
-export async function getBlockchainVerification(filters) {
-  // Filter by eventname, contractname, entityid, entitytype, transactionhash
-  let whereClause = '';
-  const params = [];
-  if (filters.eventname) {
-    params.push(filters.eventname);
-    whereClause += params.length === 1 ? 'WHERE eventname = $1' : ' AND eventname = $' + params.length;
-  }
-  if (filters.contractname) {
-    params.push(filters.contractname);
-    whereClause += whereClause ? ' AND contractname = $' + params.length : 'WHERE contractname = $' + params.length;
-  }
-  if (filters.entityid) {
-    params.push(filters.entityid);
-    whereClause += whereClause ? ' AND entityid = $' + params.length : 'WHERE entityid = $' + params.length;
-  }
-  if (filters.entitytype) {
-    params.push(filters.entitytype);
-    whereClause += whereClause ? ' AND entitytype = $' + params.length : 'WHERE entitytype = $' + params.length;
-  }
-  if (filters.transactionhash) {
-    params.push(filters.transactionhash);
-    whereClause += whereClause ? ' AND transactionhash = $' + params.length : 'WHERE transactionhash = $' + params.length;
-  }
-  const sql = `SELECT * FROM blockchaineventlog ${whereClause} ORDER BY timestamp DESC LIMIT 50`;
-  return (await query(sql, params)).rows;
-}
+export async function getBlockchainVerification() {
+  const serializeFlagged = (entries = []) =>
+    entries.map(item => ({
+      flagId: item.flagId?.toString?.() ?? item.flagId,
+      entityId: item.entityId?.toString?.() ?? item.entityId,
+      entityType: item.entityType,
+      reason: item.reason,
+      flaggedBy: item.flaggedBy,
+      userAddress: item.userAddress,
+      status: item.status,
+      timestamp: item.timestamp
+        ? new Date(Number(item.timestamp.toString()) * 1000).toISOString()
+        : new Date().toISOString()
+    }));
 
-// Analytics
-export async function getAnalyticsData(query) {
-  // Aggregate compliance/fraud stats for charts
-  const traceabilitySuccess = (await query('SELECT AVG(traceabilitySuccessRate) AS avg FROM analytics')).rows[0].avg || 0;
-  const shipmentDelays = (await query('SELECT AVG(shipmentDelayRate) AS avg FROM analytics')).rows[0].avg || 0;
-  const fraudDetection = (await query('SELECT AVG(fraudDetectionRate) AS avg FROM analytics')).rows[0].avg || 0;
+  let flaggedBatches = [];
+  let flaggedPrescriptions = [];
+  let flaggedUsers = [];
+  try {
+    const [batches, prescriptions, users] = await Promise.all([
+      getFlaggedEntitiesOnChain("batch"),
+      getFlaggedEntitiesOnChain("prescription"),
+      getFlaggedEntitiesOnChain("user")
+    ]);
+    flaggedBatches = serializeFlagged(batches);
+    flaggedPrescriptions = serializeFlagged(prescriptions);
+    flaggedUsers = serializeFlagged(users);
+  } catch (error) {
+    console.error('❌ Failed to fetch flagged entities from chain, falling back to database:', error);
+    const fallbackRows = await query(
+      `SELECT * FROM blockchaineventlog WHERE eventname ILIKE '%flag%' ORDER BY timestamp DESC LIMIT 50`
+    );
+    flaggedBatches = fallbackRows.rows.filter(row => row.entitytype === 'batch');
+    flaggedPrescriptions = fallbackRows.rows.filter(row => row.entitytype === 'prescription');
+    flaggedUsers = fallbackRows.rows.filter(row => row.entitytype === 'user');
+  }
 
-  // Recent reports for export
-  const recentReports = (await query('SELECT * FROM reports ORDER BY createdAt DESC LIMIT 5')).rows;
+  const auditLogs = await getAuditLog();
 
   return {
-    traceabilitySuccess,
-    shipmentDelays,
-    fraudDetection,
-    recentReports
+    flaggedBatches,
+    flaggedPrescriptions,
+    userViolations: flaggedUsers.map(user => ({
+      username: user.userAddress || user.flaggedBy,
+      violation: user.reason || 'Flagged by regulator',
+      action: user.status,
+      timestamp: user.timestamp
+    })),
+    auditLogs
   };
+}
+
+// RegulatorOversight contract integration
+import { logAuditOnChain, getFlaggedEntitiesOnChain } from "./blockchainService.js";
+
+// Log audit event on-chain
+export async function logRegulatorAuditEvent(auditData) {
+  try {
+    // Get regulator/admin wallet address and private key from auditData or session
+    const { description, entityType, entityId } = auditData;
+    // Always use admin wallet credentials from environment
+    const { ethers } = require("ethers");
+    const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
+    const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY;
+    if (!adminPrivateKey) throw new Error("Missing ADMIN_PRIVATE_KEY in environment");
+    const wallet = new ethers.Wallet(adminPrivateKey, provider);
+    const RegulatorOversightABI = require("../../../Smart Contracts/DrugSupplyChainABI.json"); // Replace with correct ABI path
+    const contract = new ethers.Contract(
+      process.env.REGULATOR_OVERSIGHT_ADDRESS,
+      RegulatorOversightABI,
+      wallet
+    );
+
+    // Call logAudit on-chain
+    const tx = await contract.logAudit(description, entityType, entityId);
+    await tx.wait();
+    return { success: true, txHash: tx.hash };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Get flagged batches from blockchain
+export async function getFlaggedBatchesOnChain() {
+  try {
+    return await getFlaggedEntitiesOnChain("batch");
+  } catch (error) {
+    console.error("❌ Failed to fetch flagged batches from blockchain:", error);
+    return [];
+  }
+}
+
+// Get flagged prescriptions from blockchain
+export async function getFlaggedPrescriptionsOnChain() {
+  try {
+    return await getFlaggedEntitiesOnChain("prescription");
+  } catch (error) {
+    console.error("❌ Failed to fetch flagged prescriptions from blockchain:", error);
+    return [];
+  }
 }

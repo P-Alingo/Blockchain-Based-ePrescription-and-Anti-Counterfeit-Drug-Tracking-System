@@ -20,7 +20,6 @@ api.interceptors.request.use(config => {
 
 const sidebarItems = [
   { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
-  { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
   { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
   { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: true },
   { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
@@ -58,27 +57,42 @@ export default function InventoryAndRequests() {
       toast.error("Enter a valid quantity");
       return;
     }
+    let toastId = toast.loading("Updating request on-chain...");
     try {
-      await api.put(`/api/pharmacist/requests/${editRequest.id}`, { quantity: Number(editQuantity) });
-      toast.success("Request updated");
+      const response = await api.put(`/api/pharmacist/requests/${editRequest.id}`, { quantity_requested: Number(editQuantity) });
+      toast.success("Request updated and synced to blockchain", { id: toastId });
+      // Optionally show transaction info if available
+      if (response.data && typeof response.data === 'object' && 'txHash' in response.data) {
+        toast.info(`Tx Hash: ${(response.data as any).txHash}`);
+      }
       closeEditRequestModal();
       // Refresh requests
       const res = await api.get("/api/pharmacist/requests");
       setRequests(res.data as Request[]);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to update request");
+      const errorMsg = err.response?.data?.message || "Failed to update request";
+      if (errorMsg.includes("does not exist on-chain")) {
+        toast.error("This batch request does not exist on the blockchain and cannot be edited. It may have been deleted or never created on-chain.", { id: toastId });
+      } else {
+        toast.error(errorMsg, { id: toastId });
+      }
     }
   };
 
   const handleDeleteRequest = async (id: string) => {
+    let toastId = toast.loading("Deleting request on-chain...");
     try {
-      await api.delete(`/api/pharmacist/requests/${id}`);
-      toast.success("Request deleted");
+      const response = await api.delete(`/api/pharmacist/requests/${id}`);
+      toast.success("Request deleted and removed from blockchain", { id: toastId });
+      // Optionally show transaction info if available
+      if (response.data && typeof response.data === 'object' && 'txHash' in response.data) {
+        toast.info(`Tx Hash: ${(response.data as any).txHash}`);
+      }
       // Refresh requests
       const res = await api.get("/api/pharmacist/requests");
       setRequests(res.data as Request[]);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to delete request");
+      toast.error(err.response?.data?.message || "Failed to delete request", { id: toastId });
     }
   };
   // Inventory State (single declaration)
@@ -258,16 +272,16 @@ export default function InventoryAndRequests() {
   return (
     <>
       <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
-        <div className="space-y-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Inventory & Requests</h1>
+        <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">Inventory & Requests</h1>
           {/* Add general refresh button above Tabs */}
           <div className="flex justify-end mb-4">
-            <Button variant="outline" size="sm" onClick={handleManualRefresh}>Refresh Page</Button>
+            <Button variant="outline" size="sm" className="shadow-md" onClick={handleManualRefresh}>Refresh Page</Button>
           </div>
           <Tabs defaultValue="inventory" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="inventory">Inventory</TabsTrigger>
-              <TabsTrigger value="requests">Requests</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 bg-white rounded-xl shadow-sm mb-4">
+              <TabsTrigger value="inventory" className="px-6 py-2 rounded-lg font-semibold transition-all duration-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg hover:bg-purple-100 hover:text-purple-700">Inventory</TabsTrigger>
+              <TabsTrigger value="requests" className="px-6 py-2 rounded-lg font-semibold transition-all duration-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg hover:bg-pink-100 hover:text-pink-700">Requests</TabsTrigger>
             </TabsList>
             <TabsContent value="inventory" className="space-y-4">
               {/* Inventory Section */}
@@ -370,7 +384,7 @@ export default function InventoryAndRequests() {
                   </div>
                 </div>
               )}
-              <Card>
+              <Card className="rounded-xl shadow-lg border border-gray-200">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
@@ -383,142 +397,153 @@ export default function InventoryAndRequests() {
                         placeholder="Search medications..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-64"
+                        className="w-64 border-gray-300 rounded-lg shadow-sm"
                       />
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <tr>
-                        <th>Medication</th>
-                        <th>Batch Number</th>
-                        <th>Formulation</th>
-                        <th>Dosage</th>
-                        <th>Batches Available</th>
-                        <th>Total Batch Quantity</th>
-                        <th>Available Quantity</th>
-                        <th>Expiry Date</th>
-                        <th>Distributor</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </TableHeader>
-                    <TableBody>
-                      {inventoryData.filter((item: any) => item.drug_name.toLowerCase().includes(searchTerm.toLowerCase())).map((drug: any) => {
-                        // If drug has real batches (not just placeholder), show only those
-                        const realBatches = (drug.batches || []).filter((batch: any) => batch.batch_id);
-                        if (realBatches.length > 0) {
-                          return realBatches.map((batch: any, idx: number) => (
-                            <TableRow key={drug.drug_id + '-' + (batch.batch_id || idx)}>
-                              <TableCell>{drug.drug_name}</TableCell>
-                              <TableCell>{batch.batch_number}</TableCell>
-                              <TableCell>{drug.formulation}</TableCell>
-                              <TableCell>{drug.dosageunit}</TableCell>
-                              <TableCell>1</TableCell>
-                              <TableCell>{batch.batch_quantity}</TableCell>
-                              <TableCell>{batch.available_quantity}</TableCell>
-                              <TableCell>{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '-'}</TableCell>
-                              <TableCell>{batch.distributorcompanyid || '-'}</TableCell>
-                              <TableCell>In Stock</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>Request</Button>
-                              </TableCell>
-                            </TableRow>
-                          ));
-                        } else if (drug.availableDrugBatches && drug.availableDrugBatches.length > 0) {
-                          // Show available batches from drugbatch for drugs with no inventory
-                          return drug.availableDrugBatches.map((batch: any, idx: number) => (
-                            <TableRow key={drug.drug_id + '-available-' + (batch.batch_id || idx)}>
-                              <TableCell>{drug.drug_name}</TableCell>
-                              <TableCell>{batch.batch_number}</TableCell>
-                              <TableCell>{drug.formulation}</TableCell>
-                              <TableCell>{drug.dosageunit}</TableCell>
-                              <TableCell>0</TableCell>
-                              <TableCell>{batch.batch_quantity}</TableCell>
-                              <TableCell>0</TableCell>
-                              <TableCell>{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '-'}</TableCell>
-                              <TableCell>{batch.distributorcompanyid || '-'}</TableCell>
-                              <TableCell>Available for Request</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>Request</Button>
-                              </TableCell>
-                            </TableRow>
-                          ));
-                        } else {
-                          // Show placeholder row for drugs with no inventory or batches
-                          return (
-                            <TableRow key={drug.drug_id + '-placeholder'}>
-                              <TableCell>{drug.drug_name}</TableCell>
-                              <TableCell>-</TableCell>
-                              <TableCell>{drug.formulation}</TableCell>
-                              <TableCell>{drug.dosageunit}</TableCell>
-                              <TableCell>0</TableCell>
-                              <TableCell>0</TableCell>
-                              <TableCell>0</TableCell>
-                              <TableCell>-</TableCell>
-                              <TableCell>-</TableCell>
-                              <TableCell>Out of Stock</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="outline" onClick={() => openRequestModal(drug)}>Request</Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        }
-                      })}
-                    </TableBody>
-                  </Table>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-purple-100 to-pink-100 text-gray-700">
+                          <th className="px-4 py-2 font-semibold text-left">Medication</th>
+                          <th className="px-4 py-2 font-semibold text-left">Batch Number</th>
+                          <th className="px-4 py-2 font-semibold text-left">Formulation</th>
+                          <th className="px-4 py-2 font-semibold text-left">Dosage</th>
+                          <th className="px-4 py-2 font-semibold text-left">Batches Available</th>
+                          <th className="px-4 py-2 font-semibold text-left">Total Batch Quantity</th>
+                          <th className="px-4 py-2 font-semibold text-left">Available Quantity</th>
+                          <th className="px-4 py-2 font-semibold text-left">Expiry Date</th>
+                          <th className="px-4 py-2 font-semibold text-left">Distributor</th>
+                          <th className="px-4 py-2 font-semibold text-left">Status</th>
+                          <th className="px-4 py-2 font-semibold text-left">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inventoryData.filter((item: any) => item.drug_name.toLowerCase().includes(searchTerm.toLowerCase())).map((drug: any) => {
+                          const realBatches = (drug.batches || []).filter((batch: any) => batch.batch_id);
+                          if (realBatches.length > 0) {
+                            return realBatches.map((batch: any, idx: number) => {
+                              let stockStatus = '';
+                              if (Number(batch.available_quantity) === 0) {
+                                stockStatus = 'Out of Stock';
+                              } else if (Number(batch.available_quantity) < 10) {
+                                stockStatus = 'Low Stock';
+                              } else {
+                                stockStatus = 'In Stock';
+                              }
+                              return (
+                                <tr key={drug.drug_id + '-' + (batch.batch_id || idx)} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50" + " hover:bg-purple-50 transition-colors duration-150"}>
+                                  <td className="px-4 py-2 rounded-l-xl">{drug.drug_name}</td>
+                                  <td className="px-4 py-2">{batch.batch_number}</td>
+                                  <td className="px-4 py-2">{drug.formulation}</td>
+                                  <td className="px-4 py-2">{drug.dosageunit}</td>
+                                  <td className="px-4 py-2">1</td>
+                                  <td className="px-4 py-2">{batch.batch_quantity}</td>
+                                  <td className="px-4 py-2">{batch.available_quantity}</td>
+                                  <td className="px-4 py-2">{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '-'}</td>
+                                  <td className="px-4 py-2">{batch.distributorcompanyid || '-'}</td>
+                                  <td className="px-4 py-2">{stockStatus}</td>
+                                  <td className="px-4 py-2 rounded-r-xl">
+                                    <Button size="sm" variant="outline" className="rounded-lg shadow-sm" onClick={() => openRequestModal(drug)}>Request</Button>
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          } else if (drug.availableDrugBatches && drug.availableDrugBatches.length > 0) {
+                            return drug.availableDrugBatches.map((batch: any, idx: number) => (
+                              <tr key={drug.drug_id + '-available-' + (batch.batch_id || idx)} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50" + " hover:bg-pink-50 transition-colors duration-150"}>
+                                <td className="px-4 py-2 rounded-l-xl">{drug.drug_name}</td>
+                                <td className="px-4 py-2">{batch.batch_number}</td>
+                                <td className="px-4 py-2">{drug.formulation}</td>
+                                <td className="px-4 py-2">{drug.dosageunit}</td>
+                                <td className="px-4 py-2">0</td>
+                                <td className="px-4 py-2">{batch.batch_quantity}</td>
+                                <td className="px-4 py-2">0</td>
+                                <td className="px-4 py-2">{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : '-'}</td>
+                                <td className="px-4 py-2">{batch.distributorcompanyid || '-'}</td>
+                                <td className="px-4 py-2">Available for Request</td>
+                                <td className="px-4 py-2 rounded-r-xl">
+                                  <Button size="sm" variant="outline" className="rounded-lg shadow-sm" onClick={() => openRequestModal(drug)}>Request</Button>
+                                </td>
+                              </tr>
+                            ));
+                          } else {
+                            return (
+                              <tr key={drug.drug_id + '-placeholder'} className="bg-white hover:bg-gray-100 transition-colors duration-150">
+                                <td className="px-4 py-2 rounded-l-xl">{drug.drug_name}</td>
+                                <td className="px-4 py-2">-</td>
+                                <td className="px-4 py-2">{drug.formulation}</td>
+                                <td className="px-4 py-2">{drug.dosageunit}</td>
+                                <td className="px-4 py-2">0</td>
+                                <td className="px-4 py-2">0</td>
+                                <td className="px-4 py-2">0</td>
+                                <td className="px-4 py-2">-</td>
+                                <td className="px-4 py-2">-</td>
+                                <td className="px-4 py-2">Out of Stock</td>
+                                <td className="px-4 py-2 rounded-r-xl">
+                                  <Button size="sm" variant="outline" className="rounded-lg shadow-sm" onClick={() => openRequestModal(drug)}>Request</Button>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="requests" className="space-y-4">
               {/* Requests Section */}
-              <Card>
+              <Card className="rounded-xl shadow-lg border border-gray-200">
                 <CardHeader>
                   <CardTitle>Pharmacist Batch Requests</CardTitle>
                   <CardDescription>Request new drug batches from distributors</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <table className="w-full">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Drug</th>
-                        <th>Batch ID</th>
-                        <th>Quantity</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {requestsLoading ? (
-                        <tr><td colSpan={6} className="text-center">Loading requests...</td></tr>
-                      ) : requestsError ? (
-                        <tr><td colSpan={6} className="text-center text-red-500">{requestsError}</td></tr>
-                      ) : requests.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center">No requests found</td></tr>
-                      ) : (
-                        requests.map(r => (
-                          <tr key={r.id}>
-                            <td>{r.id}</td>
-                            <td>{r.drugName ? r.drugName : r.drugId}</td>
-                            <td>{r.batchId || '-'}</td>
-                            <td>{r.quantity}</td>
-                            <td>{r.status}</td>
-                            <td>
-                              <Button variant="outline" size="sm" onClick={() => handleEditRequest(r)}>Edit</Button>
-                              <Button variant="destructive" size="sm" className="ml-2" onClick={() => handleDeleteRequest(r.id)}>Delete</Button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-pink-100 to-purple-100 text-gray-700">
+                          <th className="px-4 py-2 font-semibold text-left">ID</th>
+                          <th className="px-4 py-2 font-semibold text-left">Drug</th>
+                          <th className="px-4 py-2 font-semibold text-left">Batch ID</th>
+                          <th className="px-4 py-2 font-semibold text-left">Quantity</th>
+                          <th className="px-4 py-2 font-semibold text-left">Status</th>
+                          <th className="px-4 py-2 font-semibold text-left">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {requestsLoading ? (
+                          <tr><td colSpan={6} className="text-center py-4">Loading requests...</td></tr>
+                        ) : requestsError ? (
+                          <tr><td colSpan={6} className="text-center text-red-500 py-4">{requestsError}</td></tr>
+                        ) : requests.length === 0 ? (
+                          <tr><td colSpan={6} className="text-center py-4">No requests found</td></tr>
+                        ) : (
+                          requests.map((r, idx) => (
+                            <tr key={r.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50" + " hover:bg-purple-50 transition-colors duration-150"}>
+                              <td className="px-4 py-2 rounded-l-xl">{r.id}</td>
+                              <td className="px-4 py-2">{r.drugName ? r.drugName : r.drugId}</td>
+                              <td className="px-4 py-2">{r.batchId || '-'}</td>
+                              <td className="px-4 py-2">{r.quantity}</td>
+                              <td className="px-4 py-2">{r.status}</td>
+                              <td className="px-4 py-2 rounded-r-xl">
+                                <Button variant="outline" size="sm" className="rounded-lg shadow-sm" onClick={() => handleEditRequest(r)}>Edit</Button>
+                                <Button variant="destructive" size="sm" className="ml-2 rounded-lg shadow-sm" onClick={() => handleDeleteRequest(r.id)}>Delete</Button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                   {/* Edit Request Modal */}
                   {editRequestModal && editRequest && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+                      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200">
                         <h2 className="text-xl font-bold mb-2">Edit Request</h2>
                         <p className="mb-2">Drug: <span className="font-semibold">{editRequest.drugName || editRequest.drugId}</span></p>
                         <div className="mb-4">
@@ -528,13 +553,13 @@ export default function InventoryAndRequests() {
                             min={1}
                             value={editQuantity}
                             onChange={e => setEditQuantity(e.target.value)}
-                            className="border px-2 py-1 rounded w-full"
+                            className="border px-2 py-1 rounded-lg w-full shadow-sm"
                             placeholder="Enter quantity"
                           />
                         </div>
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" onClick={closeEditRequestModal}>Cancel</Button>
-                          <Button variant="default" onClick={submitEditRequest} disabled={!editQuantity || isNaN(Number(editQuantity)) || Number(editQuantity) <= 0}>Save</Button>
+                          <Button variant="outline" className="rounded-lg" onClick={closeEditRequestModal}>Cancel</Button>
+                          <Button variant="default" className="rounded-lg" onClick={submitEditRequest} disabled={!editQuantity || isNaN(Number(editQuantity)) || Number(editQuantity) <= 0}>Save</Button>
                         </div>
                       </div>
                     </div>

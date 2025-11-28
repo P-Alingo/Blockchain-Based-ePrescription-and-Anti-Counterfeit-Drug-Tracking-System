@@ -1,3 +1,4 @@
+import { pool } from '../config/database.js';
 // Get all drugs, batches, batch quantities, and requests for distributor dashboard
 async function getDistributorDrugRequests(distributorId) {
   // Get all drugs
@@ -119,17 +120,31 @@ async function approveDistributorRequest(distributorId, requestId) {
     const batchRes = await query('SELECT * FROM drugbatch WHERE id = $1', [request.batch_id]);
     const batch = batchRes.rows[0];
     // Create shipment using request and batch info, always set distributor_id
+    // Call DrugSupplyChain contract to log approval (emit BatchTransferred)
+    try {
+      const { transferBatchOnChain } = await import('./blockchainService.js');
+      // You may need to get contractBatchId mapping here
+      await transferBatchOnChain({
+        batchId: request.batch_id,
+        to: request.pharmacist_id, // Should be pharmacist wallet address
+        shipmentNumber: `SHIP-${requestId}`,
+        status: 'APPROVED'
+      });
+      console.log('✅ Batch approval logged on-chain');
+    } catch (chainErr) {
+      console.error('❌ Failed to log batch approval on-chain:', chainErr);
+    }
     await createDistributorShipment(distributorId, {
       batch_id: request.batch_id,
-      drug_id: request.drug_id || (batch ? batch.drugid : null),
-      manufacturer_id: batch ? batch.manufacturerid : null,
+      drug_id: request.drug_id,
+      manufacturer_id: null,
       pharmacist_id: request.pharmacist_id,
       quantity_shipped: request.quantity_requested,
       temperature: null,
       route: null,
       vehicle_number: null,
       departure_date: new Date().toISOString(),
-  // ...existing code...
+      request_id: requestId
     });
   }
   return true;
@@ -154,7 +169,7 @@ async function getDistributorShipments(distributorId) {
       pc.name AS pharmacy_company_name,
       pf.name AS pharmacy_facility_name,
       dc.name AS distributorname,
-      db.quantity,
+      db.total_batch_quantity as quantity,
       db.expirydate
     FROM shipment s
     JOIN drugbatch db ON db.id = s.batch_id
@@ -172,119 +187,259 @@ async function getDistributorShipments(distributorId) {
   return rows;
 }
 async function createDistributorShipment(distributorId, shipmentData) {
-  // Insert new shipment (simplified)
+  // Fetch batch details including qrcode_path
   const { batch_id, drug_id, manufacturer_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date } = shipmentData;
   let final_manufacturer_id = manufacturer_id;
-  // Fetch batch details including qrcode_path
   const batchRes = await query('SELECT manufacturerid, qrcode_path FROM drugbatch WHERE id = $1', [batch_id]);
   final_manufacturer_id = final_manufacturer_id || batchRes.rows[0]?.manufacturerid;
   const qrcode_path = batchRes.rows[0]?.qrcode_path || null;
-  // Insert shipment with qrcode_path from batch
-  await query(`
-    INSERT INTO shipment (
-      batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, status, qrcode_path
-    ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_transit'::shipment_status,$11
-    )
-  `, [
-    batch_id,
-    drug_id,
-    final_manufacturer_id,
-    distributorId,
-    pharmacist_id,
-    quantity_shipped,
-    temperature,
-    route,
-    vehicle_number,
-    departure_date,
-    qrcode_path
-  ]);
-  // Subtract shipped quantity from drugbatch
-  if (quantity_shipped && batch_id) {
-    await query(`UPDATE drugbatch SET quantity = quantity - $1 WHERE id = $2`, [quantity_shipped, batch_id]);
-  }
-  return true;
-}
-async function updateDistributorShipmentStatus(distributorId, shipmentId, status) {
-  // Update shipment status, arrival_date, received_condition, and updated_at
-  let arrival_date = null;
-  let received_condition = null;
-  if (typeof status === 'object' && status !== null) {
-    arrival_date = status.arrival_date || null;
-    received_condition = status.received_condition || null;
-    status = status.status;
-  }
-  const allowedStatuses = ['delivered', 'failed', 'flagged'];
-  if (!allowedStatuses.includes(status)) {
-    throw new Error('Invalid status: Only delivered, failed, or flagged are allowed');
-  }
-  await query(
-    `UPDATE shipment SET status = $1, arrival_date = $2, received_condition = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND distributor_id = $5`,
-    [status, arrival_date, received_condition, shipmentId, distributorId]
-  );
+  // For error notification
+  const notifyShipmentError = shipmentData.notifyShipmentError || null;
 
-  // Get batch_id, pharmacist_id, and quantity_shipped from shipment after updating status
-  const shipRes = await query('SELECT batch_id, pharmacist_id, quantity_shipped FROM shipment WHERE id = $1', [shipmentId]);
-  const batch_id = shipRes.rows[0]?.batch_id;
-  const pharmacist_id = shipRes.rows[0]?.pharmacist_id;
-  const quantity_shipped = shipRes.rows[0]?.quantity_shipped || 0;
-    if (batch_id && pharmacist_id) {
-      // Only update batch_request status for valid request_status enums
-      // If your request_status enum only allows 'pending', 'approved', 'rejected', skip updating to shipment status values
-      // If you want to update batch_request status, map shipment status to valid request_status
-      // Otherwise, skip this update to avoid enum errors
-      if (status === 'delivered') {
-        // Update pharmacy inventory only, do not update batch_request status
-        const pharmRes = await query('SELECT companyid FROM pharmacist WHERE id = $1', [pharmacist_id]);
-        const pharmacyCompanyId = pharmRes.rows[0]?.companyid;
-        if (pharmacyCompanyId) {
-          const facilityRes = await query('SELECT facility_id FROM pharmacy_company WHERE id = $1', [pharmacyCompanyId]);
-          const pharmacyFacilityId = facilityRes.rows[0]?.facility_id;
-          if (pharmacyFacilityId) {
-            // Check if inventory row exists
-            const invRes = await query('SELECT id FROM inventory WHERE batch_id = $1 AND facility_type = $2 AND facility_id = $3', [batch_id, 'pharmacy', pharmacyFacilityId]);
-            if (invRes.rows.length > 0) {
-              // Update only available_quantity in the existing inventory row
-              await query('UPDATE inventory SET available_quantity = available_quantity + $1, last_updated = CURRENT_TIMESTAMP WHERE id = $2', [quantity_shipped, invRes.rows[0].id]);
-            } else {
-              // Insert new inventory row only if it does not exist, and include drug_id
-              const batchRes = await query('SELECT drugid FROM drugbatch WHERE id = $1', [batch_id]);
-              const drug_id = batchRes.rows[0]?.drugid;
-              await query('INSERT INTO inventory (batch_id, drug_id, available_quantity, facility_type, facility_id, last_updated) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)', [batch_id, drug_id, quantity_shipped, 'pharmacy', pharmacyFacilityId]);
-            }
-          }
+  // Fetch distributor and pharmacist wallet addresses
+  const userId = shipmentData.userId;
+  const distributorRes = await query('SELECT wallet_address FROM users WHERE id = $1', [userId]);
+  const pharmacistRes = await query('SELECT u.wallet_address FROM pharmacist p JOIN users u ON p.userid = u.id WHERE p.id = $1', [pharmacist_id]);
+  const distributorAddress = distributorRes.rows[0]?.wallet_address;
+  const pharmacistAddress = pharmacistRes.rows[0]?.wallet_address;
+
+  // Ensure batch exists on-chain by checking drugbatch_ids.json
+  let contractBatchId = null;
+  try {
+    const path = await import('path');
+    const fs = await import('fs');
+    const batchMapPath = path.resolve(process.cwd(), 'drugbatch_ids.json');
+    let batchMappings = [];
+    if (fs.existsSync(batchMapPath)) {
+      try {
+        const fileContent = fs.readFileSync(batchMapPath, 'utf8');
+        batchMappings = fileContent ? JSON.parse(fileContent) : [];
+      } catch (err) { batchMappings = []; }
+    }
+    const found = batchMappings.find(m => m.dbDrugBatchId === batch_id);
+    if (found && found.contractBatchId) {
+      contractBatchId = found.contractBatchId;
+    }
+  } catch (err) {
+    contractBatchId = null;
+  }
+
+  if (!contractBatchId) {
+    console.warn(`[BLOCKCHAIN] No contract batch mapping found for DB batch ${batch_id}, skipping transfer`);
+    throw new Error('Batch not found on-chain');
+  }
+
+  // Blockchain integration: create shipment on chain and save mapping
+  let contractShipmentId;
+  let shipment = null;
+  let shipmentId = null;
+  try {
+    const { transferBatchOnChain, getDrugSupplyChainContract } = await import('./blockchainService.js');
+    if (!distributorAddress || !/^0x[a-fA-F0-9]{40}$/.test(distributorAddress)) {
+      const errMsg = `[BLOCKCHAIN] Distributor wallet address missing or invalid for distributorId=${distributorId}: ${distributorAddress}`;
+      console.error(errMsg);
+      if (notifyShipmentError) notifyShipmentError({ error: errMsg, shipmentData });
+      throw new Error('Distributor wallet address missing or invalid');
+    }
+    if (!pharmacistAddress || !/^0x[a-fA-F0-9]{40}$/.test(pharmacistAddress)) {
+      const errMsg = `[BLOCKCHAIN] Pharmacist wallet address missing or invalid for pharmacistId=${pharmacist_id}: ${pharmacistAddress}`;
+      console.error(errMsg);
+      if (notifyShipmentError) notifyShipmentError({ error: errMsg, shipmentData });
+      throw new Error('Pharmacist wallet address missing or invalid');
+    }
+    console.log(`[DEBUG] createDistributorShipment: userId=${userId}, distributorId=${distributorId}, distributorAddress=${distributorAddress}`);
+    // Always set a unique, non-empty shipmentNumber
+    const shipmentNumber = shipmentData.shipmentNumber && shipmentData.shipmentNumber.trim() ? shipmentData.shipmentNumber.trim() : `SHIP-${Math.floor(Math.random() * 100000)}`;
+
+    // Validate batchId
+    const batchId = Number(contractBatchId);
+    if (!batchId || isNaN(batchId)) {
+      const errMsg = 'Missing or invalid batchId';
+      console.error(errMsg, { batchId, shipmentData });
+      if (notifyShipmentError) notifyShipmentError({ error: errMsg, shipmentData });
+      throw new Error(errMsg);
+    }
+
+    // 1. Insert into DB first to get shipmentId
+    const shipmentInsert = await query(`
+      INSERT INTO shipment (
+        batch_id, drug_id, manufacturer_id, distributor_id, pharmacist_id, quantity_shipped, temperature, route, vehicle_number, departure_date, status, qrcode_path
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_transit'::shipment_status,$11
+      )
+      RETURNING *
+    `, [
+      batch_id,
+      drug_id,
+      final_manufacturer_id,
+      distributorId,
+      pharmacist_id,
+      quantity_shipped,
+      temperature,
+      route,
+      vehicle_number,
+      departure_date,
+      qrcode_path
+    ]);
+    shipment = shipmentInsert.rows[0];
+    shipmentId = shipment.id;
+
+    // 2. Call contract with DB shipmentId
+    // Use contract instance from config/blockchain.js
+    const tx = await drugSupplyChainContract.createShipment(
+      shipmentId,
+      batchId,
+      distributorAddress,
+      pharmacistAddress,
+      'in_transit'
+    );
+    const receipt = await tx.wait();
+    // Extract contractShipmentId from event logs
+    contractShipmentId = null;
+    if (receipt && receipt.events) {
+      const event = receipt.events.find(e => e.event === "ShipmentCreated");
+      if (event && event.args && event.args.shipmentId) {
+        contractShipmentId = event.args.shipmentId.toString();
+      }
+    }
+    // Verify shipment exists on-chain
+    const onChainShipment = await drugSupplyChainContract.shipments(shipmentId);
+    if (!onChainShipment || !onChainShipment.shipmentId || Number(onChainShipment.shipmentId) !== shipmentId) {
+      const errMsg = `[BLOCKCHAIN] ShipmentId ${shipmentId} not found on-chain after creation.`;
+      console.error(errMsg, { shipmentId, shipmentData });
+      if (notifyShipmentError) notifyShipmentError({ error: errMsg, shipmentData });
+      throw new Error('Shipment creation failed on-chain (not found after creation)');
+    }
+    // 3. Update shipment_id.json mapping file
+    try {
+      const pathMod = await import('path');
+      const fsMod = await import('fs');
+      const mappingFile = pathMod.resolve(process.cwd(), 'shipment_id.json');
+      let mappings = [];
+      if (fsMod.existsSync(mappingFile)) {
+        const fileContent = fsMod.readFileSync(mappingFile, 'utf8');
+        try {
+          mappings = JSON.parse(fileContent);
+        } catch (e) {
+          console.error('[ERROR] Failed to parse shipment_id.json:', e);
+          mappings = [];
         }
       }
-      // For 'failed' and 'flagged', only update batch_request if those are valid request_status enums
-      // Remove invalid enum updates to avoid errors
+      const mappingToWrite = {
+        databaseShipmentId: shipmentId,
+        contractShipmentId: contractShipmentId
+      };
+      mappings.push(mappingToWrite);
+      try {
+        fsMod.writeFileSync(mappingFile, JSON.stringify(mappings, null, 2));
+        console.log('✅ Shipment mapping written:', mappingToWrite);
+      } catch (writeErr) {
+        console.error('[ERROR] Failed to write shipment_id.json:', writeErr);
+        throw new Error('Failed to write shipment mapping file. Check file permissions and path.');
+      }
+    } catch (err) {
+      console.error('❌ Failed to update shipment_id.json:', err);
+      throw new Error('Failed to update shipment mapping file.');
     }
-  return true;
+  } catch (chainError) {
+    console.error('❌ Blockchain batch transfer failed:', chainError, { shipmentData });
+    if (notifyShipmentError) notifyShipmentError({ error: chainError?.message || chainError, shipmentData, stack: chainError?.stack });
+    throw new Error('Shipment creation failed on-chain');
+  }
+
+  // Update batch_request status to 'in_transit' and log on-chain
+  const { request_id } = shipmentData;
+  if (request_id && shipment) {
+    const { updateBatchRequestStatus } = await import('./pharmacistService.js');
+    await updateBatchRequestStatus(request_id, 'in_transit', { distributorId, batch_id, shipmentId: shipment.id });
+  }
+
+  // Do NOT subtract shipped quantity from drugbatch here; subtraction will occur when shipment is marked 'completed'.
+
+  // Ensure shipment is always defined and returned
+  if (!shipment) {
+    throw new Error('Shipment DB insert failed, shipment is undefined');
+  }
+  return shipment;
 }
 
-// Inventory
-async function getDistributorInventory(distributorId) {
-  // Get inventory batches and quantities for distributor
-  // Join distributor -> drugbatch -> inventory
-  const { rows } = await query(`
-    SELECT i.id, i.batch_id, db.batchnumber, db.drugid, i.available_quantity
-    FROM inventory i
-    JOIN drugbatch db ON db.id = i.batch_id
-    JOIN distributor d ON d.companyid = db.distributorcompanyid
-    WHERE d.id = $1
-    ORDER BY i.id DESC
-  `, [distributorId]);
-  return rows;
-}
-async function addDistributorInventory(distributorId, batchData) {
-  // Add batch to inventory
-  const { batch_id, quantity } = batchData;
-  // Find distributor's facility_id via company
-  const distributor = await query('SELECT companyid FROM distributor WHERE id = $1', [distributorId]);
-  const companyId = distributor.rows[0]?.companyid;
-  const company = await query('SELECT facility_id FROM distributor_company WHERE id = $1', [companyId]);
-  const facilityId = company.rows[0]?.facility_id;
-  await query(`INSERT INTO inventory (batch_id, available_quantity, facility_type, facility_id) VALUES ($1,$2,'distributor',$3)`, [batch_id, quantity, facilityId]);
-  return true;
+async function updateDistributorShipmentStatus(distributorId, shipmentId, status) {
+  // pool is imported at the top as ES module
+  const client = await pool.connect();
+  try {
+    // Set session variable for audit triggers (must be userId)
+    const userId = arguments[3];
+    await client.query(`SET app.current_user_id = '${userId}'`);
+
+    // Prepare status, arrival_date, received_condition
+    let arrival_date = null;
+    let received_condition = null;
+    if (typeof status === 'object' && status !== null) {
+      arrival_date = status.arrival_date || null;
+      received_condition = status.received_condition || null;
+      status = status.status;
+    }
+    // Get batch_id and shipmentNumber for blockchain update
+    const shipRes = await client.query('SELECT * FROM shipment WHERE id = $1', [shipmentId]);
+    const shipmentNumber = shipRes.rows[0]?.shipmentnumber || `SHIP-${shipmentId}`;
+    const batch_id = shipRes.rows[0]?.batch_id;
+    const pharmacist_id = shipRes.rows[0]?.pharmacist_id;
+    const quantity_shipped = shipRes.rows[0]?.quantity_shipped;
+
+    // On-chain shipment status update
+    try {
+      // Use contract instance from config/blockchain.js
+      await drugSupplyChainContract.updateDistributorShipmentStatus(shipmentId, status);
+    } catch (err) {
+      console.error('❌ Failed to update shipment status on-chain:', err);
+      throw new Error('Failed to update shipment status on-chain');
+    }
+
+    // If status is flagged, set violator to manufacturer user ID
+    let violatorUserId = null;
+    if (status === 'flagged') {
+      // Get manufacturer_id from shipment table directly
+      const shipRes2 = await client.query('SELECT manufacturer_id FROM shipment WHERE id = $1', [shipmentId]);
+      const manufacturerId = shipRes2.rows[0]?.manufacturer_id;
+      if (manufacturerId) {
+        // Get user ID for manufacturer
+        const manuUserRes = await client.query('SELECT userid FROM manufacturer WHERE id = $1', [manufacturerId]);
+        violatorUserId = manuUserRes.rows[0]?.userid || null;
+      }
+    }
+    // Update shipment status, updated_by, and violator in DB (atomic)
+    await client.query(
+      `UPDATE shipment SET status = $1, arrival_date = $2, received_condition = $3, updated_by = $4${status === 'flagged' ? ', violator = $6' : ''} WHERE id = $5`,
+      status === 'flagged'
+        ? [status, arrival_date ?? null, received_condition ?? null, userId, shipmentId, violatorUserId]
+        : [status, arrival_date ?? null, received_condition ?? null, userId, shipmentId]
+    );
+
+      // If status is flagged, call RegulatorOversight contract to log flag event
+      if (status === 'flagged') {
+        try {
+          const { flagEntityOnChain } = await import('../services/blockchainService.js');
+          // Use admin wallet for regulator actions
+          const regulatorAddress = process.env.ADMIN_WALLET_ADDRESS;
+          await flagEntityOnChain({
+            entityType: 'shipment',
+            entityId: shipmentId,
+            userAddress: regulatorAddress,
+            reason: received_condition || 'Flagged by distributor',
+          });
+        } catch (err) {
+          console.error('❌ Failed to call RegulatorOversight.flagEntity:', err);
+        }
+      }
+    // Subtract shipped quantity from drugbatch ONLY if status is 'completed'
+    if (status === 'completed' && quantity_shipped && batch_id) {
+      await client.query(`UPDATE drugbatch SET total_batch_quantity = total_batch_quantity - $1 WHERE id = $2`, [quantity_shipped, batch_id]);
+    }
+
+    return true;
+  } finally {
+    client.release();
+  }
 }
 
 // Blockchain
@@ -346,6 +501,8 @@ async function getDistributorAnalytics(distributorId) {
   };
 }
 import { query } from "../config/database.js";
+import { drugSupplyChainContract } from "../config/blockchain.js";
+import { getContractBatchId } from "../utils/blockchainMappings.js";
 
 
 async function getDistributorByUserId(userId) {
@@ -374,9 +531,7 @@ export {
   getDistributorShipments,
   createDistributorShipment,
   updateDistributorShipmentStatus,
-  getDistributorInventory,
-  addDistributorInventory,
   getDistributorBlockchain,
-  getDistributorAnalytics
-  ,getDistributorDrugRequests
+  getDistributorAnalytics,
+  getDistributorDrugRequests
 };

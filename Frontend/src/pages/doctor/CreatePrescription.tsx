@@ -128,7 +128,7 @@ const CreatePrescription = () => {
 
     try {
       const token = localStorage.getItem("token");
-      await axios.post(
+      const res = await axios.post(
         "http://localhost:4000/api/doctor/prescription",
         {
           patientId: formData.patientId,
@@ -140,11 +140,25 @@ const CreatePrescription = () => {
           instructions: formData.instructions.trim(),
           issueDate: formData.issueDate,
           validUntil: formData.validUntil,
-          quantity: Number(formData.quantity) // Pass quantity to backend
+          quantity: Number(formData.quantity)
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success("Prescription successfully created!");
+
+      // Automatically sync to blockchain
+      const data = res.data as { id?: string; prescriptionId?: string };
+      const newId = data.id || data.prescriptionId || null;
+      if (newId) {
+        try {
+          await axios.post(`http://localhost:4000/api/doctor/prescription/${newId}/sync-blockchain`, {}, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          toast.success("Prescription synced to blockchain");
+        } catch (syncErr: any) {
+          toast.error(syncErr.response?.data?.message || "Failed to sync prescription to blockchain");
+        }
+      }
 
       // Reset form
       setFormData({

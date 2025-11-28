@@ -6,7 +6,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 50,
       },
       viaIR: true,   // 👈 important fix for "stack too deep"
     },

@@ -137,10 +137,13 @@ export const syncUserToBlockchain = async (req, res) => {
 
   try {
     const user = await adminService.syncUserToBlockchain(userId);
+    // Log sync result for debugging
+    console.log('[syncUserToBlockchain] Response:', JSON.stringify(user, null, 2));
     res.json({ 
       success: true, 
-      user, 
-      message: 'User successfully synced to blockchain' 
+      user,
+      is_synced: user.is_synced === true,
+      message: user.is_synced === true ? 'User status is synced with blockchain.' : 'User status is NOT synced with blockchain.'
     });
   } catch (error) {
     console.error('❌ syncUserToBlockchain error:', error);
@@ -399,17 +402,21 @@ export const stopEventListeners = async (req, res) => {
 // Get past events
 export const getPastEvents = async (req, res) => {
   try {
-    const { eventName, fromBlock = 0, toBlock = 'latest' } = req.query;
-    
+    const { eventName, fromBlock = 0, toBlock = 'latest', limit = 100 } = req.query;
+    let result;
     if (!eventName) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'eventName query parameter is required' 
-      });
+      // Return all events from blockchaineventlog if no eventName is provided
+      result = await blockchainService.getAllBlockchainEvents(limit);
+      res.json(result);
+      return;
     }
-
-    const result = await blockchainService.getPastEvents(eventName, fromBlock, toBlock);
-    res.json(result);
+    result = await blockchainService.getPastEvents(eventName, fromBlock, toBlock);
+    // If result.events exists, return only the events array for frontend compatibility
+    if (result && Array.isArray(result.events)) {
+      res.json(result.events);
+    } else {
+      res.json([]);
+    }
   } catch (error) {
     console.error('❌ getPastEvents error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -423,7 +430,40 @@ export const getPastEvents = async (req, res) => {
 // Health check endpoint
 export const healthCheck = async (req, res) => {
   try {
+    // Check required blockchain environment variables
+    const requiredVars = [
+      'BLOCKCHAIN_RPC_URL',
+      'ADMIN_PRIVATE_KEY',
+      'USER_MANAGEMENT_ADDRESS',
+      'PRESCRIPTION_MANAGEMENT_ADDRESS',
+      'DRUG_SUPPLY_CHAIN_ADDRESS',
+      'REGULATOR_OVERSIGHT_ADDRESS'
+    ];
+    const missingVars = requiredVars.filter((v) => !process.env[v]);
+    let rpcStatus = 'unknown';
+    let rpcError = null;
+    // Try connecting to RPC
+    if (process.env.BLOCKCHAIN_RPC_URL) {
+      try {
+        const { ethers } = await import('ethers');
+        const provider = new ethers.providers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
+        await provider.getBlockNumber();
+        rpcStatus = 'connected';
+      } catch (err) {
+        rpcStatus = 'error';
+        rpcError = err.message;
+      }
+    } else {
+      rpcStatus = 'missing';
+    }
     const health = await adminService.getSystemHealth();
+    health.blockchain = health.blockchain || {};
+    health.blockchain.env = {
+      missingVars,
+      rpcStatus,
+      rpcError
+    };
+    health.blockchain.connected = rpcStatus === 'connected' && missingVars.length === 0;
     res.json(health);
   } catch (error) {
     res.status(500).json({

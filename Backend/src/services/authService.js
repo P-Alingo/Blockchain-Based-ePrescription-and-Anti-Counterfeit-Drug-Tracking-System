@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { query } from "../config/database.js";
 import { generateOtp } from "../utils/otpGenerator.js";
 import { sendOtpEmail } from "../utils/emailSender.js";
+import { registerUserOnChain, getOrCreateRoleId } from "./blockchainService.js";
 
 const OTP_EXPIRATION_MINUTES = Number(process.env.OTP_EXPIRATION_MINUTES) || 2;
 
@@ -270,14 +271,22 @@ export async function verifyOtpService({ walletAddress, otp }) {
     throw { status: 400, message: "OTP expired" };
 
   await query("UPDATE otps SET used_at=NOW() WHERE id=$1", [otpRow.id]);
-  await query("UPDATE users SET isverified=true, updatedat=NOW() WHERE id=$1", [
-    user.id,
-  ]);
+  await query("UPDATE users SET isverified=true, updatedat=NOW() WHERE id=$1", [user.id]);
 
   console.log(`✅ Verified user ${user.email}`);
-  
+
+  // Automatically register user on-chain
+  try {
+    const roleId = await getOrCreateRoleId(user.role);
+    await registerUserOnChain(user.wallet_address, roleId);
+    console.log(`✅ Registered user ${user.wallet_address} on-chain with role ${user.role}`);
+  } catch (err) {
+    console.error(`❌ Failed to register user on-chain:`, err.message);
+    // Optionally, you can throw or continue
+  }
+
   // ✅ RETURN userId for controller to use
-  return { 
+  return {
     message: "Registration verified successfully.",
     userId: user.id
   };

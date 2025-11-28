@@ -16,7 +16,6 @@ api.interceptors.request.use(config => {
 const Shipments = () => {
   const sidebarItems = [
     { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: false },
-    { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
     { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
     { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
     { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },
@@ -52,7 +51,7 @@ const Shipments = () => {
   const handleStatusUpdate = async () => {
     if (!selectedShipment || !selectedStatus) return;
     try {
-      await api.post('/api/pharmacist/shipments/confirm-delivery', {
+      await api.post('/api/pharmacist/shipments/update-status', {
         shipmentId: selectedShipment.id,
         status: selectedStatus
       });
@@ -70,9 +69,9 @@ const Shipments = () => {
 
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="pharmacist" userName="John Pharmacist" userEmail="john@pharmacy.co.ke">
-      <div className="space-y-8">
+      <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
             Pharmacy Shipments
           </h1>
           <p className="text-muted-foreground">Track and manage all incoming shipments</p>
@@ -82,7 +81,7 @@ const Shipments = () => {
         ) : error ? (
           <div className="p-8 text-center text-red-500">{error}</div>
         ) : (
-          <Card>
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardHeader>
               <CardTitle>Pharmacy Shipments</CardTitle>
             </CardHeader>
@@ -90,75 +89,71 @@ const Shipments = () => {
               {shipments.length === 0 ? (
                 <div className="text-center py-8">No shipments found</div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Batch</th>
-                      <th>Drug</th>
-                      <th>Status</th>
-                      <th>Arrival</th>
-                      <th>QR Code</th>
-                      <th>Update Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shipments.map(s => {
-                      // Only show update button if distributor set status to 'delivered' and pharmacist has not confirmed
-                      // If status is 'failed' or 'flagged', pharmacist cannot change
-                      // If status is 'delivered' and pharmacist has not confirmed, show button
-                      // If status is 'delivered' and pharmacist has confirmed, show confirmation
-                      // If you have a pharmacist_status field, use it here. Otherwise, assume status changes after pharmacist confirms.
-                      // New logic for Update Status column
-                      let updateStatusCell;
-                      if (s.status === 'completed') {
-                        updateStatusCell = <span className="font-semibold text-green-700">Completed</span>;
-                      } else if (s.status === 'failed') {
-                        updateStatusCell = <span className="font-semibold text-red-700">Failed</span>;
-                      } else if (s.status === 'flagged') {
-                        updateStatusCell = <span className="font-semibold text-yellow-700">Flagged</span>;
-                      } else if (s.status === 'delivered') {
-                        updateStatusCell = (
-                          <button
-                            className="px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
-                            onClick={() => {
-                              setSelectedShipment(s);
-                              setStatusModalOpen(true);
-                            }}
-                          >
-                            Update Status
-                          </button>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-purple-100 to-pink-100 text-gray-700">
+                        <th className="px-4 py-2 font-semibold text-left">ID</th>
+                        <th className="px-4 py-2 font-semibold text-left">Batch</th>
+                        <th className="px-4 py-2 font-semibold text-left">Drug</th>
+                        <th className="px-4 py-2 font-semibold text-left">Status</th>
+                        <th className="px-4 py-2 font-semibold text-left">Arrival</th>
+                        <th className="px-4 py-2 font-semibold text-left">QR Code</th>
+                        <th className="px-4 py-2 font-semibold text-left">Update Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shipments.map((s, idx) => {
+                        let updateStatusCell;
+                        if (s.status === 'completed') {
+                          updateStatusCell = <span className="font-semibold text-green-700">Completed</span>;
+                        } else if (s.status === 'failed') {
+                          updateStatusCell = <span className="font-semibold text-red-700">Failed</span>;
+                        } else if (s.status === 'flagged') {
+                          updateStatusCell = <span className="font-semibold text-yellow-700">Flagged</span>;
+                        } else if (s.status === 'delivered') {
+                          updateStatusCell = (
+                            <button
+                              className="px-2 py-1 bg-purple-600 text-white rounded-lg shadow-sm hover:bg-purple-700 transition-colors"
+                              onClick={() => {
+                                setSelectedShipment(s);
+                                setStatusModalOpen(true);
+                              }}
+                            >
+                              Update Status
+                            </button>
+                          );
+                        } else {
+                          updateStatusCell = <span className="text-gray-500">-</span>;
+                        }
+                        return (
+                          <tr key={s.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50" + " hover:bg-purple-50 transition-colors duration-150"}>
+                            <td className="px-4 py-2 rounded-l-xl">{s.id}</td>
+                            <td className="px-4 py-2">{s.batchnumber}</td>
+                            <td className="px-4 py-2">{s.drugname || '-'}</td>
+                            <td className="px-4 py-2">{s.status}</td>
+                            <td className="px-4 py-2">{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</td>
+                            <td className="px-4 py-2">
+                              {s.qrcode_path ? (
+                                <button
+                                  className="px-2 py-1 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition-colors"
+                                  onClick={() => {
+                                    setQrCodePath(s.qrcode_path);
+                                    setQrDetails(s);
+                                    setQrModalOpen(true);
+                                  }}
+                                >
+                                  QR Code
+                                </button>
+                              ) : '-'}
+                            </td>
+                            <td className="px-4 py-2 rounded-r-xl">{updateStatusCell}</td>
+                          </tr>
                         );
-                      } else {
-                        updateStatusCell = <span className="text-gray-500">-</span>;
-                      }
-                      return (
-                        <tr key={s.id}>
-                          <td>{s.id}</td>
-                          <td>{s.batchnumber}</td>
-                          <td>{s.drugname || '-'}</td>
-                          <td>{s.status}</td>
-                          <td>{s.arrival_date ? new Date(s.arrival_date).toLocaleString() : '-'}</td>
-                          <td>
-                            {s.qrcode_path ? (
-                              <button
-                                className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                                onClick={() => {
-                                  setQrCodePath(s.qrcode_path);
-                                  setQrDetails(s);
-                                  setQrModalOpen(true);
-                                }}
-                              >
-                                QR Code
-                              </button>
-                            ) : '-'}
-                          </td>
-                          <td>{updateStatusCell}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -166,11 +161,11 @@ const Shipments = () => {
         {/* QR Code Modal */}
         {qrModalOpen && qrCodePath && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative border border-gray-200">
               <button className="absolute top-2 right-2 text-gray-500" onClick={() => setQrModalOpen(false)}>&times;</button>
               <h2 className="text-xl font-bold mb-4">Shipment QR Code</h2>
               <div className="flex flex-col items-center gap-4">
-                <img src={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} alt="Shipment QR Code" className="w-64 h-64 object-contain border" />
+                <img src={qrCodePath.startsWith('/') ? `${API_BASE_URL}${qrCodePath}` : qrCodePath} alt="Shipment QR Code" className="w-64 h-64 object-contain border rounded-lg" />
                 <div className="mt-4 text-left w-full">
                   <div><strong>ID:</strong> {qrDetails?.id}</div>
                   <div><strong>Batch:</strong> {qrDetails?.batchnumber}</div>
@@ -186,14 +181,14 @@ const Shipments = () => {
         {/* Status Update Modal */}
         {statusModalOpen && selectedShipment && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative border border-gray-200">
               <button className="absolute top-2 right-2 text-gray-500" onClick={() => setStatusModalOpen(false)}>&times;</button>
               <h2 className="text-xl font-bold mb-4">Update Shipment Status</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Status</label>
                   <select
-                    className="border rounded px-2 py-1 w-full"
+                    className="border rounded-lg px-2 py-1 w-full"
                     value={selectedStatus}
                     onChange={e => setSelectedStatus(e.target.value)}
                   >
@@ -202,9 +197,8 @@ const Shipments = () => {
                     <option value="flagged">Flagged</option>
                   </select>
                 </div>
-                {/* Note field removed as per backend update */}
                 <button
-                  className="w-full mt-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                  className="w-full mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg shadow-sm hover:bg-purple-700 transition-colors"
                   onClick={handleStatusUpdate}
                   disabled={!selectedStatus}
                 >

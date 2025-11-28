@@ -1,4 +1,25 @@
-// ...existing code...
+// DELETE prescription
+export async function deletePrescription(req, res) {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid prescription ID" });
+    const userId = req.user.id;
+    const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
+    if (doctorResult.rowCount === 0) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+    const doctorId = doctorResult.rows[0].id;
+    const deleted = await deletePrescriptionService(id, doctorId);
+    if (!deleted) {
+      return res.status(404).json({ message: "Prescription not found or unauthorized" });
+    }
+    return res.status(200).json({ message: "Prescription deleted successfully" });
+  } catch (error) {
+    console.error("❌ Error deleting prescription:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+import { query } from "../config/database.js";
 import * as doctorService from "../services/doctorService.js";
 import {
   createPrescription as createPrescriptionService,
@@ -11,6 +32,7 @@ import {
   getDoctorAnalytics as getDoctorAnalyticsService,
   getExpiredPrescriptions
 } from "../services/doctorService.js";
+
 // UPDATE prescription
 export async function updatePrescription(req, res) {
   try {
@@ -45,7 +67,6 @@ export async function updatePrescription(req, res) {
     return res.status(500).json({ message: "Internal server error" });
   }
 }
-import { query } from "../config/database.js";
 
 // SEARCH patients
 export async function searchPatients(req, res) {
@@ -159,7 +180,9 @@ export async function listPrescriptions(req, res) {
 export async function getPrescription(req, res) {
   try {
     const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ message: "Invalid prescription ID" });
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid prescription ID" });
+    }
     const userId = req.user.id;
     const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
     if (doctorResult.rowCount === 0) {
@@ -172,39 +195,18 @@ export async function getPrescription(req, res) {
     }
     return res.status(200).json(prescription);
   } catch (error) {
-    console.error("❌ Error fetching prescription:", error);
+    console.error("❌ Error getting prescription:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
 
-// DELETE prescription
-export async function deletePrescription(req, res) {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ message: "Invalid prescription ID" });
-    const userId = req.user.id;
-    const doctorResult = await query("SELECT id FROM doctor WHERE userid = $1", [userId]);
-    if (doctorResult.rowCount === 0) {
-      return res.status(404).json({ message: "Doctor profile not found" });
-    }
-    const doctorId = doctorResult.rows[0].id;
-    const deleted = await deletePrescriptionService(id, doctorId);
-    if (!deleted) {
-      return res.status(404).json({ message: "Prescription not found or unauthorized" });
-    }
-    return res.status(200).json({ message: "Prescription deleted successfully" });
-  } catch (error) {
-    console.error("❌ Error deleting prescription:", error);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-}
 
 export async function getDoctorProfile(req, res, next) {
   try {
     const userId = req.user.id;
-    const profile = await query("SELECT * FROM doctor WHERE userid = $1", [userId]);
-    if (!profile) return res.status(404).json({ message: "Doctor profile not found" });
-    res.json(profile);
+    const profileResult = await query("SELECT * FROM doctor WHERE userid = $1", [userId]);
+    if (profileResult.rowCount === 0) return res.status(404).json({ message: "Doctor profile not found" });
+    res.json(profileResult.rows[0]);
   } catch (error) {
     next(error);
   }
@@ -337,5 +339,109 @@ export async function listExpiredPrescriptions(req, res) {
   } catch (error) {
     console.error("❌ Error listing expired prescriptions:", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+// SYNC prescription to blockchain
+export async function syncPrescriptionToBlockchain(req, res) {
+  try {
+    // ...existing code...
+    const prescriptionId = Number(req.params.id);
+    if (isNaN(prescriptionId)) return res.status(400).json({ message: "Invalid prescription ID" });
+
+    // Fetch prescription from DB
+    const prescriptionResult = await query(
+      "SELECT * FROM prescription WHERE id = $1",
+      [prescriptionId]
+    );
+    if (prescriptionResult.rowCount === 0) {
+      return res.status(404).json({ message: "Prescription not found" });
+    }
+    const presc = prescriptionResult.rows[0];
+
+    // Map patient and doctor IDs to wallet addresses
+    const patientWalletRes = await query(
+      "SELECT wallet_address FROM users WHERE id = (SELECT userid FROM patient WHERE id = $1)",
+      [presc.patient_id]
+    );
+    const doctorWalletRes = await query(
+      "SELECT wallet_address FROM users WHERE id = (SELECT userid FROM doctor WHERE id = $1)",
+      [presc.doctor_id]
+    );
+    const patientWallet = patientWalletRes.rows[0]?.wallet_address;
+    const doctorWallet = doctorWalletRes.rows[0]?.wallet_address;
+
+    // Validate raw 0x... addresses only
+    if (!patientWallet?.startsWith('0x') || !doctorWallet?.startsWith('0x')) {
+      return res.status(400).json({ message: "Missing or invalid wallet address for patient or doctor" });
+    }
+
+    // Fetch drug details
+    const drugResult = await query(
+      "SELECT name, formulation, dosageunit FROM drug WHERE id = $1",
+      [presc.drug_id]
+    );
+    if (drugResult.rowCount === 0) {
+      return res.status(400).json({ message: "Drug not found for prescription" });
+    }
+    const drug = drugResult.rows[0];
+
+    // Call blockchain service with all required params
+    const { createPrescriptionOnChain } = await import("../services/blockchainService.js");
+    let txResult;
+    try {
+      txResult = await createPrescriptionOnChain({
+        databaseId: presc.id,
+        prescriptionCode: presc.prescription_code,
+        drugName: drug.name,
+        strength: drug.dosageunit,
+        form: drug.formulation,
+        instructions: presc.instructions || "",
+        dosageAmount: presc.dosage_amount?.toString() || "",
+        dosageUnit: presc.dosage_unit || "",
+        frequency: presc.frequency || "",
+        drugId: parseInt(presc.drug_id),
+        quantity: parseInt(presc.quantity),
+        duration: parseInt(presc.duration),
+        validUntil: Math.floor(new Date(presc.valid_until).getTime() / 1000),
+        patient: patientWallet,
+        doctorWallet: doctorWallet,
+        doctorId: presc.doctor_id,
+        patientId: presc.patient_id,
+        gasLimit: 300000 // manual gas limit for testing
+      });
+    } catch (err) {
+      if (err.message && err.message.includes("Duplicate prescription code")) {
+        return res.status(409).json({ message: "Prescription already exists on blockchain", detail: err.message });
+      }
+      return res.status(500).json({ message: err.message || "Failed to sync prescription to blockchain" });
+    }
+
+    // Log blockchain event directly
+    if (txResult && txResult.transactionHash && txResult.blockNumber) {
+      const eventname = 'PrescriptionSynced';
+      const contractname = 'PrescriptionManagement';
+      const entityid = presc.id;
+      const entitytype = 'prescription';
+      const transactionhash = txResult.transactionHash;
+      const blocknumber = txResult.blockNumber;
+      const timestamp = new Date().toISOString();
+      const details = JSON.stringify({ action: 'sync', prescriptionId: presc.id });
+      const { query } = await import("../config/database.js");
+      await query(
+        `INSERT INTO blockchaineventlog (eventname, contractname, entityid, entitytype, transactionhash, blocknumber, timestamp, details, processed, wallet_address)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [eventname, contractname, entityid, entitytype, transactionhash, blocknumber, timestamp, details, false, doctorWallet]
+      );
+    }
+
+    return res.status(200).json({
+      message: "Prescription synced to blockchain",
+      blockchainTxHash: txResult.transactionHash,
+      blockchainBlockNumber: txResult.blockNumber
+    });
+  } catch (error) {
+    console.error("❌ Error syncing prescription to blockchain:", error);
+    return res.status(500).json({ message: error.message || "Internal server error" });
   }
 }

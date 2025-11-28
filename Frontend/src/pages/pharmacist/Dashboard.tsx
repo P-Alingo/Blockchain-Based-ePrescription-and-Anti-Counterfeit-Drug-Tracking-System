@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 const PharmacistDashboard = () => {
   const sidebarItems = [
   { icon: Shield, label: "Dashboard", path: "/pharmacist/dashboard", active: true },
-  { icon: Activity, label: "Blockchain", path: "/pharmacist/blockchain", active: false },
   { icon: Activity, label: "Analytics", path: "/pharmacist/analytics", active: false },
   { icon: Package, label: "Inventory & Requests", path: "/pharmacist/inventory-requests", active: false },
   { icon: FileText, label: "My Prescriptions", path: "/pharmacist/myprescriptions", active: false },

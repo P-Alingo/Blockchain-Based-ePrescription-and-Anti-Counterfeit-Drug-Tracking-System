@@ -60,23 +60,24 @@ async function getDistributorShipments(req, res, next) {
     res.json(shipments);
   } catch (error) { next(error); }
 }
+import { transferBatchOnChain } from "../services/blockchainService.js";
 async function createDistributorShipment(req, res, next) {
   try {
     const userId = req.user.id;
     const distributor = await distributorService.getDistributorByUserId(userId);
     if (!distributor) return res.status(404).json({ message: "Distributor not found" });
-    await distributorService.createDistributorShipment(distributor.id, req.body);
+    await distributorService.createDistributorShipment(distributor.id, { ...req.body, userId });
     res.json({ success: true });
   } catch (error) { next(error); }
 }
+
 async function updateDistributorShipmentStatus(req, res, next) {
   try {
     const userId = req.user.id;
     const distributor = await distributorService.getDistributorByUserId(userId);
     if (!distributor) return res.status(404).json({ message: "Distributor not found" });
     const shipmentId = req.params.id;
-  // Pass all relevant fields for status update
-  await distributorService.updateDistributorShipmentStatus(distributor.id, shipmentId, req.body);
+    await distributorService.updateDistributorShipmentStatus(distributor.id, shipmentId, req.body, userId);
     res.json({ success: true });
   } catch (error) { next(error); }
 }

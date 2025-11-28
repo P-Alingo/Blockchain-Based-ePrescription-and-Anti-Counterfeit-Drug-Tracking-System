@@ -15,7 +15,6 @@ const ManufacturerDashboard = () => {
     { icon: Package, label: "Dashboard", path: "/manufacturer/dashboard", active: true },
     { icon: Plus, label: "Register Batch", path: "/manufacturer/register-batch", active: false},
     { icon: List, label: "Batches", path: "/manufacturer/batches", active: false },
-    { icon: Shield, label: "Blockchain", path: "/manufacturer/blockchain", active: false},
     { icon: Activity, label: "Analytics", path: "/manufacturer/analytics", active: false},
     { icon: Truck, label: "Shipments", path: "/manufacturer/shipments", active: false},
   ];
@@ -104,7 +103,7 @@ const ManufacturerDashboard = () => {
                   <th className="p-2">Quantity</th>
                   <th className="p-2">Expiry</th>
                   {/* <th className="p-2">Status</th> */}
-                  <th className="p-2">Blockchain Tx</th>
+                  {/* <th className="p-2">Blockchain Tx</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -115,7 +114,7 @@ const ManufacturerDashboard = () => {
                     <td className="p-2">{b.quantity}</td>
                     <td className="p-2">{b.expirydate?.slice(0,10)}</td>
                     {/* <td className="p-2">{b.status}</td> */}
-                    <td className="p-2">{b.blockchaintx ? <span className="text-green-700">✔</span> : <span className="text-gray-400">-</span>}</td>
+                    {/* <td className="p-2">Blockchain Tx removed</td> */}
                   </tr>
                 )) : <tr><td colSpan={6} className="p-2 text-center text-muted-foreground">No recent batches</td></tr>}
               </tbody>
@@ -166,7 +165,7 @@ const ManufacturerDashboard = () => {
               <thead>
                 <tr className="bg-muted/40">
                   <th className="p-2">Batch No</th>
-                  <th className="p-2">Blockchain Tx</th>
+                  {/* <th className="p-2">Blockchain Tx</th> */}
                   {/* <th className="p-2">Status</th> */}
                 </tr>
               </thead>
@@ -174,7 +173,7 @@ const ManufacturerDashboard = () => {
                 {blockchainSnapshot?.length > 0 ? blockchainSnapshot.map((b: any, idx: number) => (
                   <tr key={idx} className="border-b">
                     <td className="p-2">{b.batchnumber}</td>
-                    <td className="p-2">{b.blockchaintx}</td>
+                    {/* <td className="p-2">Blockchain Tx removed</td> */}
                     {/* <td className="p-2">{b.status}</td> */}
                   </tr>
                 )) : <tr><td colSpan={3} className="p-2 text-center text-muted-foreground">No blockchain records</td></tr>}

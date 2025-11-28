@@ -11,7 +11,6 @@ const DistributorDashboard = () => {
       { icon: Truck, label: 'Dashboard', path: '/distributor/dashboard', active: true },
       { icon: Package, label: 'Shipments', path: '/distributor/shipments', active: false },
       { icon: RotateCcw, label: 'Requests', path: '/distributor/requests', active: false },
-      { icon: FileText, label: 'Blockchain', path: '/distributor/blockchain', active: false },
       { icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
     ];
 

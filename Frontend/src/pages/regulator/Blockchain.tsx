@@ -25,10 +25,11 @@ const sidebarItems = [
   { icon: Activity, label: "Analytics", path: "/regulator/analytics", active: false },
 ];
 
+const API_BASE = "http://localhost:4000";
+
 const RegulatorBlockchain = () => {
   const [data, setData] = useState({
     flaggedPrescriptions: [],
-    flaggedBatches: [],
     userViolations: [],
     auditLogs: [],
   });
@@ -40,21 +41,42 @@ const RegulatorBlockchain = () => {
     const fetchBlockchainData = async () => {
       try {
         setLoading(true);
-        const API_BASE = "http://localhost:4000";
         const token = localStorage.getItem("token");
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`${API_BASE}/api/regulator/blockchain`, { headers });
 
-        if (!res.ok) {
-          const text = await res.text();
+
+        // Fetch manufacturer violations
+        console.log("[DEBUG] Fetching manufacturer violations from", `${API_BASE}/api/regulator/manufacturer-violations`);
+        const violationsRes = await fetch(`${API_BASE}/api/regulator/manufacturer-violations`, { headers });
+        console.log("[DEBUG] Manufacturer violations response status:", violationsRes.status);
+        if (!violationsRes.ok) {
+          const text = await violationsRes.text();
+          console.error("[DEBUG] Manufacturer violations fetch error response:", text);
+          throw new Error("Failed to fetch manufacturer violations");
+        }
+        const manufacturerViolations = await violationsRes.json();
+        console.log("[DEBUG] Manufacturer violations data:", manufacturerViolations);
+
+        // Fetch blockchain event logs
+        console.log("[DEBUG] Fetching blockchain event logs from", `${API_BASE}/api/blockchain/events`);
+        const eventRes = await fetch(`${API_BASE}/api/blockchain/events`, { headers });
+        console.log("[DEBUG] Blockchain event logs response status:", eventRes.status);
+        if (!eventRes.ok) {
+          const text = await eventRes.text();
+          console.error("[DEBUG] Blockchain event logs fetch error response:", text);
           if (text.startsWith("<!doctype") || text.startsWith("<html")) {
             throw new Error("Server returned HTML error page — check backend logs.");
           }
-          throw new Error("Failed to fetch blockchain data");
+          throw new Error("Failed to fetch blockchain event logs");
         }
+        const eventLogs = await eventRes.json();
+        console.log("[DEBUG] Blockchain event logs data:", eventLogs);
 
-        const result = await res.json();
-        setData(result);
+        setData((prev) => ({
+          flaggedPrescriptions: prev.flaggedPrescriptions,
+          userViolations: manufacturerViolations,
+          auditLogs: eventLogs
+        }));
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -82,12 +104,10 @@ const RegulatorBlockchain = () => {
     >
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent drop-shadow-lg">
             Blockchain Oversight
           </h1>
-          <p className="text-muted-foreground text-lg mt-1">
-            View and verify flagged prescriptions, batches, user violations, and audit logs from the blockchain network.
-          </p>
+          <p className="text-muted-foreground text-lg mt-1">View and verify flagged batches, user violations, and audit logs from the blockchain network.</p>
         </div>
 
         {/* Search & Refresh */}
@@ -96,124 +116,27 @@ const RegulatorBlockchain = () => {
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search across all records..."
-              className="w-96"
+              className="w-96 rounded-lg shadow-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="outline" onClick={() => window.location.reload()}>
+          <Button variant="outline" className="rounded-lg shadow-sm" onClick={() => window.location.reload()}>
             <RefreshCw className="mr-2 h-4 w-4" /> Refresh
           </Button>
         </div>
 
         {/* TABS */}
-        <Tabs defaultValue="flaggedPrescriptions" className="w-full">
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="flaggedPrescriptions">Flagged Prescriptions</TabsTrigger>
-            <TabsTrigger value="flaggedBatches">Flagged Batches</TabsTrigger>
-            <TabsTrigger value="userViolations">User Violations</TabsTrigger>
-            <TabsTrigger value="auditLogs">Audit Logs</TabsTrigger>
+        <Tabs defaultValue="userViolations" className="w-full">
+          <TabsList className="rounded-xl bg-gradient-to-r from-pink-100 to-red-100 p-1 shadow-md mb-4 flex gap-2">
+            <TabsTrigger value="userViolations" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">User Violations</TabsTrigger>
+            <TabsTrigger value="auditLogs" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">Blockchain Event Logs</TabsTrigger>
           </TabsList>
 
-          {/* FLAGGED PRESCRIPTIONS */}
-          <TabsContent value="flaggedPrescriptions">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="text-red-500" /> Flagged Prescriptions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading flagged prescriptions...
-                  </div>
-                ) : error ? (
-                  <div className="text-destructive text-center py-8">{error}</div>
-                ) : filtered(data.flaggedPrescriptions).length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No flagged prescriptions found.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-4 py-2 text-left">Prescription ID</th>
-                          <th className="px-4 py-2 text-left">Reason</th>
-                          <th className="px-4 py-2 text-left">Pharmacist</th>
-                          <th className="px-4 py-2 text-left">Timestamp</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered(data.flaggedPrescriptions).map((p: any, idx: number) => (
-                          <tr key={idx} className="border-b">
-                            <td className="px-4 py-2 font-medium">{p.prescriptionId}</td>
-                            <td className="px-4 py-2">{p.reason}</td>
-                            <td className="px-4 py-2">{p.pharmacist || "-"}</td>
-                            <td className="px-4 py-2">
-                              {p.timestamp ? new Date(p.timestamp).toLocaleString() : "-"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* FLAGGED BATCHES */}
-          <TabsContent value="flaggedBatches">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckSquare className="text-orange-500" /> Flagged Batches
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading flagged batches...
-                  </div>
-                ) : filtered(data.flaggedBatches).length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No flagged batches found.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-4 py-2 text-left">Batch ID</th>
-                          <th className="px-4 py-2 text-left">Product</th>
-                          <th className="px-4 py-2 text-left">Reason</th>
-                          <th className="px-4 py-2 text-left">Timestamp</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered(data.flaggedBatches).map((b: any, idx: number) => (
-                          <tr key={idx} className="border-b">
-                            <td className="px-4 py-2 font-medium">{b.batchId}</td>
-                            <td className="px-4 py-2">{b.productName}</td>
-                            <td className="px-4 py-2">{b.reason}</td>
-                            <td className="px-4 py-2">
-                              {b.timestamp ? new Date(b.timestamp).toLocaleString() : "-"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* USER VIOLATIONS */}
           <TabsContent value="userViolations">
-            <Card>
+            <Card className="rounded-xl shadow-lg border border-gray-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <UserX className="text-red-500" /> User Violations
@@ -221,32 +144,80 @@ const RegulatorBlockchain = () => {
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading user violations...
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground">Loading user violations...</div>
                 ) : filtered(data.userViolations).length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No violations recorded.
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground">No violations found.</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-4 py-2 text-left">User</th>
-                          <th className="px-4 py-2 text-left">Violation</th>
-                          <th className="px-4 py-2 text-left">Action Taken</th>
-                          <th className="px-4 py-2 text-left">Timestamp</th>
+                    <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm text-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-pink-100 to-red-100 text-gray-700">
+                          <th className="px-4 py-2 text-left font-semibold">Shipment ID</th>
+                          <th className="px-4 py-2 text-left font-semibold">Violator Role</th>
+                          <th className="px-4 py-2 text-left font-semibold">Violator Name</th>
+                          <th className="px-4 py-2 text-left font-semibold">Flagged By Role</th>
+                          <th className="px-4 py-2 text-left font-semibold">Flagged By Name</th>
+                          <th className="px-4 py-2 text-left font-semibold">Reason</th>
+                          <th className="px-4 py-2 text-left font-semibold">Timestamp</th>
+                          <th className="px-4 py-2 text-left font-semibold">Status</th>
+                          <th className="px-4 py-2 text-left font-semibold">Violator Status</th>
+                          <th className="px-4 py-2 text-left font-semibold">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filtered(data.userViolations).map((u: any, idx: number) => (
-                          <tr key={idx} className="border-b">
-                            <td className="px-4 py-2 font-medium">{u.username}</td>
-                            <td className="px-4 py-2">{u.violation}</td>
-                            <td className="px-4 py-2">{u.action || "-"}</td>
+                          <tr key={u.shipment_id} className={idx % 2 === 0 ? "bg-white" : "bg-pink-50" + " hover:bg-pink-100 transition-colors duration-150"}>
+                            <td className="px-4 py-2 font-medium rounded-l-xl">{u.shipment_id}</td>
+                            <td className="px-4 py-2">{u.violator_role}</td>
+                            <td className="px-4 py-2">{u.violator_name}</td>
+                            <td className="px-4 py-2">{u.flagged_by_role}</td>
+                            <td className="px-4 py-2">{u.flagged_by_name}</td>
+                            <td className="px-4 py-2">{u.reason}</td>
+                            <td className="px-4 py-2">{u.timestamp ? new Date(u.timestamp).toLocaleString() : "-"}</td>
                             <td className="px-4 py-2">
-                              {u.timestamp ? new Date(u.timestamp).toLocaleString() : "-"}
+                              <Badge variant={u.status === 'completed' ? 'default' : 'destructive'}>
+                                {u.status}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-2">
+                              <span style={{
+                                padding: '4px 12px',
+                                borderRadius: '12px',
+                                color: '#fff',
+                                background: u.violator_status === 'active' ? '#52c41a' : u.violator_status === 'suspended' ? '#f5222d' : '#faad14'
+                              }}>
+                                {u.violator_status ? (u.violator_status.charAt(0).toUpperCase() + u.violator_status.slice(1)) : 'Unknown'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 rounded-r-xl">
+                              <Button
+                                variant={u.violator_status === 'active' ? 'destructive' : 'default'}
+                                onClick={async () => {
+                                  const newStatus = u.violator_status === 'active' ? 'suspended' : 'active';
+                                  const token = localStorage.getItem("token");
+                                  const headers = {
+                                    "Content-Type": "application/json",
+                                    ...(token ? { Authorization: `Bearer ${token}` } : {})
+                                  };
+                                  await fetch(`${API_BASE}/api/regulator/violator/${u.violator_id}/status`, {
+                                    method: 'PATCH',
+                                    headers,
+                                    body: JSON.stringify({ status: newStatus })
+                                  });
+                                  // Refetch violations and event logs to show RegulatorOversight event
+                                  const violationsRes = await fetch(`${API_BASE}/api/regulator/manufacturer-violations`, { headers });
+                                  const manufacturerViolations = await violationsRes.json();
+                                  const eventRes = await fetch(`${API_BASE}/api/blockchain/events`, { headers });
+                                  const eventLogs = await eventRes.json();
+                                  setData((prev) => ({
+                                    ...prev,
+                                    userViolations: manufacturerViolations,
+                                    auditLogs: eventLogs
+                                  }));
+                                }}
+                              >
+                                {u.violator_status === 'active' ? 'Suspend' : 'Activate'}
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -260,45 +231,51 @@ const RegulatorBlockchain = () => {
 
           {/* AUDIT LOGS */}
           <TabsContent value="auditLogs">
-            <Card>
+            <Card className="rounded-xl shadow-lg border border-gray-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="text-blue-500" /> Blockchain Audit Logs
+                  <BookOpen className="text-blue-500" /> Blockchain Event Logs
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading audit logs...
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground">Loading audit logs...</div>
                 ) : filtered(data.auditLogs).length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No audit logs found.
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground">No audit logs found.</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-4 py-2 text-left">Action Type</th>
-                          <th className="px-4 py-2 text-left">Entity</th>
-                          <th className="px-4 py-2 text-left">Details</th>
-                          <th className="px-4 py-2 text-left">User</th>
-                          <th className="px-4 py-2 text-left">Timestamp</th>
+                    <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-lg text-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-pink-200 to-red-200 text-gray-700">
+                          <th className="px-4 py-2 text-left font-semibold">ID</th>
+                          <th className="px-4 py-2 text-left font-semibold">Event Name</th>
+                          <th className="px-4 py-2 text-left font-semibold">Contract Name</th>
+                          <th className="px-4 py-2 text-left font-semibold">Entity ID</th>
+                          <th className="px-4 py-2 text-left font-semibold">Entity Type</th>
+                          <th className="px-4 py-2 text-left font-semibold">Transaction Hash</th>
+                          <th className="px-4 py-2 text-left font-semibold">Timestamp</th>
+                          <th className="px-4 py-2 text-left font-semibold">Processed</th>
+                          <th className="px-4 py-2 text-left font-semibold">Wallet Address</th>
+                          <th className="px-4 py-2 text-left font-semibold">Block Number</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filtered(data.auditLogs).map((a: any, idx: number) => (
-                          <tr key={idx} className="border-b">
-                            <td className="px-4 py-2 font-medium">{a.action_type}</td>
-                            <td className="px-4 py-2">{a.entity_type}</td>
-                            <td className="px-4 py-2">{a.details}</td>
-                            <td className="px-4 py-2">{a.user || "-"}</td>
-                            <td className="px-4 py-2">
-                              {a.timestamp ? new Date(a.timestamp).toLocaleString() : "-"}
-                            </td>
-                          </tr>
-                        ))}
+                        {filtered(data.auditLogs)
+                          .slice(0, 12)
+                          .map((a: any, idx: number) => (
+                            <tr key={a.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-pink-50" + " hover:bg-pink-100 transition-colors duration-150"}>
+                              <td className="px-4 py-2 font-medium rounded-l-xl">{a.id}</td>
+                              <td className="px-4 py-2">{a.eventname}</td>
+                              <td className="px-4 py-2">{a.contractname}</td>
+                              <td className="px-4 py-2">{a.entityid}</td>
+                              <td className="px-4 py-2">{a.entitytype}</td>
+                              <td className="px-4 py-2">{a.transactionhash}</td>
+                              <td className="px-4 py-2">{a.timestamp ? new Date(a.timestamp).toLocaleString() : "-"}</td>
+                              <td className="px-4 py-2">{a.processed ? "Yes" : "No"}</td>
+                              <td className="px-4 py-2">{a.wallet_address}</td>
+                              <td className="px-4 py-2 rounded-r-xl">{a.blocknumber}</td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>

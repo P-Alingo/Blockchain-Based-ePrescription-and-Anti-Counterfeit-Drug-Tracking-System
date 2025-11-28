@@ -15,18 +15,18 @@ async function main() {
   const userManagementAddress = userManagement.target;
   console.log("✅ UserManagement deployed to:", userManagementAddress);
 
-  // 2. Deploy RegulatorOversight (Depends on UserManagement)
+  // 2. Deploy RegulatorOversight (Depends on UserManagement and admin wallet)
   console.log("\n📋 Step 2: Deploying RegulatorOversight...");
   const RegulatorOversight = await ethers.getContractFactory("RegulatorOversight");
-  const regulatorOversight = await RegulatorOversight.deploy(userManagementAddress);
+  const regulatorOversight = await RegulatorOversight.deploy(userManagementAddress, deployer.address);
   await regulatorOversight.waitForDeployment();
   const regulatorOversightAddress = regulatorOversight.target;
   console.log("✅ RegulatorOversight deployed to:", regulatorOversightAddress);
 
-  // 3. Deploy DrugSupplyChain (Depends on UserManagement)
+  // 3. Deploy DrugSupplyChain (Requires admin address)
   console.log("\n📋 Step 3: Deploying DrugSupplyChain...");
   const DrugSupplyChain = await ethers.getContractFactory("DrugSupplyChain");
-  const drugSupplyChain = await DrugSupplyChain.deploy(userManagementAddress);
+  const drugSupplyChain = await DrugSupplyChain.deploy(deployer.address); // Pass admin wallet address
   await drugSupplyChain.waitForDeployment();
   const drugSupplyChainAddress = drugSupplyChain.target;
   console.log("✅ DrugSupplyChain deployed to:", drugSupplyChainAddress);

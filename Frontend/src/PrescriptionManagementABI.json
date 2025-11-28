@@ -506,37 +506,6 @@
         "type": "uint256"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "pharmacist",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "prescriptionCode",
-        "type": "string"
-      }
-    ],
-    "name": "PrescriptionInvalid",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "prescriptionId",
-        "type": "uint256"
-      },
-      {
         "indexed": false,
         "internalType": "string",
         "name": "prescriptionCode",
@@ -710,6 +679,11 @@
       },
       {
         "internalType": "address",
+        "name": "doctor",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
         "name": "patient",
         "type": "address"
       },
@@ -839,153 +813,6 @@
   {
     "inputs": [],
     "name": "getAllPrescriptions",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "prescriptionId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "databaseId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "doctor",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "patient",
-            "type": "address"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "name",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "strength",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "form",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "instructions",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "dosageAmount",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "dosageUnit",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "frequency",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "duration",
-                "type": "uint256"
-              }
-            ],
-            "internalType": "struct PrescriptionManagement.DrugDetails",
-            "name": "drug",
-            "type": "tuple"
-          },
-          {
-            "internalType": "uint256",
-            "name": "issueDate",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "validUntil",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "prescriptionCode",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "blockchainTx",
-            "type": "string"
-          },
-          {
-            "internalType": "enum PrescriptionManagement.Status",
-            "name": "status",
-            "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "dispensedBy",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "dispensedDate",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          }
-        ],
-        "internalType": "struct PrescriptionManagement.Prescription[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getFlaggedPrescriptions",
     "outputs": [
       {
         "components": [
@@ -1931,24 +1758,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "prescriptionId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      }
-    ],
-    "name": "markPrescriptionInvalid",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

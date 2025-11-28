@@ -56,6 +56,7 @@ interface Prescription {
   valid: string;
   dispensed: boolean;
   qrcode?: string;
+  blockchain_synced?: boolean;
 }
 
 interface EditFormData {
@@ -85,6 +86,7 @@ const MyPrescriptions: React.FC = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [editForm, setEditForm] = useState<EditFormData | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const userName = userData.fullName || "Doctor";
@@ -115,6 +117,7 @@ const MyPrescriptions: React.FC = () => {
         dispensed: p.status.toLowerCase() === "dispensed",
         qrcode: p.qrcode_path || p.qrcode || "",
         quantity: p.quantity || 0,
+        blockchain_synced: p.blockchain_synced || false, // Add this field if available
       }));
 
       setPrescriptions(data);
@@ -123,6 +126,22 @@ const MyPrescriptions: React.FC = () => {
       console.error("Failed to fetch prescriptions:", error);
       toast.error(error.response?.data?.message || "Failed to load prescriptions");
     }
+  };
+  // Sync prescription to blockchain
+  const handleSyncBlockchain = async (id: string) => {
+    setSyncingId(id);
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(`http://localhost:4000/api/doctor/prescription/${id}/sync-blockchain`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Prescription synced to blockchain");
+      // Optionally, refetch prescriptions to update badge
+      fetchPrescriptions();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to sync prescription");
+    }
+    setSyncingId(null);
   };
 
   useEffect(() => {
@@ -292,18 +311,37 @@ const MyPrescriptions: React.FC = () => {
   };
 
   const exportCSV = () => {
-    const headers = ["Prescription ID", "Patient", "Age", "Drug", "Dosage", "Quantity", "Duration", "Status", "Issued", "Valid Until"];
+    const headers = [
+      "Prescription ID",
+      "Patient",
+      "Age",
+      "Drug",
+      "Dosage Amount",
+      "Dosage Unit",
+      "Quantity",
+      "Frequency",
+      "Duration",
+      "Instructions",
+      "Status",
+      "Issued",
+      "Valid Until",
+      "Blockchain Synced"
+    ];
     const rows = filteredPrescriptions.map((p) => [
       p.id,
       p.patient_name,
       calculateAge(p.dob),
       p.drug_name,
-      `${p.dosage_amount} ${p.dosage_unit}`,
+      p.dosage_amount,
+      p.dosage_unit,
       p.quantity ?? "-",
+      p.frequency ?? "-",
       p.duration,
+      p.instructions ?? "-",
       p.status,
       formatDate(p.issued),
       formatDate(p.valid),
+      p.blockchain_synced ? "Synced" : "Not Synced"
     ]);
     const csvContent =
       "data:text/csv;charset=utf-8," + [headers, ...rows].map((e) => e.join(",")).join("\n");
@@ -330,10 +368,16 @@ const MyPrescriptions: React.FC = () => {
             <h1 className="text-3xl font-bold text-blue-600">My Prescriptions</h1>
             <p className="text-muted-foreground">Manage and track all your issued prescriptions</p>
           </div>
-          <Button onClick={exportCSV} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Download className="mr-2 w-4 h-4" />
-            Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={fetchPrescriptions} className="bg-green-500 hover:bg-green-600 text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.5 19A7.5 7.5 0 0012 4.5a7.5 7.5 0 016.5 14.5" /></svg>
+              Refresh
+            </Button>
+            <Button onClick={exportCSV} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Download className="mr-2 w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
         {/* Search & Filter */}
@@ -398,19 +442,15 @@ const MyPrescriptions: React.FC = () => {
                       <div className="space-y-2 flex-1">
                         <div className="flex items-center space-x-3">
                           <span className="font-semibold text-lg">#{p.id}</span>
-                          {(() => {
-                            const now = dayjs();
-                            const validUntil = dayjs(p.valid);
-                            let badgeText: string;
-                            if (validUntil.isValid() && (now.isSame(validUntil, "day") || now.isAfter(validUntil, "day"))) {
-                              badgeText = "Expired";
-                            } else {
-                              badgeText = p.status === "Pending" ? "Active" : p.status;
-                            }
-                            const badgeClass = getStatusColor(badgeText);
-                            return <Badge className={`${badgeClass} border`}>{badgeText}</Badge>;
-                          })()}
-                          {p.dispensed && <Badge variant="outline" className="text-xs bg-purple-100 text-purple-800">Dispensed</Badge>}
+                          {/* Show status badge: Dispensed > Expired > Issued */}
+                          {p.status.toLowerCase() === "dispensed" ? (
+                            <Badge className="bg-purple-100 text-purple-800 border border-purple-200">Dispensed</Badge>
+                          ) : p.status.toLowerCase() === "expired" ? (
+                            <Badge className="bg-red-100 text-red-800 border border-red-200">Expired</Badge>
+                          ) : (
+                            <Badge className="bg-blue-100 text-blue-800 border border-blue-200">Issued</Badge>
+                          )}
+                          {/* Blockchain sync badge removed as requested */}
                         </div>
                         <div className="grid md:grid-cols-2 gap-2 text-sm">
                           <p><span className="font-medium">Patient:</span> {p.patient_name} ({calculateAge(p.dob)}y)</p>
@@ -433,6 +473,18 @@ const MyPrescriptions: React.FC = () => {
                           <Button variant="destructive" size="sm" onClick={() => handleDelete(p.id)}>
                             <Trash2 className="mr-2 w-3 h-3" />Delete
                           </Button>
+                          {/* Sync to Blockchain button */}
+                          {!p.blockchain_synced && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSyncBlockchain(p.id)}
+                              disabled={syncingId === p.id}
+                              className="bg-yellow-100 text-yellow-800 border-yellow-200"
+                            >
+                              {syncingId === p.id ? "Syncing..." : "Sync to Blockchain"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

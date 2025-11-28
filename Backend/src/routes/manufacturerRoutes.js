@@ -7,6 +7,8 @@ router.use(authMiddleware);
 // Batch registration route
 router.post("/batches", createDrugBatch);
 router.get("/drugbatch/form/dropdowns", getManufacturerDropdowns);
+// Alias for frontend compatibility
+router.get("/api/drugbatch/form/dropdowns", getManufacturerDropdowns);
 
 // Dropdowns for shipment creation form
 router.get("/shipment/form/dropdowns", getShipmentFormDropdowns);
@@ -31,7 +33,16 @@ router.get("/dashboard", getManufacturerDashboard);
 
 router.get("/batches", getManufacturerBatches);
 router.get("/batches/:id", getManufacturerBatchDetails);
+router.get("/drugbatch/:id", getManufacturerBatchDetails);
+// Alias for frontend compatibility
+router.get("/api/drugbatch/:id", getManufacturerBatchDetails);
 router.put("/batches/:id", updateManufacturerBatch);
+router.put("/drugbatch/:id", updateManufacturerBatch);
+// Alias for frontend compatibility
+router.put("/api/drugbatch/:id", updateManufacturerBatch);
 router.delete("/batches/:id", deleteManufacturerBatch);
+router.delete("/drugbatch/:id", deleteManufacturerBatch);
+// Alias for frontend compatibility
+router.delete("/api/drugbatch/:id", deleteManufacturerBatch);
 
 export default router;

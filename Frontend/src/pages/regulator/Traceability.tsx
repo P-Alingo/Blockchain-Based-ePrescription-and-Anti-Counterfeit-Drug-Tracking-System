@@ -159,17 +159,15 @@ const Traceability = () => {
     <DashboardLayout sidebarItems={sidebarItems} userRole="regulator" userName="Dr. Jane Regulator" userEmail="jane@ppb.go.ke">
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">Regulatory Reports</h1>
-          <p className="text-lg text-muted-foreground mt-2">
-            Comprehensive analysis and compliance documentation
-          </p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent drop-shadow-lg">Regulatory Reports</h1>
+          <p className="text-lg text-muted-foreground mt-2">Comprehensive analysis and compliance documentation</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 rounded-lg shadow-sm">
             <Calendar className="w-4 h-4" />
             Schedule Report
           </Button>
-          <Button className="medical-button gap-2">
+          <Button className="medical-button gap-2 rounded-lg shadow-md">
             <FileText className="w-4 h-4" />
             Create Report
           </Button>
@@ -178,14 +176,14 @@ const Traceability = () => {
 
       {/* Shipments and Drug Batches Tabs */}
       <Tabs defaultValue="shipments" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="shipments">Shipments</TabsTrigger>
-          <TabsTrigger value="batches">Drug Batches</TabsTrigger>
-          <TabsTrigger value="counterfeit">Counterfeit Drugs</TabsTrigger>
+        <TabsList className="rounded-xl bg-gradient-to-r from-pink-100 to-red-100 p-1 shadow-md mb-4 flex gap-2">
+          <TabsTrigger value="shipments" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">Shipments</TabsTrigger>
+          <TabsTrigger value="batches" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">Drug Batches</TabsTrigger>
+          <TabsTrigger value="counterfeit" className="rounded-lg px-6 py-2 font-semibold data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-400 data-[state=active]:to-red-400 data-[state=active]:text-white data-[state=active]:shadow-lg transition-colors">Counterfeit Drugs</TabsTrigger>
         </TabsList>
         {/* Counterfeit Drugs Tab */}
         <TabsContent value="counterfeit" className="space-y-4">
-          <Card className="healthcare-card">
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardHeader>
               <CardTitle>Flagged/Counterfeit Drugs</CardTitle>
               <CardDescription>All flagged or counterfeit drugs detected in shipments</CardDescription>
@@ -208,24 +206,24 @@ const Traceability = () => {
               )}
               {!loadingCounterfeit && !counterfeitError && counterfeitDrugs.length > 0 && (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="px-4 py-2 text-left">Drug Name</th>
-                        <th className="px-4 py-2 text-left">Batch Number</th>
-                        <th className="px-4 py-2 text-left">Manufacturer</th>
-                        <th className="px-4 py-2 text-left">Date Flagged</th>
-                        <th className="px-4 py-2 text-left">Flag Reason</th>
+                      <tr className="bg-gradient-to-r from-pink-100 to-red-100 text-gray-700">
+                        <th className="px-4 py-2 text-left font-semibold">Drug Name</th>
+                        <th className="px-4 py-2 text-left font-semibold">Batch Number</th>
+                        <th className="px-4 py-2 text-left font-semibold">Manufacturer</th>
+                        <th className="px-4 py-2 text-left font-semibold">Date Flagged</th>
+                        <th className="px-4 py-2 text-left font-semibold">Flag Reason</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {counterfeitDrugs.map((drug) => (
-                        <tr key={drug.id} className="border-b hover:bg-accent/50">
-                          <td className="px-4 py-2">{drug.drug_name || drug.drug_id}</td>
+                      {counterfeitDrugs.map((drug, idx) => (
+                        <tr key={drug.id} className={idx % 2 === 0 ? "bg-white" : "bg-pink-50" + " hover:bg-pink-100 transition-colors duration-150"}>
+                          <td className="px-4 py-2 rounded-l-xl">{drug.drug_name || drug.drug_id}</td>
                           <td className="px-4 py-2">{drug.batchnumber || drug.batch_id}</td>
                           <td className="px-4 py-2">{drug.manufacturer_name || drug.manufacturer_id}</td>
                           <td className="px-4 py-2">{drug.arrival_date ? new Date(drug.arrival_date).toLocaleDateString() : ''}</td>
-                          <td className="px-4 py-2">{drug.received_condition}</td>
+                          <td className="px-4 py-2 rounded-r-xl">{drug.received_condition}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -238,7 +236,7 @@ const Traceability = () => {
 
         {/* Shipments Tab */}
         <TabsContent value="shipments" className="space-y-4">
-          <Card className="healthcare-card">
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardContent className="p-6">
               <div className="flex flex-col lg:flex-row gap-4">
                 <div className="flex-1 relative">
@@ -276,7 +274,7 @@ const Traceability = () => {
           {!loadingShipments && !shipmentError && shipments.length > 0 && (
             <div className="grid gap-6">
               {shipments.map((shipment) => (
-                <Card key={shipment.id} className="healthcare-card hover-lift border shadow-lg">
+                <Card key={shipment.id} className="rounded-xl border shadow-lg hover:shadow-xl transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <div>
@@ -341,7 +339,7 @@ const Traceability = () => {
 
         {/* Drug Batches Tab */}
         <TabsContent value="batches" className="space-y-4">
-          <Card className="healthcare-card">
+          <Card className="rounded-xl shadow-lg border border-gray-200">
             <CardContent className="p-6">
               <div className="flex flex-col lg:flex-row gap-4">
                 <div className="flex-1 relative">
@@ -368,7 +366,7 @@ const Traceability = () => {
           {!loadingBatches && !batchError && batches.length > 0 && (
             <div className="grid gap-6">
               {batches.map((batch) => (
-                <Card key={batch.id} className="healthcare-card hover-lift border shadow-lg">
+                <Card key={batch.id} className="rounded-xl border shadow-lg hover:shadow-xl transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <div>

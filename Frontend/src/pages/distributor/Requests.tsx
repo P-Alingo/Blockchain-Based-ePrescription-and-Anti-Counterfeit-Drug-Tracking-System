@@ -20,7 +20,6 @@ const sidebarItems = [
 	{ icon: List, label: 'Dashboard', path: '/distributor/dashboard', active: false },
 	{ icon: Truck, label: 'Shipments', path: '/distributor/shipments', active: false },
 	{ icon: Package, label: 'Requests', path: '/distributor/requests', active: true },
-	{ icon: RotateCcw, label: 'Blockchain', path: '/distributor/blockchain', active: false },
 	{ icon: Activity, label: 'Analytics', path: '/distributor/analytics', active: false },
 ];
 
@@ -203,136 +202,135 @@ const DistributorRequests: React.FC = () => {
   if (loading || error) {
     return (
       <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName="Mike Distributor" userEmail="mike@logistics.co.ke">
-        {loading && <div className="p-8 text-center">Loading drug requests...</div>}
-        {error && <div className="p-8 text-center text-red-500">{error}</div>}
+        <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
+          {loading && <div className="p-8 text-center">Loading drug requests...</div>}
+          {error && <div className="p-8 text-center text-red-500">{error}</div>}
+        </div>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout sidebarItems={sidebarItems} userRole="distributor" userName="Mike Distributor" userEmail="mike@logistics.co.ke">
-      <div className="space-y-8">
-        <Card>
+      <div className="min-h-screen bg-gray-50 py-8 px-2 md:px-8 space-y-8">
+        <Card className="rounded-xl shadow-lg border border-gray-200">
           <CardHeader><CardTitle>Distributor Drug Requests</CardTitle></CardHeader>
           <CardContent>
             {drugRequests.length === 0 ? (
               <div className="text-center py-8">No drugs or requests found</div>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th>Drug</th>
-                    <th>Batch</th>
-                    <th>Batch Quantity</th>
-                    <th>Expiry</th>
-                    <th>Pharmacist Request</th>
-                    <th>Requested Qty</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {drugRequests.map(drugRow => (
-                    drugRow.batches.length === 0 && drugRow.requests.length === 0 ? (
-                      <tr key={drugRow.drug.id}>
-                        <td>{drugRow.drug.name}</td>
-                        <td colSpan={7} className="text-center text-muted-foreground">No batches or requests</td>
-                      </tr>
-                    ) : (
-                      drugRow.batches.map(batch => (
-                        <React.Fragment key={batch.batch_id}>
-                          {drugRow.requests.filter(r => r.batch_id === batch.batch_id).length === 0 ? (
-                            <tr>
-                              <td>{drugRow.drug.name}</td>
-                              <td>{batch.batchnumber}</td>
-                              <td>{batch.quantity}</td>
-                              <td>{batch.expirydate}</td>
-                              <td colSpan={4} className="text-center text-muted-foreground">No requests for this batch</td>
-                            </tr>
-                          ) : (
-                            drugRow.requests.filter(r => r.batch_id === batch.batch_id).map(request => (
-                              <tr key={request.request_id}>
-                                <td>{drugRow.drug.name}</td>
-                                <td>{batch.batchnumber}</td>
-                                <td>{batch.quantity}</td>
-                                <td>{batch.expirydate}</td>
-                                <td>{request.pharmacist_name}</td>
-                                <td>{request.quantity_requested}</td>
-                                <td>{request.status}</td>
-                                <td>
-                                  {/* Show Accept button only if batch exists for the requested drug */}
-                                  {/* Check if shipment exists for this request (by batch_id and pharmacist_id) */}
-                                  {(() => {
-                                    // Only disable Accept if a shipment exists for THIS request (by request_id)
-                                    const shipmentForRequest = shipments.find(s => s.request_id === request.request_id);
-                                    if (shipmentForRequest) {
-                                      if (shipmentForRequest.status === 'cancelled') {
+              <div className="overflow-x-auto">
+                <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-purple-100 to-pink-100 text-gray-700">
+                      <th className="px-4 py-2 font-semibold text-left">Drug</th>
+                      <th className="px-4 py-2 font-semibold text-left">Batch</th>
+                      <th className="px-4 py-2 font-semibold text-left">Batch Quantity</th>
+                      <th className="px-4 py-2 font-semibold text-left">Expiry</th>
+                      <th className="px-4 py-2 font-semibold text-left">Pharmacist Request</th>
+                      <th className="px-4 py-2 font-semibold text-left">Requested Qty</th>
+                      <th className="px-4 py-2 font-semibold text-left">Status</th>
+                      <th className="px-4 py-2 font-semibold text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drugRequests.map(drugRow => (
+                      drugRow.batches.length === 0 && drugRow.requests.length === 0 ? (
+                        <tr key={drugRow.drug.id} className="bg-white hover:bg-gray-100 transition-colors duration-150">
+                          <td className="px-4 py-2 rounded-l-xl">{drugRow.drug.name}</td>
+                          <td colSpan={7} className="text-center text-muted-foreground">No batches or requests</td>
+                        </tr>
+                      ) : (
+                        drugRow.batches.map((batch, batchIdx) => (
+                          <React.Fragment key={batch.batch_id}>
+                            {drugRow.requests.filter(r => r.batch_id === batch.batch_id).length === 0 ? (
+                              <tr className={batchIdx % 2 === 0 ? "bg-white" : "bg-gray-50" + " hover:bg-pink-50 transition-colors duration-150"}>
+                                <td className="px-4 py-2 rounded-l-xl">{drugRow.drug.name}</td>
+                                <td className="px-4 py-2">{batch.batchnumber}</td>
+                                <td className="px-4 py-2">{batch.quantity}</td>
+                                <td className="px-4 py-2">{batch.expirydate}</td>
+                                <td colSpan={4} className="text-center text-muted-foreground">No requests for this batch</td>
+                              </tr>
+                            ) : (
+                              drugRow.requests.filter(r => r.batch_id === batch.batch_id).map((request, reqIdx) => (
+                                <tr key={request.request_id} className={reqIdx % 2 === 0 ? "bg-white" : "bg-gray-50" + " hover:bg-purple-50 transition-colors duration-150"}>
+                                  <td className="px-4 py-2 rounded-l-xl">{drugRow.drug.name}</td>
+                                  <td className="px-4 py-2">{batch.batchnumber}</td>
+                                  <td className="px-4 py-2">{batch.quantity}</td>
+                                  <td className="px-4 py-2">{batch.expirydate}</td>
+                                  <td className="px-4 py-2">{request.pharmacist_name}</td>
+                                  <td className="px-4 py-2">{request.quantity_requested}</td>
+                                  <td className="px-4 py-2">{request.status}</td>
+                                  <td className="px-4 py-2 rounded-r-xl">
+                                    {(() => {
+                                      const shipmentForRequest = shipments.find(s => s.request_id === request.request_id);
+                                      if (shipmentForRequest) {
+                                        if (shipmentForRequest.status === 'cancelled') {
+                                          return (
+                                            <Button variant="destructive" size="sm" className="rounded-lg shadow-sm" disabled>
+                                              Cancelled
+                                            </Button>
+                                          );
+                                        }
                                         return (
-                                          <Button variant="destructive" size="sm" disabled>
-                                            Cancelled
+                                          <Button variant="default" size="sm" className="rounded-lg shadow-sm" disabled>
+                                            Accepted
                                           </Button>
                                         );
                                       }
-                                      return (
-                                        <Button variant="default" size="sm" disabled>
-                                          Accepted
-                                        </Button>
-                                      );
-                                    }
-                                    // Only show Accept if status is pending
-                                    if (request.status === 'pending') {
-                                      return (
-                                        <Button variant="default" size="sm" onClick={() => handleAcceptClick(request)}>
-                                          Accept
-                                        </Button>
-                                      );
-                                    }
-                                    // Disable Accept for approved/in_transit/delivered/cancelled/other statuses
-                                    if (request.status !== 'pending') {
-                                      return (
-                                        <Button variant="default" size="sm" disabled>
-                                          {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                                        </Button>
-                                      );
-                                    }
-                                    return null;
-                                  })()}
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </React.Fragment>
-                      ))
-                    )
-                  ))}
-                </tbody>
-              </table>
+                                      if (request.status === 'pending') {
+                                        return (
+                                          <Button variant="default" size="sm" className="rounded-lg shadow-sm" onClick={() => handleAcceptClick(request)}>
+                                            Accept
+                                          </Button>
+                                        );
+                                      }
+                                      if (request.status !== 'pending') {
+                                        return (
+                                          <Button variant="default" size="sm" className="rounded-lg shadow-sm" disabled>
+                                            {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                                          </Button>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </React.Fragment>
+                        ))
+                      )
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>
         {acceptModalOpen && selectedRequest && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg relative">
+            <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg relative border border-gray-200">
               <button className="absolute top-2 right-2 text-gray-500" onClick={() => setAcceptModalOpen(false)}>&times;</button>
               <h2 className="text-xl font-bold mb-4">Accept Request & Create Shipment</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Departure Date</label>
-                  <input type="datetime-local" className="border rounded px-2 py-1 w-full" value={shipmentFields.departure_date} onChange={e => setShipmentFields(f => ({ ...f, departure_date: e.target.value }))} />
+                  <input type="datetime-local" className="border rounded-lg px-2 py-1 w-full shadow-sm" value={shipmentFields.departure_date} onChange={e => setShipmentFields(f => ({ ...f, departure_date: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Route</label>
-                  <input className="border rounded px-2 py-1 w-full" value={shipmentFields.route} onChange={e => setShipmentFields(f => ({ ...f, route: e.target.value }))} />
+                  <input className="border rounded-lg px-2 py-1 w-full shadow-sm" value={shipmentFields.route} onChange={e => setShipmentFields(f => ({ ...f, route: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Vehicle Number</label>
-                  <input className="border rounded px-2 py-1 w-full" value={shipmentFields.vehicle_number} onChange={e => setShipmentFields(f => ({ ...f, vehicle_number: e.target.value }))} />
+                  <input className="border rounded-lg px-2 py-1 w-full shadow-sm" value={shipmentFields.vehicle_number} onChange={e => setShipmentFields(f => ({ ...f, vehicle_number: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Quantity</label>
-                  <input className="border rounded px-2 py-1 w-full" value={shipmentFields.quantity} onChange={e => setShipmentFields(f => ({ ...f, quantity: e.target.value }))} />
+                  <input className="border rounded-lg px-2 py-1 w-full shadow-sm" value={shipmentFields.quantity} onChange={e => setShipmentFields(f => ({ ...f, quantity: e.target.value }))} />
                 </div>
-                <Button className="w-full mt-4" onClick={handleSubmitShipment} disabled={shipmentLoading}>{shipmentLoading ? 'Processing...' : 'Create Shipment & Accept'}</Button>
+                <Button className="w-full mt-4 rounded-lg shadow-sm" onClick={handleSubmitShipment} disabled={shipmentLoading}>{shipmentLoading ? 'Processing...' : 'Create Shipment & Accept'}</Button>
               </div>
             </div>
           </div>
@@ -340,39 +338,39 @@ const DistributorRequests: React.FC = () => {
         {/* Shipment Modal */}
         {shipmentModalOpen && selectedRequest && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200">
               <h2 className="text-xl font-bold mb-4">Create Shipment</h2>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Pharmacist Facility</label>
-                <input type="text" value={selectedRequest.pharmacist_facility || ''} readOnly className="w-full border rounded px-2 py-1 bg-gray-100" />
+                <input type="text" value={selectedRequest.pharmacist_facility || ''} readOnly className="w-full border rounded-lg px-2 py-1 bg-gray-100 shadow-sm" />
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Manufacturer</label>
-                <input type="text" value={selectedRequest.manufacturer_name || ''} readOnly className="w-full border rounded px-2 py-1 bg-gray-100" />
+                <input type="text" value={selectedRequest.manufacturer_name || ''} readOnly className="w-full border rounded-lg px-2 py-1 bg-gray-100 shadow-sm" />
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Quantity</label>
-                <input type="number" min="1" value={shipmentFields.quantity} onChange={e => setShipmentFields(f => ({ ...f, quantity: e.target.value }))} className="w-full border rounded px-2 py-1" />
+                <input type="number" min="1" value={shipmentFields.quantity} onChange={e => setShipmentFields(f => ({ ...f, quantity: e.target.value }))} className="w-full border rounded-lg px-2 py-1 shadow-sm" />
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Temperature</label>
-                <input type="text" value={shipmentFields.temperature} onChange={e => setShipmentFields(f => ({ ...f, temperature: e.target.value }))} className="w-full border rounded px-2 py-1" />
+                <input type="text" value={shipmentFields.temperature} onChange={e => setShipmentFields(f => ({ ...f, temperature: e.target.value }))} className="w-full border rounded-lg px-2 py-1 shadow-sm" />
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Route</label>
-                <input type="text" value={shipmentFields.route} onChange={e => setShipmentFields(f => ({ ...f, route: e.target.value }))} className="w-full border rounded px-2 py-1" />
+                <input type="text" value={shipmentFields.route} onChange={e => setShipmentFields(f => ({ ...f, route: e.target.value }))} className="w-full border rounded-lg px-2 py-1 shadow-sm" />
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Vehicle Number</label>
-                <input type="text" value={shipmentFields.vehicle_number} onChange={e => setShipmentFields(f => ({ ...f, vehicle_number: e.target.value }))} className="w-full border rounded px-2 py-1" />
+                <input type="text" value={shipmentFields.vehicle_number} onChange={e => setShipmentFields(f => ({ ...f, vehicle_number: e.target.value }))} className="w-full border rounded-lg px-2 py-1 shadow-sm" />
               </div>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Departure Date</label>
-                <input type="date" value={shipmentFields.departure_date} onChange={e => setShipmentFields(f => ({ ...f, departure_date: e.target.value }))} className="w-full border rounded px-2 py-1" />
+                <input type="date" value={shipmentFields.departure_date} onChange={e => setShipmentFields(f => ({ ...f, departure_date: e.target.value }))} className="w-full border rounded-lg px-2 py-1 shadow-sm" />
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setShipmentModalOpen(false); setSelectedRequest(null); }}>Cancel</Button>
-                <Button onClick={handleCreateShipment}>Create Shipment</Button>
+                <Button variant="outline" className="rounded-lg" onClick={() => { setShipmentModalOpen(false); setSelectedRequest(null); }}>Cancel</Button>
+                <Button className="rounded-lg shadow-sm" onClick={handleCreateShipment}>Create Shipment</Button>
               </div>
             </div>
           </div>

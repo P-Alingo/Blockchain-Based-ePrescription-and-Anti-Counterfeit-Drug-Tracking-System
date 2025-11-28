@@ -3,7 +3,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_userManagementAddress",
+        "name": "_admin",
         "type": "address"
       }
     ],
@@ -16,20 +16,26 @@
       {
         "indexed": true,
         "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
         "name": "batchId",
         "type": "uint256"
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "batchNumber",
-        "type": "string"
+        "indexed": true,
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
       },
       {
         "indexed": false,
-        "internalType": "string",
-        "name": "transactionHash",
-        "type": "string"
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -38,7 +44,7 @@
         "type": "uint256"
       }
     ],
-    "name": "BatchBlockchainTxUpdated",
+    "name": "BatchRequestDeleted",
     "type": "event"
   },
   {
@@ -47,87 +53,7 @@
       {
         "indexed": true,
         "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "flaggedBy",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
-    ],
-    "name": "BatchCounterfeit",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "databaseId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "manufacturer",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "batchNumber",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "drugName",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "quantity",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "expiryDate",
-        "type": "uint256"
-      }
-    ],
-    "name": "BatchCreated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "transferId",
+        "name": "requestId",
         "type": "uint256"
       },
       {
@@ -139,20 +65,26 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "from",
+        "name": "pharmacist",
         "type": "address"
       },
       {
         "indexed": false,
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "quantityRequested",
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "string",
-        "name": "shipmentNumber",
-        "type": "string"
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "distributorId",
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -167,7 +99,87 @@
         "type": "uint256"
       }
     ],
-    "name": "BatchTransferred",
+    "name": "BatchRequestEdited",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "oldStatus",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "newStatus",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "BatchRequestStatusUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quantityRequested",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "distributorId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "BatchRequested",
     "type": "event"
   },
   {
@@ -181,8 +193,326 @@
       },
       {
         "indexed": false,
+        "internalType": "uint256",
+        "name": "manufacturerId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
         "internalType": "string",
-        "name": "shipmentNumber",
+        "name": "batchNumber",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "manufactureDate",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "expiryDate",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "storageTemperature",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "manufacturingFacility",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "qualityControlOfficerId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "dateChecked",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "DrugBatchCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "manufacturerId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "batchNumber",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "DrugBatchDeleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "manufacturerId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "batchNumber",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "manufactureDate",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "expiryDate",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "storageTemperature",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "manufacturingFacility",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "qualityControlOfficerId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "dateChecked",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "DrugBatchEdited",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "status",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "ShipmentCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "ShipmentDeleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "status",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "ShipmentEdited",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "oldStatus",
         "type": "string"
       },
       {
@@ -190,12 +520,6 @@
         "internalType": "string",
         "name": "newStatus",
         "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "updatedBy",
-        "type": "address"
       },
       {
         "indexed": false,
@@ -208,51 +532,8 @@
     "type": "event"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "allBatchIds",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
-    "name": "batchCounter",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "batchOwnershipHistory",
+    "name": "admin",
     "outputs": [
       {
         "internalType": "address",
@@ -269,18 +550,13 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
-    "name": "batchTransfers",
+    "name": "batchRequests",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "transferId",
+        "name": "requestId",
         "type": "uint256"
       },
       {
@@ -290,159 +566,28 @@
       },
       {
         "internalType": "address",
-        "name": "from",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "to",
+        "name": "pharmacist",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "timestamp",
+        "name": "quantityRequested",
         "type": "uint256"
       },
       {
-        "internalType": "string",
-        "name": "shipmentNumber",
-        "type": "string"
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "distributorId",
+        "type": "uint256"
       },
       {
         "internalType": "string",
         "name": "status",
         "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "blockchainTx",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "batches",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      },
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "databaseId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "batchNumber",
-            "type": "string"
-          },
-          {
-            "internalType": "uint256",
-            "name": "drugId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "drugName",
-            "type": "string"
-          },
-          {
-            "internalType": "uint256",
-            "name": "manufacturerId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "quantity",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "manufactureDate",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "expiryDate",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "storageTemperature",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "manufacturingFacility",
-            "type": "string"
-          },
-          {
-            "internalType": "uint256",
-            "name": "qualityControlOfficerId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "dateChecked",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "shipmentNumber",
-            "type": "string"
-          },
-          {
-            "internalType": "uint256",
-            "name": "distributorCompanyId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "distributorFacilityId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "qrCodePath",
-            "type": "string"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.BatchDetails",
-        "name": "details",
-        "type": "tuple"
-      },
-      {
-        "internalType": "address",
-        "name": "currentOwner",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "manufacturer",
-        "type": "address"
-      },
-      {
-        "internalType": "bool",
-        "name": "isCounterfeit",
-        "type": "bool"
-      },
-      {
-        "internalType": "bool",
-        "name": "exists",
-        "type": "bool"
       },
       {
         "internalType": "bool",
@@ -456,7 +601,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "updatedAt",
+        "name": "deletedAt",
         "type": "uint256"
       }
     ],
@@ -467,7 +612,17 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "databaseId",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "manufacturerId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "drugId",
         "type": "uint256"
       },
       {
@@ -477,13 +632,131 @@
       },
       {
         "internalType": "uint256",
-        "name": "drugId",
+        "name": "manufactureDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiryDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quantity",
         "type": "uint256"
       },
       {
         "internalType": "string",
-        "name": "drugName",
+        "name": "storageTemperature",
         "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "manufacturingFacility",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "qualityControlOfficerId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "dateChecked",
+        "type": "uint256"
+      }
+    ],
+    "name": "createDrugBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "status",
+        "type": "string"
+      }
+    ],
+    "name": "createShipment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      }
+    ],
+    "name": "deleteBatchRequest",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      }
+    ],
+    "name": "deleteDrugBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      }
+    ],
+    "name": "deleteShipment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "drugBatches",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
       },
       {
         "internalType": "uint256",
@@ -492,8 +765,13 @@
       },
       {
         "internalType": "uint256",
-        "name": "quantity",
+        "name": "drugId",
         "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "batchNumber",
+        "type": "string"
       },
       {
         "internalType": "uint256",
@@ -503,6 +781,11 @@
       {
         "internalType": "uint256",
         "name": "expiryDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quantity",
         "type": "uint256"
       },
       {
@@ -526,1322 +809,55 @@
         "type": "uint256"
       },
       {
-        "internalType": "string",
-        "name": "shipmentNumber",
-        "type": "string"
+        "internalType": "bool",
+        "name": "isDeleted",
+        "type": "bool"
       },
       {
         "internalType": "uint256",
-        "name": "distributorCompanyId",
+        "name": "createdAt",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "distributorFacilityId",
+        "name": "deletedAt",
         "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "qrCodePath",
-        "type": "string"
       }
     ],
-    "name": "createBatch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
       {
         "internalType": "uint256",
         "name": "batchId",
         "type": "uint256"
-      }
-    ],
-    "name": "detectAnomalies",
-    "outputs": [
-      {
-        "internalType": "string[]",
-        "name": "",
-        "type": "string[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
       },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "distributorBatches",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getAllBatches",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getBatch",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "batchNumber",
-        "type": "string"
-      }
-    ],
-    "name": "getBatchByNumber",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getBatchOwnershipHistory",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "",
-        "type": "address[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getBatchTransfers",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "transferId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "from",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "to",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "timestamp",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "shipmentNumber",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "status",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "blockchainTx",
-            "type": "string"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Transfer[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "distributor",
-        "type": "address"
-      }
-    ],
-    "name": "getBatchesByDistributor",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "manufacturer",
-        "type": "address"
-      }
-    ],
-    "name": "getBatchesByManufacturer",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
       {
         "internalType": "address",
         "name": "pharmacist",
         "type": "address"
-      }
-    ],
-    "name": "getBatchesByPharmacist",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getCurrentBatchOwner",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getFlaggedBatches",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "batchId",
-            "type": "uint256"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "databaseId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "batchNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "drugId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "drugName",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufacturerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "quantity",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "manufactureDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "expiryDate",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "storageTemperature",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "manufacturingFacility",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "qualityControlOfficerId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "dateChecked",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "shipmentNumber",
-                "type": "string"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorCompanyId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "distributorFacilityId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "string",
-                "name": "qrCodePath",
-                "type": "string"
-              }
-            ],
-            "internalType": "struct DrugSupplyChain.BatchDetails",
-            "name": "details",
-            "type": "tuple"
-          },
-          {
-            "internalType": "address",
-            "name": "currentOwner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "manufacturer",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isCounterfeit",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeleted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "createdAt",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "updatedAt",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DrugSupplyChain.Batch[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      }
-    ],
-    "name": "isBatchExpired",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "wallet",
-        "type": "address"
-      }
-    ],
-    "name": "isBatchOwner",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "manufacturerBatches",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
+        "name": "quantityRequested",
         "type": "uint256"
       },
       {
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      }
-    ],
-    "name": "markBatchAsCounterfeit",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
         "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "pharmacistBatches",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
+        "name": "drugId",
         "type": "uint256"
       },
       {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "shipmentNumber",
-        "type": "string"
+        "internalType": "uint256",
+        "name": "distributorId",
+        "type": "uint256"
       },
       {
         "internalType": "string",
@@ -1849,18 +865,206 @@
         "type": "string"
       }
     ],
-    "name": "transferBatch",
+    "name": "editBatchRequest",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "transferCounter",
-    "outputs": [
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "manufacturerId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "batchNumber",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "manufactureDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiryDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quantity",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "storageTemperature",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "manufacturingFacility",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "qualityControlOfficerId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "dateChecked",
+        "type": "uint256"
+      }
+    ],
+    "name": "editDrugBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "status",
+        "type": "string"
+      }
+    ],
+    "name": "editShipment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quantityRequested",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "drugId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "distributorId",
+        "type": "uint256"
+      }
+    ],
+    "name": "requestBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_admin",
+        "type": "address"
+      }
+    ],
+    "name": "setAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "uint256",
         "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "shipments",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "pharmacist",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "status",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "isDeleted",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "createdAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "deletedAt",
         "type": "uint256"
       }
     ],
@@ -1871,31 +1075,8 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "batchId",
+        "name": "requestId",
         "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "transactionHash",
-        "type": "string"
-      }
-    ],
-    "name": "updateBatchBlockchainTx",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "batchId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "shipmentNumber",
-        "type": "string"
       },
       {
         "internalType": "string",
@@ -1903,7 +1084,7 @@
         "type": "string"
       }
     ],
-    "name": "updateShipmentStatus",
+    "name": "updateBatchRequestStatus",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1911,52 +1092,37 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "shipmentId",
+        "type": "uint256"
+      },
+      {
         "internalType": "string",
-        "name": "",
+        "name": "newStatus",
         "type": "string"
       }
     ],
-    "name": "usedBatchNumbers",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "userManagement",
-    "outputs": [
-      {
-        "internalType": "contract UserManagement",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
+    "name": "updateDistributorShipmentStatus",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "batchId",
+        "name": "shipmentId",
         "type": "uint256"
-      }
-    ],
-    "name": "verifyBatchAuthenticity",
-    "outputs": [
+      },
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
+        "internalType": "string",
+        "name": "newStatus",
+        "type": "string"
       }
     ],
-    "stateMutability": "view",
+    "name": "updatePharmacistShipmentStatus",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]

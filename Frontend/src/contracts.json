@@ -1,23 +1,23 @@
 {
-  "USER_MANAGEMENT_ADDRESS": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "REGULATOR_OVERSIGHT_ADDRESS": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-  "DRUG_SUPPLY_CHAIN_ADDRESS": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-  "PRESCRIPTION_MANAGEMENT_ADDRESS": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+  "USER_MANAGEMENT_ADDRESS": "0x8A93d247134d91e0de6f96547cB0204e5BE8e5D8",
+  "REGULATOR_OVERSIGHT_ADDRESS": "0x40918Ba7f132E0aCba2CE4de4c4baF9BD2D7D849",
+  "DRUG_SUPPLY_CHAIN_ADDRESS": "0xF32D39ff9f6Aa7a7A64d7a4F00a54826Ef791a55",
+  "PRESCRIPTION_MANAGEMENT_ADDRESS": "0xd6e1afe5cA8D00A2EFC01B89997abE2De47fdfAf",
   "ADMIN_WALLET": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "DEPLOYMENT_NETWORK": "localhost",
-  "DEPLOYMENT_TIMESTAMP": "2025-11-15T17:14:12.214Z",
+  "DEPLOYMENT_TIMESTAMP": "2025-11-27T23:45:57.825Z",
   "ABI_PATHS": {
     "BACKEND": {
-      "USER_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\UserManagementABI.json",
-      "REGULATOR_OVERSIGHT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\RegulatorOversightABI.json",
-      "DRUG_SUPPLY_CHAIN": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\DrugSupplyChainABI.json",
-      "PRESCRIPTION_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Backend\\src\\PrescriptionManagementABI.json"
+      "USER_MANAGEMENT": "C:\\eprescribe_kenya\\eprescribe\\Backend\\src\\UserManagementABI.json",
+      "REGULATOR_OVERSIGHT": "C:\\eprescribe_kenya\\eprescribe\\Backend\\src\\RegulatorOversightABI.json",
+      "DRUG_SUPPLY_CHAIN": "C:\\eprescribe_kenya\\eprescribe\\Backend\\src\\DrugSupplyChainABI.json",
+      "PRESCRIPTION_MANAGEMENT": "C:\\eprescribe_kenya\\eprescribe\\Backend\\src\\PrescriptionManagementABI.json"
     },
     "FRONTEND": {
-      "USER_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\UserManagementABI.json",
-      "REGULATOR_OVERSIGHT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\RegulatorOversightABI.json",
-      "DRUG_SUPPLY_CHAIN": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\DrugSupplyChainABI.json",
-      "PRESCRIPTION_MANAGEMENT": "D:\\Alingo\\Strathmore\\Project II\\System Codes\\eprescribe Kenya\\Frontend\\src\\PrescriptionManagementABI.json"
+      "USER_MANAGEMENT": "C:\\eprescribe_kenya\\eprescribe\\Frontend\\src\\UserManagementABI.json",
+      "REGULATOR_OVERSIGHT": "C:\\eprescribe_kenya\\eprescribe\\Frontend\\src\\RegulatorOversightABI.json",
+      "DRUG_SUPPLY_CHAIN": "C:\\eprescribe_kenya\\eprescribe\\Frontend\\src\\DrugSupplyChainABI.json",
+      "PRESCRIPTION_MANAGEMENT": "C:\\eprescribe_kenya\\eprescribe\\Frontend\\src\\PrescriptionManagementABI.json"
     }
   },
   "DEPENDENCIES": {

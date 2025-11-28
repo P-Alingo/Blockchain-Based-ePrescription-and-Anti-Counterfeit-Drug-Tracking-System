@@ -46,6 +46,7 @@ const UserManagement = () => {
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [modalStatus, setModalStatus] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [syncingUserId, setSyncingUserId] = useState<string | null>(null);
@@ -81,10 +82,10 @@ const UserManagement = () => {
             const blockchainStatus = await fetchBlockchainStatus(user.id);
             if (blockchainStatus) {
               user.blockchain = {
-                badge: blockchainStatus.blockchain_badge,
+                badge: blockchainStatus.is_synced === true ? 'synced' : 'not_synced',
                 status: blockchainStatus.status,
                 role: blockchainStatus.onChainRole,
-                is_synced: blockchainStatus.blockchain_badge === 'synced',
+                is_synced: blockchainStatus.is_synced === true,
                 error: blockchainStatus.error,
                 transaction_hash: blockchainStatus.transaction_hash,
                 block_number: blockchainStatus.block_number
@@ -189,6 +190,7 @@ const UserManagement = () => {
     }
     
     setSelectedUser(user);
+    setModalStatus(user.status || "pending");
     setModalOpen(true);
     setEditMode(enableEdit);
   };
@@ -201,13 +203,19 @@ const UserManagement = () => {
         // Fetch original user for comparison
         const originalUser = users.find(u => u.id === selectedUser.id);
         if (!originalUser) throw new Error("Original user not found");
-        // Only send changed fields
+        // Debug: log status values
+        console.log('Original status:', originalUser.status, 'Modal status:', modalStatus);
+        // Only send changed fields, but always include status if changed in modal
         const changedFields: any = {};
-        ["full_name","email","role","wallet_address","phone_number","gender","dob","user_code","status"].forEach(field => {
+        ["full_name","email","role","wallet_address","phone_number","gender","dob","user_code"].forEach(field => {
           if ((selectedUser as any)[field] !== (originalUser as any)[field]) {
             changedFields[field] = (selectedUser as any)[field];
           }
         });
+        // Always check status change explicitly using modalStatus
+        if (modalStatus !== originalUser.status) {
+          changedFields["status"] = modalStatus;
+        }
         if (Object.keys(changedFields).length === 0) {
           alert("No changes detected.");
           return;
@@ -225,6 +233,7 @@ const UserManagement = () => {
         if (!updatedUser) throw new Error("Failed to fetch updated user");
         setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
         setSelectedUser(updatedUser);
+        setModalStatus(updatedUser.status || "pending");
         setEditMode(false);
         alert("User updated successfully!");
       } catch (err) {
@@ -295,18 +304,16 @@ const UserManagement = () => {
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Failed to sync user to blockchain");
       }
-      // Refetch blockchain status for this user
-      const blockchainStatus = await fetchBlockchainStatus(userId);
-      // Map blockchain status for badge logic
-      const mappedBlockchain = blockchainStatus ? {
-        badge: blockchainStatus.blockchain_badge,
-        status: blockchainStatus.status,
-        role: blockchainStatus.onChainRole,
-        is_synced: blockchainStatus.blockchain_badge === 'synced',
-        error: blockchainStatus.error,
-        transaction_hash: blockchainStatus.transaction_hash,
-        block_number: blockchainStatus.block_number
-      } : undefined;
+      // Always use is_synced from sync response for badge
+      const mappedBlockchain = {
+        badge: data.is_synced ? 'synced' : 'not_synced',
+        status: data.user?.status || '',
+        role: data.user?.role || '',
+        is_synced: data.is_synced === true,
+        error: data.user?.error || '',
+        transaction_hash: data.user?.transaction_hash || '',
+        block_number: data.user?.block_number || ''
+      };
       // Update user in users state
       setUsers(prevUsers => prevUsers.map(u =>
         u.id === userId ? { ...u, blockchain: mappedBlockchain } : u
@@ -315,6 +322,24 @@ const UserManagement = () => {
       if (selectedUser && selectedUser.id === userId) {
         setSelectedUser({ ...selectedUser, blockchain: mappedBlockchain });
       }
+      // Optionally, refresh blockchain status from backend for full accuracy
+      setTimeout(() => {
+        fetchBlockchainStatus(userId).then(blockchainStatus => {
+          if (blockchainStatus) {
+            setUsers(prevUsers => prevUsers.map(u =>
+              u.id === userId ? { ...u, blockchain: {
+                ...u.blockchain,
+                badge: blockchainStatus.is_synced === true ? 'synced' : (blockchainStatus.blockchain_badge || 'not_synced'),
+                status: blockchainStatus.status,
+                role: blockchainStatus.onChainRole,
+                error: blockchainStatus.error,
+                transaction_hash: blockchainStatus.transaction_hash,
+                block_number: blockchainStatus.block_number
+              }} : u
+            ));
+          }
+        });
+      }, 500);
     } catch (err) {
       console.error(err);
       // Optionally show error to user
@@ -370,19 +395,17 @@ const UserManagement = () => {
   };
 
   const getBlockchainStatusBadge = (user: User) => {
-    if (!user.blockchain || !user.blockchain.badge) {
-      return <Badge variant="outline" className="text-xs">Unknown</Badge>;
+    if (!user.blockchain) {
+      return <Badge variant="outline" className="text-xs">Not Synced</Badge>;
     }
-    switch (user.blockchain.badge) {
-      case 'not_registered':
-        return <Badge variant="secondary" className="text-xs">Not Registered</Badge>;
-      case 'synced':
-        return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Synced</Badge>;
-      case 'not_synced':
-        return <Badge variant="outline" className="text-xs">Not Synced</Badge>;
-      default:
-        return <Badge variant="outline" className="text-xs">Unknown</Badge>;
+    if (user.blockchain.is_synced === true) {
+      return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Synced</Badge>;
     }
+    if (user.blockchain.badge === 'not_registered') {
+      return <Badge variant="secondary" className="text-xs">Not Registered</Badge>;
+    }
+    // Always show 'Not Synced' if not synced
+    return <Badge variant="outline" className="text-xs">Not Synced</Badge>;
   };
 
   const renderUserTable = (userList: User[], isDeleted = false) => (
@@ -622,12 +645,10 @@ const UserManagement = () => {
                 <div className="mt-2">
                   <p className="text-xs font-semibold">Status</p>
                   <Select
-                    value={selectedUser.status || "pending"}
+                    value={modalStatus || "pending"}
                     onValueChange={(val) => {
                       if (editMode && selectedUser && !selectedUser.is_deleted) {
-                        const updatedUser = { ...selectedUser, status: val as "pending"|"active"|"suspended"|"inactive" };
-                        setSelectedUser(updatedUser);
-                        setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+                        setModalStatus(val);
                       }
                     }}
                     disabled={!editMode || selectedUser.is_deleted}

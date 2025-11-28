@@ -78,7 +78,7 @@ contract PrescriptionManagement {
         bool exists;
     }
 
-    enum Status { Issued, Dispensed, Expired, Invalid }
+    enum Status { Issued, Dispensed, Expired }
 
     // ---------------- State Variables ----------------
     UserManagement public userManagement;
@@ -115,12 +115,6 @@ contract PrescriptionManagement {
         address indexed pharmacist,
         address indexed patient,
         uint dispensedDate,
-        string prescriptionCode
-    );
-    event PrescriptionInvalid(
-        uint indexed prescriptionId,
-        address indexed pharmacist,
-        string reason,
         string prescriptionCode
     );
     event PrescriptionDeleted(
@@ -228,8 +222,11 @@ contract PrescriptionManagement {
     }
 
     modifier onlyPharmacist() {
-        require(userManagement.isPharmacist(msg.sender), "Only pharmacists can perform this action");
-        require(userManagement.isUserActive(msg.sender), "Pharmacist must be active");
+        require(
+            userManagement.isPharmacist(msg.sender) || userManagement.isAdmin(msg.sender),
+            "Only pharmacists or admin can perform this action"
+        );
+        require(userManagement.isUserActive(msg.sender), "Pharmacist or admin must be active");
         _;
     }
 
@@ -285,6 +282,7 @@ contract PrescriptionManagement {
      */
     function createPrescription(
         uint databaseId,
+        address doctor,
         address patient,
         string memory prescriptionCode,
         uint drugId,
@@ -298,22 +296,23 @@ contract PrescriptionManagement {
         string memory frequency,
         uint duration,
         uint validUntil
-    ) public onlyDoctor {
+    ) public {
+        // Validate doctor exists and is active
+        require(userManagement.isDoctor(doctor), "Invalid doctor address");
+        require(userManagement.isUserActive(doctor), "Doctor must be active");
         // Validate patient exists and is active
         require(userManagement.isPatient(patient), "Invalid patient address");
         require(userManagement.isUserActive(patient), "Patient must be active");
-        
         // Validate prescription code uniqueness
         require(bytes(prescriptionCode).length > 0, "Prescription code required");
         require(!usedPrescriptionCodes[prescriptionCode], "Duplicate prescription code");
-        
         // Validate drug details
         require(bytes(drugName).length > 0, "Drug name required");
         require(bytes(strength).length > 0, "Drug strength required");
         require(bytes(form).length > 0, "Drug form required");
         require(quantity > 0, "Quantity must be greater than 0");
         require(bytes(instructions).length > 0, "Instructions required");
-        require(validUntil > block.timestamp, "Valid until must be in the future");
+        // Allow prescriptions with any validUntil date (past or future)
 
         // Generate prescription ID
         prescriptionCounter++;
@@ -339,7 +338,7 @@ contract PrescriptionManagement {
         prescriptions[prescriptionId] = Prescription({
             prescriptionId: prescriptionId,
             databaseId: databaseId,
-            doctor: msg.sender,
+            doctor: doctor,
             patient: patient,
             drug: drug,
             issueDate: currentTime,
@@ -357,14 +356,14 @@ contract PrescriptionManagement {
 
         // Update mappings
         usedPrescriptionCodes[prescriptionCode] = true;
-        doctorPrescriptions[msg.sender].push(prescriptionId);
+        doctorPrescriptions[doctor].push(prescriptionId);
         patientPrescriptions[patient].push(prescriptionId);
         allPrescriptionIds.push(prescriptionId);
 
         emit PrescriptionCreated(
             prescriptionId,
             databaseId,
-            msg.sender,
+            doctor,
             patient,
             prescriptionCode,
             drugName,
@@ -404,30 +403,6 @@ contract PrescriptionManagement {
         );
     }
 
-    /**
-     * @dev Mark prescription as invalid (e.g., counterfeit detection)
-     * @param prescriptionId ID of the prescription to mark invalid
-     * @param reason Reason for marking as invalid
-     */
-    function markPrescriptionInvalid(uint prescriptionId, string memory reason) 
-        public 
-        onlyPharmacist 
-        prescriptionExists(prescriptionId)
-        notDispensed(prescriptionId)
-    {
-        require(bytes(reason).length > 0, "Reason required");
-
-        Prescription storage prescription = prescriptions[prescriptionId];
-        prescription.status = Status.Invalid;
-        prescription.updatedAt = block.timestamp;
-
-        emit PrescriptionInvalid(
-            prescriptionId,
-            msg.sender,
-            reason,
-            prescription.prescriptionCode
-        );
-    }
 
     /**
      * @dev Delete a prescription (only if not dispensed)
@@ -589,42 +564,6 @@ contract PrescriptionManagement {
         return _getValidPrescriptions(allPrescriptionIds);
     }
 
-    /**
-     * @dev Get prescriptions that are flagged as invalid
-     */
-    function getFlaggedPrescriptions() public view returns (Prescription[] memory) {
-        require(
-            userManagement.isAdmin(msg.sender) || 
-            userManagement.isRegulator(msg.sender),
-            "Only admin or regulator can view flagged prescriptions"
-        );
-
-        uint flaggedCount = 0;
-        
-        // First count flagged prescriptions
-        for (uint i = 0; i < allPrescriptionIds.length; i++) {
-            if (prescriptions[allPrescriptionIds[i]].exists && 
-                !prescriptions[allPrescriptionIds[i]].isDeleted &&
-                prescriptions[allPrescriptionIds[i]].status == Status.Invalid) {
-                flaggedCount++;
-            }
-        }
-        
-        // Create array with exact size
-        Prescription[] memory result = new Prescription[](flaggedCount);
-        uint currentIndex = 0;
-        
-        for (uint i = 0; i < allPrescriptionIds.length; i++) {
-            if (prescriptions[allPrescriptionIds[i]].exists && 
-                !prescriptions[allPrescriptionIds[i]].isDeleted &&
-                prescriptions[allPrescriptionIds[i]].status == Status.Invalid) {
-                result[currentIndex] = prescriptions[allPrescriptionIds[i]];
-                currentIndex++;
-            }
-        }
-        
-        return result;
-    }
 
     // ---------------- Utility Functions ----------------
 
@@ -655,7 +594,7 @@ contract PrescriptionManagement {
         if (status == Status.Issued) return "issued";
         if (status == Status.Dispensed) return "dispensed";
         if (status == Status.Expired) return "expired";
-        return "invalid";
+        return "unknown";
     }
 
     /**

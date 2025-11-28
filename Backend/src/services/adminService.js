@@ -24,6 +24,7 @@ export const logUserViewEvent = async (userId, walletAddress, txHash, blockNumbe
 // await logUserViewEvent(user.id, user.wallet_address, receipt.transactionHash, receipt.blockNumber);
 import { query } from "../config/database.js";
 import * as blockchainService from "./blockchainService.js";
+import { contract } from "./blockchainService.js";
 import { ethers } from 'ethers';
 
 // ===========================
@@ -39,8 +40,7 @@ export const syncAllUsersToBlockchain = async () => {
       continue;
     }
     try {
-      const { checkUserExistsOnChain, addUserToBlockchain, getContract } = await import("./blockchainService.js");
-      const contract = getContract();
+      const { checkUserExistsOnChain, addUserToBlockchain } = blockchainService;
       let exists = await checkUserExistsOnChain(user.wallet_address);
       if (!exists) {
         // Register user on-chain
@@ -147,7 +147,7 @@ export const getAllUsers = async (includeDeleted = false) => {
     let roleName = user.role;
     if (user.role && !isNaN(user.role)) {
       try {
-        const { contract } = require("./blockchainService.js");
+        // contract already imported at top
         roleName = await contract.getRoleName(Number(user.role));
       } catch (err) {
         roleName = user.role;
@@ -179,7 +179,7 @@ export const getUserById = async (id) => {
   // Map role ID to role name if needed
   if (user.role && !isNaN(user.role)) {
     try {
-      const { contract } = require("./blockchainService.js");
+      // contract already imported at top
       user.role = await contract.getRoleName(Number(user.role));
     } catch (err) {
       // fallback to role ID
@@ -260,7 +260,7 @@ export const searchUsers = async (term) => {
     let roleName = user.role;
     if (user.role && !isNaN(user.role)) {
       try {
-        const { contract } = require("./blockchainService.js");
+        // contract already imported at top
         roleName = await contract.getRoleName(Number(user.role));
       } catch (err) {
         roleName = user.role;
@@ -311,7 +311,6 @@ export const updateUser = async (id, updates) => {
   const currentUser = await getUserById(id);
 
   // If status or role is being changed, sync to blockchain
-  // No longer needed: transaction_hash and block_number columns removed
   let blockchainTxHash = null, blockchainBlockNumber = null;
   if (currentUser.wallet_address && !currentUser.is_deleted) {
     const { checkUserExistsOnChain, addUserToBlockchain, getOrCreateRoleId, getContract, getUserStatusFromChain } = await import("./blockchainService.js");
@@ -323,61 +322,99 @@ export const updateUser = async (id, updates) => {
       const roleName = currentUser.role || 'doctor';
       const regResult = await addUserToBlockchain(currentUser.wallet_address, roleName);
       if (!regResult || !regResult.transactionHash || !regResult.blockNumber) {
+        console.error(`[updateUser] Blockchain registration failed: No transaction receipt. User not registered on-chain.`);
         throw new Error('Blockchain registration failed: No transaction receipt. User not registered on-chain.');
       }
       blockchainTxHash = regResult?.transactionHash || null;
       blockchainBlockNumber = regResult?.blockNumber || null;
+      console.log(`[updateUser] Registered user on-chain: wallet=${currentUser.wallet_address}, tx=${blockchainTxHash}, block=${blockchainBlockNumber}`);
     }
     // Status change
     if (updates.status && updates.status !== currentUser.status) {
       let tx, receipt;
       // Fetch on-chain status before attempting blockchain update
       const onChainStatus = await getUserStatusFromChain(currentUser.wallet_address);
-      if (updates.status === 'active' && currentUser.status === 'pending') {
-        if (onChainStatus === 'pending') {
-          // Approve user on chain
-          tx = await contract.approveUser(currentUser.wallet_address);
+      console.log(`[updateUser] Status change requested: DB status=${currentUser.status} -> ${updates.status}, on-chain status=${onChainStatus}`);
+      try {
+        if (updates.status === 'active' && currentUser.status === 'pending') {
+          if (onChainStatus === 'pending') {
+            // Approve user on chain
+            tx = await contract.approveUser(currentUser.wallet_address);
+            console.log(`[updateUser] Sent approveUser tx: ${tx.hash}`);
+            receipt = await tx.wait();
+            console.log(`[updateUser] approveUser mined: tx=${receipt.transactionHash}, block=${receipt.blockNumber}`);
+          } else {
+            // Skip blockchain call, user not pending on-chain
+            receipt = null;
+            console.log(`[updateUser] Skipped approveUser: user not pending on-chain.`);
+          }
+        } else if (updates.status === 'suspended' && (currentUser.status === 'active' || onChainStatus === 'active')) {
+          // Determine if action is by admin or regulator
+          const actorRole = updates.actorRole || 'admin';
+          if (actorRole === 'regulator') {
+            // Regulator uses RegulatorOversight contract
+            const { suspendUserOnChain } = await import("./blockchainService.js");
+            tx = await suspendUserOnChain(currentUser.wallet_address, updates.reason || 'Suspended by regulator');
+            console.log(`[updateUser] Regulator suspendUserOnChain tx: ${tx.transactionHash}`);
+            receipt = tx;
+          } else {
+            // Admin uses UserManagement contract
+            console.log(`[updateUser] Attempting to suspend user: wallet=${currentUser.wallet_address}, status=${onChainStatus}`);
+              tx = await contract.suspendUser(currentUser.wallet_address);
+            console.log(`[updateUser] Sent suspendUser tx: ${tx.hash}`);
+            receipt = await tx.wait();
+            console.log(`[updateUser] suspendUser mined: tx=${receipt.transactionHash}, block=${receipt.blockNumber}`);
+          }
+        } else if (updates.status === 'inactive' && currentUser.status === 'active') {
+          // Only admin can set inactive
+          tx = await contract.deactivateUser(currentUser.wallet_address);
+          console.log(`[updateUser] Sent deactivateUser tx: ${tx.hash}`);
           receipt = await tx.wait();
-        } else {
-          // Skip blockchain call, user not pending on-chain
-          receipt = null;
+          console.log(`[updateUser] deactivateUser mined: tx=${receipt.transactionHash}, block=${receipt.blockNumber}`);
+        } else if (updates.status === 'active' && (currentUser.status === 'inactive' || currentUser.status === 'suspended')) {
+          const actorRole = updates.actorRole || 'admin';
+          if (actorRole === 'regulator') {
+            // Regulator lifts suspension via RegulatorOversight
+            const { liftUserSuspensionOnChain } = await import("./blockchainService.js");
+            tx = await liftUserSuspensionOnChain(currentUser.wallet_address);
+            console.log(`[updateUser] Regulator liftUserSuspensionOnChain tx: ${tx.transactionHash}`);
+            receipt = tx;
+          } else {
+            // Admin reactivates via UserManagement
+            tx = await contract.reactivateUser(currentUser.wallet_address);
+            console.log(`[updateUser] Sent reactivateUser tx: ${tx.hash}`);
+            receipt = await tx.wait();
+            console.log(`[updateUser] reactivateUser mined: tx=${receipt.transactionHash}, block=${receipt.blockNumber}`);
+          }
         }
-      } else if (updates.status === 'suspended' && currentUser.status === 'active') {
-        if (onChainStatus === 'active') {
-          tx = await contract.suspendUser(currentUser.wallet_address);
-          receipt = await tx.wait();
+        if (receipt && receipt.transactionHash) {
+          blockchainTxHash = receipt.transactionHash;
+          blockchainBlockNumber = receipt.blockNumber;
+          console.log(`[updateUser] Status change successful: tx=${blockchainTxHash}, block=${blockchainBlockNumber}`);
         } else {
-          receipt = null;
+          console.log(`[updateUser] No transaction receipt for status change.`);
         }
-      } else if (updates.status === 'inactive' && currentUser.status === 'active') {
-        if (onChainStatus === 'active') {
-          tx = await contract.suspendUser(currentUser.wallet_address);
-          receipt = await tx.wait();
-        } else {
-          receipt = null;
-        }
-      } else if (updates.status === 'active' && (currentUser.status === 'inactive' || currentUser.status === 'suspended')) {
-        if (onChainStatus === 'inactive' || onChainStatus === 'suspended') {
-          tx = await contract.reactivateUser(currentUser.wallet_address);
-          receipt = await tx.wait();
-        } else {
-          receipt = null;
-        }
-      }
-      if (receipt && receipt.transactionHash) {
-        blockchainTxHash = receipt.transactionHash;
-        blockchainBlockNumber = receipt.blockNumber;
+      } catch (err) {
+        console.error(`[updateUser] Error during status change contract call:`, err);
+        throw err;
       }
     }
     // Role change
     if (updates.role && updates.role !== currentUser.role) {
-      // Get roleId from contract
-      const roleId = await contract.getRoleIdByName(updates.role);
-      const tx = await contract.updateUserRole(currentUser.wallet_address, roleId);
-      const receipt = await tx.wait();
-      if (receipt && receipt.transactionHash) {
-        blockchainTxHash = receipt.transactionHash;
-        blockchainBlockNumber = receipt.blockNumber;
+      try {
+        // Get roleId from contract
+        const roleId = await contract.getRoleIdByName(updates.role);
+        const tx = await contract.updateUserRole(currentUser.wallet_address, roleId);
+        console.log(`[updateUser] Sent updateUserRole tx: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`[updateUser] updateUserRole mined: tx=${receipt.transactionHash}, block=${receipt.blockNumber}`);
+        if (receipt && receipt.transactionHash) {
+          blockchainTxHash = receipt.transactionHash;
+          blockchainBlockNumber = receipt.blockNumber;
+        }
+      } catch (err) {
+        console.error(`[updateUser] Error during role change contract call:`, err);
+        throw err;
       }
     }
     // If wallet address is changed, you may want to handle re-registration (not covered here)
@@ -836,7 +873,7 @@ export async function getSystemAnalytics() {
   // Recent blockchain transactions
   const recentBlockchainTx = await query(`SELECT id, eventname, contractname, transactionhash, timestamp FROM blockchaineventlog ORDER BY timestamp DESC LIMIT 10`);
   // Drug distribution by region/facility
-  const drugDistribution = await query(`SELECT f.location, d.name AS drug_name, SUM(i.available_quantity) AS total_quantity FROM inventory i JOIN drug d ON i.drug_id = d.id JOIN facility f ON i.facility_id = f.id WHERE i.available_quantity > 0 GROUP BY f.location, d.name ORDER BY total_quantity DESC`);
+  const drugDistribution = await query(`SELECT f.location, d.name AS drug_name, SUM(i.available_quantity) AS total_quantity FROM inventory i JOIN drug d ON i.drug_id = d.id JOIN facility f ON i.distributor_id = f.id WHERE i.available_quantity > 0 GROUP BY f.location, d.name ORDER BY total_quantity DESC`);
   // Prescription volume trend (daily for last 14 days)
   const prescriptionTrend = await query(`SELECT DATE(issue_date) AS day, COUNT(*) AS count FROM prescription WHERE is_deleted = false GROUP BY day ORDER BY day DESC LIMIT 14`);
   // Recent activity feed (latest actions by users, with role)

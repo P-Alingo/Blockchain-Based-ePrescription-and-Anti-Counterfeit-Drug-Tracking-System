@@ -42,6 +42,7 @@ interface BlockchainStats {
 }
 
 const AdminBlockchain = () => {
+    console.log("[DEBUG] AdminBlockchain component mounted");
   const [events, setEvents] = useState<BlockchainEvent[]>([]);
   const [stats, setStats] = useState<BlockchainStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,28 +62,28 @@ const AdminBlockchain = () => {
     
     setLoading(true);
     try {
-      // Fetch blockchain events
-      const eventsRes = await fetch(`${API_URL}/api/blockchain/events`, {
+      // Fetch all blockchain event logs from the database
+      const eventsRes = await fetch(`${API_URL}/api/admin/blockchain/events/history`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (!eventsRes.ok) throw new Error("Failed to fetch blockchain events");
       const eventsData = await eventsRes.json();
+      console.log('[DEBUG] Blockchain events response:', eventsData);
 
       // Fetch dashboard stats for blockchain metrics
       const statsRes = await fetch(`${API_URL}/api/admin/dashboard`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (!statsRes.ok) throw new Error("Failed to fetch blockchain stats");
       const statsData = await statsRes.json();
+      console.log('[DEBUG] Dashboard stats response:', statsData);
 
       // Fetch blockchain health
       const healthRes = await fetch(`${API_URL}/api/admin/blockchain-health`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
       const healthData = healthRes.ok ? await healthRes.json() : { blockchain: { connected: false } };
+      console.log('[DEBUG] Blockchain health response:', healthData);
+      console.dir(healthData, { depth: null });
+      console.log('Blockchain health full:', JSON.stringify(healthData.blockchain, null, 2));
 
       // Set events
       if (Array.isArray(eventsData)) {
@@ -150,7 +151,7 @@ const AdminBlockchain = () => {
     // This would open the transaction in a block explorer
     // You can customize this based on your blockchain network
     const explorerUrl = `https://etherscan.io/tx/${txHash}`;
-    window.open(explorerUrl, '_blank');
+    window.open(explorerUrl, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) {
@@ -270,57 +271,45 @@ const AdminBlockchain = () => {
               <div className="py-8 text-center text-destructive">
                 <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
                 <p>{error}</p>
-                <Button onClick={fetchBlockchainData} className="mt-4">
-                  Retry
-                </Button>
+                <Button onClick={fetchBlockchainData} className="mt-4">Retry</Button>
               </div>
             ) : filteredEvents.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-4" />
                 <p>No blockchain events found.</p>
                 {searchTerm && (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setSearchTerm("")}
-                    className="mt-2"
-                  >
-                    Clear search
-                  </Button>
+                  <Button variant="outline" onClick={() => setSearchTerm("")} className="mt-2">Clear search</Button>
                 )}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Event Type</TableHead>
-                      <TableHead>Transaction Hash</TableHead>
-                      <TableHead>Entity ID</TableHead>
-                      <TableHead>Contract</TableHead>
-                      <TableHead>Timestamp</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredEvents.map((event) => (
-                      <TableRow key={event.id}>
-                        <TableCell>
+                <table className="min-w-full rounded-xl overflow-hidden border border-gray-200 shadow-lg text-sm">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-pink-200 to-red-200 text-gray-700">
+                      <th className="px-4 py-2 text-left font-semibold">Event Type</th>
+                      <th className="px-4 py-2 text-left font-semibold">Transaction Hash</th>
+                      <th className="px-4 py-2 text-left font-semibold">Entity ID</th>
+                      <th className="px-4 py-2 text-left font-semibold">Contract</th>
+                      <th className="px-4 py-2 text-left font-semibold">Timestamp</th>
+                      <th className="px-4 py-2 text-left font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEvents.map((event, idx) => (
+                      <tr key={event.id} className={idx % 2 === 0 ? "bg-white" : "bg-pink-50" + " hover:bg-pink-100 transition-colors duration-150"}>
+                        <td className="px-4 py-2 rounded-l-xl">
                           <div className="flex items-center gap-2">
                             {getEventIcon(event.eventname)}
                             <Badge className={getEventTypeColor(event.eventname)}>
                               {event.eventname || 'Unknown'}
                             </Badge>
                           </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {truncateHash(event.transactionhash)}
-                        </TableCell>
-                        <TableCell>{event.entityid || '-'}</TableCell>
-                        <TableCell>{event.contractname || '-'}</TableCell>
-                        <TableCell>
-                          {event.timestamp ? new Date(event.timestamp).toLocaleString() : '-'}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td className="px-4 py-2 font-mono text-sm">{truncateHash(event.transactionhash)}</td>
+                        <td className="px-4 py-2">{event.entityid || '-'}</td>
+                        <td className="px-4 py-2">{event.contractname || '-'}</td>
+                        <td className="px-4 py-2">{event.timestamp ? new Date(event.timestamp).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-2 rounded-r-xl">
                           {event.transactionhash && (
                             <Button
                               variant="ghost"
@@ -331,11 +320,11 @@ const AdminBlockchain = () => {
                               <ExternalLink className="h-4 w-4" />
                             </Button>
                           )}
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
             )}
           </CardContent>
